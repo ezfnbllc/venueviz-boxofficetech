@@ -1,70 +1,22 @@
-import { NextRequest, NextResponse } from 'next/server'
+import{NextRequest,NextResponse}from'next/server'
+import{db}from'@/lib/firebase'
+import{collection,addDoc,getDocs,query,orderBy}from'firebase/firestore'
 
-const mockEvents = [
-  {
-    id: '1',
-    name: 'Hamilton',
-    date: '2025-09-28',
-    time: '19:30',
-    venue: 'Main Theater',
-    availableSeats: 75,
-    totalSeats: 500,
-    minPrice: 75,
-    maxPrice: 250,
-    image: '/api/placeholder/400/600',
-    category: 'Musical'
-  },
-  {
-    id: '2',
-    name: 'Symphony Orchestra',
-    date: '2025-09-29',
-    time: '20:00',
-    venue: 'Concert Hall',
-    availableSeats: 64,
-    totalSeats: 800,
-    minPrice: 50,
-    maxPrice: 150,
-    image: '/api/placeholder/400/600',
-    category: 'Classical'
-  },
-  {
-    id: '3',
-    name: 'Jazz Night',
-    date: '2025-09-30',
-    time: '21:00',
-    venue: 'Jazz Club',
-    availableSeats: 70,
-    totalSeats: 200,
-    minPrice: 35,
-    maxPrice: 75,
-    image: '/api/placeholder/400/600',
-    category: 'Jazz'
-  },
-  {
-    id: '4',
-    name: 'The Lion King',
-    date: '2025-10-05',
-    time: '14:00',
-    venue: 'Main Theater',
-    availableSeats: 250,
-    totalSeats: 500,
-    minPrice: 65,
-    maxPrice: 200,
-    image: '/api/placeholder/400/600',
-    category: 'Musical'
-  }
-]
-
-export async function GET(request: NextRequest) {
-  return NextResponse.json({ events: mockEvents })
+export async function GET(){
+try{
+const q=query(collection(db,'events'),orderBy('date','desc'))
+const snapshot=await getDocs(q)
+const events=snapshot.docs.map(doc=>({id:doc.id,...doc.data()}))
+return NextResponse.json({events,db:'Firebase'})
+}catch(e){
+return NextResponse.json({events:[],error:'Database error'})}
 }
 
-export async function POST(request: NextRequest) {
-  const body = await request.json()
-  const newEvent = {
-    id: Date.now().toString(),
-    ...body,
-    createdAt: new Date().toISOString()
-  }
-  return NextResponse.json({ success: true, event: newEvent })
+export async function POST(req:NextRequest){
+try{
+const data=await req.json()
+const docRef=await addDoc(collection(db,'events'),{...data,createdAt:new Date()})
+return NextResponse.json({id:docRef.id,success:true})
+}catch(e){
+return NextResponse.json({error:'Failed to create event'},{ status:500})}
 }

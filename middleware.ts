@@ -1,22 +1,10 @@
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
-
-export function middleware(request: NextRequest) {
-  const token = request.cookies.get('auth-token')
-  const isAdminPath = request.nextUrl.pathname.startsWith('/admin')
-  const isLoginPath = request.nextUrl.pathname === '/login'
-
-  if (isAdminPath && !token) {
-    return NextResponse.redirect(new URL('/login', request.url))
-  }
-
-  if (isLoginPath && token) {
-    return NextResponse.redirect(new URL('/admin', request.url))
-  }
-
-  return NextResponse.next()
+import{NextResponse}from'next/server'
+import type{NextRequest}from'next/server'
+export function middleware(req:NextRequest){
+const token=req.cookies.get('auth')
+if(req.nextUrl.pathname.startsWith('/admin')&&!token){
+return NextResponse.redirect(new URL('/login',req.url))
 }
-
-export const config = {
-  matcher: ['/admin/:path*', '/login']
+return NextResponse.next()
 }
+export const config={matcher:['/admin/:path*']}
