@@ -56,7 +56,14 @@ export class AdminService {
   }
 
   static async updateVenue(id: string, data: any) {
-    await updateDoc(doc(db, 'venues', id), data)
+    await updateDoc(doc(db, 'venues', id), {
+      ...data,
+      updatedAt: Timestamp.now()
+    })
+  }
+
+  static async deleteVenue(id: string) {
+    await deleteDoc(doc(db, 'venues', id))
   }
 
   static async getOrders(): Promise<any[]> {
