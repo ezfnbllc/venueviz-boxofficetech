@@ -14,5 +14,6 @@ const app=!getApps().length?initializeApp(config):getApps()[0]
 export const db=getFirestore(app)
 export const auth=getAuth(app)
 export const storage=getStorage(app)
+export const dbStatus={connected:true,name:'Firebase Firestore - VenueViz'}
 export const STORAGE_URL='https://firebasestorage.googleapis.com/v0/b/venueviz.firebasestorage.app/o/production%2F'
 export default app
