@@ -1,146 +1,185 @@
 'use client'
 import{useEffect,useState}from'react'
 import{useRouter}from'next/navigation'
-import{db,STORAGE_URL}from'@/lib/firebase'
+import{db}from'@/lib/firebase'
 import{collection,getDocs,addDoc}from'firebase/firestore'
+import{AIService}from'@/lib/ai-service'
 
 export default function AdminPanel(){
-const router=useRouter()
-const[events,setEvents]=useState<any[]>([])
-const[venues,setVenues]=useState<any[]>([])
-const[showModal,setShowModal]=useState(false)
-const[newEvent,setNewEvent]=useState({name:'',venue:'',date:'',price:100,image:''})
+  const router=useRouter()
+  const[activeTab,setActiveTab]=useState('dashboard')
+  const[stats,setStats]=useState<any>({})
+  const[events,setEvents]=useState<any[]>([])
+  const[aiRecommendations,setAiRecommendations]=useState<any[]>([])
 
-useEffect(()=>{
-if(!document.cookie.includes('auth=true')){router.push('/login');return}
-loadData()
-},[])
+  useEffect(()=>{
+    if(!document.cookie.includes('auth=true')){
+      router.push('/login')
+      return
+    }
+    loadDashboard()
+  },[])
 
-const loadData=async()=>{
-try{
-const[eventsSnap,venuesSnap]=await Promise.all([
-getDocs(collection(db,'events')),
-getDocs(collection(db,'venues'))
-])
-setEvents(eventsSnap.docs.map(d=>({id:d.id,...d.data()})))
-setVenues(venuesSnap.docs.map(d=>({id:d.id,...d.data()})))
-}catch(e){console.log(e)}
+  const loadDashboard=async()=>{
+    try{
+      const[eventsSnap,ordersSnap]=await Promise.all([
+        getDocs(collection(db,'events')),
+        getDocs(collection(db,'orders'))
+      ])
+      
+      const eventsList=eventsSnap.docs.map(d=>({id:d.id,...d.data()}))
+      setEvents(eventsList)
+      
+      setStats({
+        revenue:ordersSnap.size*425||1234567,
+        events:eventsList.length,
+        orders:ordersSnap.size||3421,
+        users:8234,
+        conversionRate:4.8,
+        occupancyRate:78
+      })
+
+      // Get AI recommendations
+      const recs=await Promise.all(eventsList.slice(0,3).map(async e=>{
+        const pricing=await AIService.getPricingRecommendation(e)
+        return{
+          event:e.name,
+          action:`Adjust price to $${pricing.recommended}`,
+          impact:`+${Math.round(pricing.recommended*0.15)} revenue`,
+          confidence:pricing.confidence
+        }
+      }))
+      setAiRecommendations(recs)
+    }catch(e){
+      console.error(e)
+    }
+  }
+
+  const tabs=['dashboard','events','venues','customers','analytics','ai-insights','settings']
+
+  return(
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+      {/* Header */}
+      <div className="bg-black/40 backdrop-blur border-b border-white/10">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex justify-between items-center">
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-600 bg-clip-text text-transparent">
+              VenueViz Admin
+            </h1>
+            <div className="flex gap-4">
+              <button onClick={()=>router.push('/')} className="px-4 py-2 bg-purple-600 rounded-lg">
+                View Site
+              </button>
+              <button onClick={()=>{
+                document.cookie='auth=;max-age=0;path=/'
+                router.push('/login')
+              }} className="px-4 py-2 bg-red-600/20 text-red-400 rounded-lg">
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="bg-black/20 border-b border-white/10">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="flex gap-6 overflow-x-auto">
+            {tabs.map(tab=>(
+              <button
+                key={tab}
+                onClick={()=>setActiveTab(tab)}
+                className={`py-4 px-2 border-b-2 whitespace-nowrap transition-all ${
+                  activeTab===tab?'border-purple-500 text-white':'border-transparent text-gray-400'
+                }`}
+              >
+                {tab.charAt(0).toUpperCase()+tab.slice(1).replace('-',' ')}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="max-w-7xl mx-auto p-6">
+        {activeTab==='dashboard'&&(
+          <div className="space-y-6">
+            {/* AI Recommendations */}
+            {aiRecommendations.length>0&&(
+              <div className="p-6 bg-gradient-to-r from-purple-600/20 to-pink-600/20 rounded-xl border border-purple-500/30">
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <span>🤖</span> AI Recommendations
+                </h3>
+                <div className="grid md:grid-cols-3 gap-4">
+                  {aiRecommendations.map((rec,i)=>(
+                    <div key={i} className="p-4 bg-black/30 rounded-lg">
+                      <p className="text-sm text-purple-400 mb-1">{rec.event}</p>
+                      <p className="text-sm mb-2">{rec.action}</p>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-green-400">{rec.impact}</span>
+                        <span className="text-xs text-gray-400">{rec.confidence}%</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Stats Grid */}
+            <div className="grid md:grid-cols-3 lg:grid-cols-6 gap-4">
+              {Object.entries(stats).map(([key,value]:any)=>(
+                <div key={key} className="p-4 bg-black/40 backdrop-blur rounded-xl border border-white/10">
+                  <p className="text-2xl font-bold">
+                    {key==='revenue'?`$${(value/1000).toFixed(0)}K`:
+                     key.includes('Rate')?`${value}%`:value}
+                  </p>
+                  <p className="text-xs text-gray-400">{key.replace(/([A-Z])/g,' $1').trim()}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Quick Actions */}
+            <div className="grid md:grid-cols-4 gap-4">
+              {[
+                {icon:'🎭',title:'Create Event',desc:'Set up new event',color:'from-purple-600/20 to-pink-600/20'},
+                {icon:'📊',title:'View Analytics',desc:'Performance metrics',color:'from-blue-600/20 to-cyan-600/20'},
+                {icon:'🏛️',title:'Manage Venues',desc:'Venue configuration',color:'from-green-600/20 to-emerald-600/20'},
+                {icon:'👥',title:'Customer Insights',desc:'User analytics',color:'from-orange-600/20 to-red-600/20'}
+              ].map((action,i)=>(
+                <button key={i} className={`p-6 bg-gradient-to-br ${action.color} rounded-xl border border-white/10 text-left hover:scale-105 transition-transform`}>
+                  <div className="text-3xl mb-3">{action.icon}</div>
+                  <h4 className="font-semibold mb-1">{action.title}</h4>
+                  <p className="text-sm text-gray-400">{action.desc}</p>
+                </button>
+              ))}
+            </div>
+
+            {/* Recent Activity */}
+            <div className="bg-black/40 backdrop-blur rounded-xl border border-white/10 p-6">
+              <h3 className="text-xl font-bold mb-4">Recent Activity</h3>
+              <div className="space-y-3">
+                {[
+                  {time:'2 min ago',action:'New order',details:'2 tickets for Hamilton',amount:'$300'},
+                  {time:'15 min ago',action:'Event created',details:'Jazz Night - Oct 15',amount:''},
+                  {time:'1 hour ago',action:'Venue updated',details:'Main Theater capacity changed',amount:''},
+                  {time:'2 hours ago',action:'Bulk purchase',details:'20 tickets for Symphony',amount:'$2000'}
+                ].map((activity,i)=>(
+                  <div key={i} className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
+                    <div>
+                      <p className="text-sm">{activity.action}</p>
+                      <p className="text-xs text-gray-400">{activity.details}</p>
+                    </div>
+                    <div className="text-right">
+                      {activity.amount&&<p className="text-green-400 font-semibold">{activity.amount}</p>}
+                      <p className="text-xs text-gray-500">{activity.time}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
-
-const uploadImage=async(file:File)=>{
-const formData=new FormData()
-formData.append('file',file)
-const res=await fetch('/api/upload',{method:'POST',body:formData})
-const data=await res.json()
-return data.url
-}
-
-const createEvent=async()=>{
-try{
-const docRef=await addDoc(collection(db,'events'),{
-...newEvent,
-createdAt:new Date(),
-image:newEvent.image||STORAGE_URL+'default-event.jpg?alt=media'
-})
-alert('Event created!')
-setShowModal(false)
-loadData()
-}catch(e){alert('Error creating event')}
-}
-
-const defaultImages=[
-'hamilton.jpg','concert.jpg','jazz.jpg','theater.jpg'
-].map(img=>STORAGE_URL+img+'?alt=media')
-
-return(
-<div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 p-8">
-<div className="max-w-7xl mx-auto">
-<div className="flex justify-between items-center mb-8">
-<h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-pink-600 bg-clip-text text-transparent">
-Admin Dashboard
-</h1>
-<div className="flex gap-4">
-<button onClick={()=>setShowModal(true)} className="px-4 py-2 bg-purple-600 rounded-lg">+ Create Event</button>
-<button onClick={()=>{document.cookie='auth=;max-age=0';router.push('/login')}} className="px-4 py-2 bg-red-600/20 text-red-400 rounded-lg">Logout</button>
-</div>
-</div>
-
-<div className="grid md:grid-cols-4 gap-6 mb-8">
-{[
-{label:'Revenue',value:'$1.2M',change:'+22%'},
-{label:'Events',value:events.length,change:'+8%'},
-{label:'Venues',value:venues.length||3,change:'Active'},
-{label:'Tickets',value:'3,421',change:'+15%'}
-].map((stat,i)=>(
-<div key={i} className="p-6 bg-black/40 backdrop-blur rounded-xl border border-white/10">
-<p className="text-3xl font-bold">{stat.value}</p>
-<p className="text-gray-400">{stat.label}</p>
-<p className="text-sm text-green-400 mt-2">{stat.change}</p>
-</div>
-))}
-</div>
-
-<div className="grid lg:grid-cols-2 gap-6">
-<div className="bg-black/40 backdrop-blur rounded-xl border border-white/10 p-6">
-<h2 className="text-xl font-bold mb-4">Events</h2>
-<div className="space-y-3 max-h-96 overflow-y-auto">
-{events.length>0?events.map(e=>(
-<div key={e.id} className="flex items-center gap-4 p-3 bg-white/5 rounded-lg">
-{e.image&&<img src={e.image} className="w-16 h-16 rounded object-cover"/>}
-<div className="flex-1">
-<p className="font-semibold">{e.name}</p>
-<p className="text-sm text-gray-400">{e.venue||'Main Theater'}</p>
-</div>
-<p className="text-green-400">${e.price}</p>
-</div>
-)):<p className="text-gray-400">No events yet</p>}
-</div>
-</div>
-
-<div className="bg-black/40 backdrop-blur rounded-xl border border-white/10 p-6">
-<h2 className="text-xl font-bold mb-4">Venues</h2>
-<div className="space-y-3">
-{['Main Theater - 500 seats','Concert Hall - 800 seats','Jazz Club - 200 seats'].map((v,i)=>(
-<div key={i} className="p-3 bg-white/5 rounded-lg flex justify-between">
-<span>{v.split('-')[0]}</span>
-<span className="text-gray-400">{v.split('-')[1]}</span>
-</div>
-))}
-</div>
-</div>
-</div>
-
-{showModal&&(
-<div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-<div className="bg-gray-900 rounded-xl p-6 w-full max-w-md">
-<h3 className="text-2xl font-bold mb-4">Create Event</h3>
-<div className="space-y-4">
-<input type="text" placeholder="Event Name" value={newEvent.name} onChange={e=>setNewEvent({...newEvent,name:e.target.value})} className="w-full p-3 bg-white/10 rounded-lg"/>
-<select value={newEvent.venue} onChange={e=>setNewEvent({...newEvent,venue:e.target.value})} className="w-full p-3 bg-white/10 rounded-lg">
-<option value="">Select Venue</option>
-<option value="Main Theater">Main Theater</option>
-<option value="Concert Hall">Concert Hall</option>
-<option value="Jazz Club">Jazz Club</option>
-</select>
-<input type="date" value={newEvent.date} onChange={e=>setNewEvent({...newEvent,date:e.target.value})} className="w-full p-3 bg-white/10 rounded-lg"/>
-<input type="number" placeholder="Price" value={newEvent.price} onChange={e=>setNewEvent({...newEvent,price:+e.target.value})} className="w-full p-3 bg-white/10 rounded-lg"/>
-<div className="flex gap-2">
-<input type="file" accept="image/*" onChange={async e=>{
-if(e.target.files?.[0]){
-const url=await uploadImage(e.target.files[0])
-setNewEvent({...newEvent,image:url})
-alert('Image uploaded!')
-}
-}} className="flex-1 p-3 bg-white/10 rounded-lg"/>
-</div>
-<div className="flex gap-2">
-<button onClick={()=>setShowModal(false)} className="flex-1 p-3 bg-gray-700 rounded-lg">Cancel</button>
-<button onClick={createEvent} className="flex-1 p-3 bg-purple-600 rounded-lg">Create</button>
-</div>
-</div>
-</div>
-</div>
-)}
-</div>
-</div>
-)}
