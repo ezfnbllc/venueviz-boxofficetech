@@ -39,3 +39,6 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Lock files (optional, but recommended to ignore)
+package-lock.json
