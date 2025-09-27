@@ -5,7 +5,7 @@ import {AdminService} from '@/lib/admin/adminService'
 import {StorageService} from '@/lib/storage/storageService'
 import {auth} from '@/lib/firebase'
 import {onAuthStateChanged} from 'firebase/auth'
-import LayoutBuilder from '@/components/LayoutBuilder'
+import EnhancedLayoutBuilder from '@/components/EnhancedLayoutBuilder'
 
 export default function VenuesManagement() {
   const router = useRouter()
@@ -767,7 +767,7 @@ export default function VenuesManagement() {
 
         {/* Layout Builder Modal */}
         {showLayoutBuilder && selectedVenue && (
-          <LayoutBuilder
+          <EnhancedLayoutBuilder
             venue={selectedVenue}
             onClose={() => {
               setShowLayoutBuilder(false)
