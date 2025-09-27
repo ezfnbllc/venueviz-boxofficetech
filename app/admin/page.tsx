@@ -2,26 +2,44 @@
 import {useEffect, useState} from 'react'
 import {useRouter} from 'next/navigation'
 import {AdminService} from '@/lib/admin/adminService'
-import ProtectedRoute from '@/components/ProtectedRoute'
 import {useFirebaseAuth} from '@/lib/firebase-auth'
 
-function AdminDashboardContent() {
+export default function AdminDashboard() {
   const router = useRouter()
-  const {signOut, userData} = useFirebaseAuth()
+  const {user, userData, signOut, loading: authLoading} = useFirebaseAuth()
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<any>(null)
   const [activeTab, setActiveTab] = useState('dashboard')
 
   useEffect(() => {
-    loadDashboard()
-  }, [])
+    if (!authLoading) {
+      if (!user) {
+        router.push('/login')
+      } else {
+        loadDashboard()
+      }
+    }
+  }, [user, authLoading, router])
 
   const loadDashboard = async () => {
     try {
+      console.log('Loading dashboard stats...')
       const dashboardStats = await AdminService.getDashboardStats()
+      console.log('Dashboard stats loaded:', dashboardStats)
       setStats(dashboardStats)
     } catch (error) {
       console.error('Error loading dashboard:', error)
+      // Set default stats if loading fails
+      setStats({
+        events: 0,
+        venues: 0,
+        orders: 0,
+        customers: 0,
+        promotions: 0,
+        revenue: 0,
+        tickets: 0,
+        recentOrders: []
+      })
     }
     setLoading(false)
   }
@@ -32,7 +50,8 @@ function AdminDashboardContent() {
     {id: 'venues', label: 'Venues', icon: '🏛️'},
     {id: 'orders', label: 'Orders', icon: '🎫'},
     {id: 'customers', label: 'Customers', icon: '👥'},
-    {id: 'promotions', label: 'Promotions', icon: '🎁'}
+    {id: 'promotions', label: 'Promotions', icon: '🎁'},
+    {id: 'promoters', label: 'Promoters', icon: '🤝'}
   ]
 
   const navigateToSection = (section: string) => {
@@ -43,12 +62,16 @@ function AdminDashboardContent() {
     }
   }
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-purple-500"/>
       </div>
     )
+  }
+
+  if (!user) {
+    return null
   }
 
   return (
@@ -123,7 +146,7 @@ function AdminDashboardContent() {
         </div>
 
         {/* Quick Actions */}
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
+        <div className="grid md:grid-cols-3 gap-6">
           <button 
             onClick={() => router.push('/admin/events')}
             className="p-6 bg-gradient-to-br from-purple-600/20 to-pink-600/20 rounded-xl border border-purple-500/30 text-left hover:scale-105 transition"
@@ -149,50 +172,7 @@ function AdminDashboardContent() {
             <p className="text-sm text-gray-400">Manage discount codes</p>
           </button>
         </div>
-
-        {/* Recent Orders */}
-        <div className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-6">
-          <h2 className="text-xl font-bold mb-4">Recent Orders</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="border-b border-white/10">
-                <tr>
-                  <th className="text-left py-2">Order ID</th>
-                  <th className="text-left py-2">Customer</th>
-                  <th className="text-left py-2">Amount</th>
-                  <th className="text-left py-2">Status</th>
-                  <th className="text-left py-2">Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats?.recentOrders?.map((order: any) => (
-                  <tr key={order.id} className="border-b border-white/5">
-                    <td className="py-2">{order.orderId || order.id.slice(0,8)}</td>
-                    <td className="py-2">{order.customerEmail}</td>
-                    <td className="py-2">${order.total?.toFixed(2)}</td>
-                    <td className="py-2">
-                      <span className="px-2 py-1 bg-green-600/20 text-green-400 rounded text-xs">
-                        {order.status || 'confirmed'}
-                      </span>
-                    </td>
-                    <td className="py-2">
-                      {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'N/A'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
       </div>
     </div>
-  )
-}
-
-export default function AdminDashboard() {
-  return (
-    <ProtectedRoute requirePromoter>
-      <AdminDashboardContent />
-    </ProtectedRoute>
   )
 }
