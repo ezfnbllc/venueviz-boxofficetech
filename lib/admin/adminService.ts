@@ -43,7 +43,8 @@ export class AdminService {
       performers: data.performers || [],
       promotionIds: data.promotionIds || [],
       allowPromotionStacking: false,
-      ticketPurchaseUrl: ''
+      ticketPurchaseUrl: data.sourceUrl || '',
+      scrapeUrl: data.sourceUrl || ''
     }
     
     const docRef = await addDoc(collection(db, 'events'), eventData)
@@ -62,6 +63,8 @@ export class AdminService {
       price: data.price || 100,
       capacity: data.capacity || 500,
       performers: data.performers || [],
+      ticketPurchaseUrl: data.sourceUrl || '',
+      scrapeUrl: data.sourceUrl || '',
       updatedAt: Timestamp.now()
     }
     
@@ -90,6 +93,24 @@ export class AdminService {
       console.error('Error fetching venues:', error)
       return []
     }
+  }
+
+  static async createVenue(data: any): Promise<string> {
+    const venueData = {
+      name: data.name,
+      streetAddress1: data.address || '',
+      streetAddress2: '',
+      city: data.city || 'Dallas',
+      state: data.state || 'TX',
+      zipCode: data.zipCode || '75001',
+      latitude: data.latitude || 32.7767,
+      longitude: data.longitude || -96.7970,
+      imageUrl: data.imageUrl || '',
+      capacity: data.capacity || 500
+    }
+    
+    const docRef = await addDoc(collection(db, 'venues'), venueData)
+    return docRef.id
   }
 
   static async getOrders(): Promise<any[]> {

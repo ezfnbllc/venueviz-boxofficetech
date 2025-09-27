@@ -14,6 +14,8 @@ export default function EventsManagement() {
   const [editingEvent, setEditingEvent] = useState<any>(null)
   const [wizardStep, setWizardStep] = useState(1)
   const [aiLoading, setAiLoading] = useState(false)
+  const [scrapeUrl, setScrapeUrl] = useState('')
+  const [scraping, setScraping] = useState(false)
   
   const [formData, setFormData] = useState({
     name: '',
@@ -25,7 +27,8 @@ export default function EventsManagement() {
     price: 100,
     capacity: 500,
     performers: [] as string[],
-    type: 'concert'
+    type: 'concert',
+    sourceUrl: ''
   })
 
   useEffect(() => {
@@ -51,6 +54,78 @@ export default function EventsManagement() {
       console.error('Error loading data:', error)
     }
     setLoading(false)
+  }
+
+  const scrapeEventUrl = async () => {
+    if (!scrapeUrl) {
+      alert('Please enter a URL')
+      return
+    }
+    
+    setScraping(true)
+    try {
+      const response = await fetch('/api/scrape-event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: scrapeUrl })
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        
+        // Check if venue exists
+        let existingVenue = venues.find(v => 
+          v.name?.toLowerCase() === data.venueName?.toLowerCase() ||
+          v.address?.includes(data.venueAddress)
+        )
+        
+        // If venue doesn't exist, create it
+        if (!existingVenue && data.venueName) {
+          const newVenueId = await AdminService.createVenue({
+            name: data.venueName,
+            address: data.venueAddress || '',
+            city: data.venueCity || 'Unknown',
+            state: data.venueState || 'TX',
+            capacity: data.venueCapacity || 500
+          })
+          
+          existingVenue = {
+            id: newVenueId,
+            name: data.venueName,
+            capacity: data.venueCapacity || 500
+          }
+          
+          // Reload venues
+          const updatedVenues = await AdminService.getVenues()
+          setVenues(updatedVenues)
+          
+          alert(`New venue "${data.venueName}" was added to the database`)
+        }
+        
+        // Update form with scraped data
+        setFormData({
+          name: data.title || '',
+          description: data.description || '',
+          venue: existingVenue?.name || data.venueName || '',
+          venueId: existingVenue?.id || '',
+          date: data.date || '',
+          time: data.time || '19:00',
+          price: data.price || 100,
+          capacity: existingVenue?.capacity || data.capacity || 500,
+          performers: data.performers || [],
+          type: data.type || 'concert',
+          sourceUrl: scrapeUrl
+        })
+        
+        alert('Event details loaded successfully!')
+      } else {
+        alert('Could not extract event details from this URL')
+      }
+    } catch (error) {
+      console.error('Scraping error:', error)
+      alert('Error extracting event details')
+    }
+    setScraping(false)
   }
 
   const generateWithAI = async () => {
@@ -118,7 +193,8 @@ export default function EventsManagement() {
       price: event.price || 100,
       capacity: event.capacity || 500,
       performers: event.performers || [],
-      type: event.type || 'concert'
+      type: event.type || 'concert',
+      sourceUrl: event.sourceUrl || ''
     })
     setShowWizard(true)
     setWizardStep(1)
@@ -139,6 +215,7 @@ export default function EventsManagement() {
     setShowWizard(false)
     setEditingEvent(null)
     setWizardStep(1)
+    setScrapeUrl('')
     setFormData({
       name: '',
       description: '',
@@ -149,13 +226,14 @@ export default function EventsManagement() {
       price: 100,
       capacity: 500,
       performers: [],
-      type: 'concert'
+      type: 'concert',
+      sourceUrl: ''
     })
   }
 
   const nextStep = () => {
     if (wizardStep === 1 && !formData.name) {
-      alert('Please enter event name')
+      alert('Please enter event name or import from URL')
       return
     }
     if (wizardStep === 2 && !formData.venue) {
@@ -265,7 +343,31 @@ export default function EventsManagement() {
               {/* Step 1: Basic Info */}
               {wizardStep === 1 && (
                 <div className="space-y-4">
-                  <div>
+                  {/* URL Import Section */}
+                  <div className="bg-purple-600/10 border border-purple-600/30 rounded-lg p-4">
+                    <label className="block text-sm mb-2 text-purple-400">Import from URL (Optional)</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="url"
+                        value={scrapeUrl}
+                        onChange={(e) => setScrapeUrl(e.target.value)}
+                        className="flex-1 px-4 py-2 bg-white/10 rounded-lg text-sm"
+                        placeholder="Paste Ticketmaster, Sulekha, or Fandango URL"
+                      />
+                      <button
+                        onClick={scrapeEventUrl}
+                        disabled={scraping || !scrapeUrl}
+                        className="px-4 py-2 bg-purple-600 rounded-lg disabled:opacity-50"
+                      >
+                        {scraping ? '...' : '📥 Import'}
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2">
+                      Supports: Ticketmaster, Sulekha Events, Fandango
+                    </p>
+                  </div>
+
+                  <div className="border-t border-gray-700 pt-4">
                     <label className="block text-sm mb-2">Event Name *</label>
                     <div className="flex gap-2">
                       <input
@@ -298,6 +400,7 @@ export default function EventsManagement() {
                       <option value="comedy">Comedy</option>
                       <option value="sports">Sports</option>
                       <option value="festival">Festival</option>
+                      <option value="movie">Movie</option>
                     </select>
                   </div>
 
@@ -308,7 +411,7 @@ export default function EventsManagement() {
                       onChange={(e) => setFormData({...formData, description: e.target.value})}
                       className="w-full px-4 py-2 bg-white/10 rounded-lg"
                       rows={4}
-                      placeholder="Event description (AI can generate this)"
+                      placeholder="Event description"
                     />
                   </div>
 
@@ -325,6 +428,14 @@ export default function EventsManagement() {
                       placeholder="e.g., Artist Name, Opening Act"
                     />
                   </div>
+
+                  {formData.sourceUrl && (
+                    <div className="text-xs text-gray-400">
+                      Source: <a href={formData.sourceUrl} target="_blank" className="text-purple-400 hover:underline">
+                        {formData.sourceUrl.substring(0, 50)}...
+                      </a>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -421,6 +532,9 @@ export default function EventsManagement() {
                     {formData.performers.length > 0 && (
                       <p><span className="text-gray-400">Performers:</span> {formData.performers.join(', ')}</p>
                     )}
+                    {formData.sourceUrl && (
+                      <p><span className="text-gray-400">Source:</span> <span className="text-xs">{formData.sourceUrl}</span></p>
+                    )}
                   </div>
                 </div>
               )}
@@ -438,7 +552,7 @@ export default function EventsManagement() {
                   onClick={nextStep}
                   className="px-6 py-2 bg-purple-600 rounded-lg"
                 >
-                  {wizardStep === 4 ? 'Create Event' : 'Next'}
+                  {wizardStep === 4 ? (editingEvent ? 'Update Event' : 'Create Event') : 'Next'}
                 </button>
               </div>
             </div>
