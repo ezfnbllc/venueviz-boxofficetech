@@ -1,53 +1,28 @@
 'use client'
 import {useEffect, useState} from 'react'
 import {useRouter} from 'next/navigation'
-import {db} from '@/lib/firebase'
-import {collection, getDocs, query, orderBy} from 'firebase/firestore'
+import {AdminService} from '@/lib/admin/adminService'
 
 export default function AdminDashboard() {
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState('dashboard')
-  const [stats, setStats] = useState({
-    totalRevenue: 0,
-    totalOrders: 0,
-    totalEvents: 0,
-    totalCustomers: 0
-  })
-  const [orders, setOrders] = useState<any[]>([])
-  const [events, setEvents] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState<any>(null)
+  const [activeTab, setActiveTab] = useState('dashboard')
 
   useEffect(() => {
     if (!document.cookie.includes('auth=true')) {
       router.push('/login')
       return
     }
-    loadData()
+    loadDashboard()
   }, [])
 
-  const loadData = async () => {
+  const loadDashboard = async () => {
     try {
-      const [ordersSnap, eventsSnap] = await Promise.all([
-        getDocs(query(collection(db, 'orders'), orderBy('createdAt', 'desc'))),
-        getDocs(query(collection(db, 'events'), orderBy('date', 'asc')))
-      ])
-
-      const ordersData = ordersSnap.docs.map(doc => ({id: doc.id, ...doc.data()}))
-      const eventsData = eventsSnap.docs.map(doc => ({id: doc.id, ...doc.data()}))
-
-      setOrders(ordersData)
-      setEvents(eventsData)
-      
-      const totalRevenue = ordersData.reduce((sum, order) => sum + (order.total || 0), 0)
-      
-      setStats({
-        totalRevenue,
-        totalOrders: ordersData.length,
-        totalEvents: eventsData.length,
-        totalCustomers: new Set(ordersData.map(o => o.customerEmail)).size
-      })
-    } catch (e) {
-      console.error('Error loading data:', e)
+      const dashboardStats = await AdminService.getDashboardStats()
+      setStats(dashboardStats)
+    } catch (error) {
+      console.error('Error loading dashboard:', error)
     }
     setLoading(false)
   }
@@ -58,9 +33,24 @@ export default function AdminDashboard() {
     {id: 'venues', label: 'Venues', icon: '🏛️'},
     {id: 'orders', label: 'Orders', icon: '🎫'},
     {id: 'customers', label: 'Customers', icon: '👥'},
-    {id: 'promotions', label: 'Promotions', icon: '🎁'},
-    {id: 'analytics', label: 'Analytics', icon: '📈'}
+    {id: 'promotions', label: 'Promotions', icon: '🎁'}
   ]
+
+  const navigateToSection = (section: string) => {
+    if (section === 'dashboard') {
+      setActiveTab('dashboard')
+    } else {
+      router.push(`/admin/${section}`)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-purple-500"/>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
@@ -69,9 +59,10 @@ export default function AdminDashboard() {
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex justify-between items-center">
             <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-600 bg-clip-text text-transparent">
-              Admin CMS
+              Admin CMS - VenueViz
             </h1>
             <div className="flex gap-4">
+              <span className="text-sm text-gray-400">Connected to Firebase</span>
               <button onClick={() => router.push('/')} className="px-4 py-2 bg-purple-600 rounded-lg">
                 View Site
               </button>
@@ -96,7 +87,7 @@ export default function AdminDashboard() {
             {tabs.map(tab => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => navigateToSection(tab.id)}
                 className={`py-4 px-2 border-b-2 whitespace-nowrap transition flex items-center gap-2 ${
                   activeTab === tab.id 
                     ? 'border-purple-500 text-white' 
@@ -111,143 +102,90 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Content */}
+      {/* Dashboard Content */}
       <div className="max-w-7xl mx-auto p-6">
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
+        {/* Stats Grid */}
+        <div className="grid md:grid-cols-4 gap-6 mb-8">
+          <div className="p-6 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10">
+            <p className="text-3xl font-bold">${(stats?.revenue || 0).toLocaleString()}</p>
+            <p className="text-gray-400">Total Revenue</p>
           </div>
-        ) : (
-          <>
-            {activeTab === 'dashboard' && (
-              <div className="space-y-6">
-                {/* Stats Grid */}
-                <div className="grid md:grid-cols-4 gap-6">
-                  <div className="p-6 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10">
-                    <p className="text-3xl font-bold">${stats.totalRevenue.toLocaleString()}</p>
-                    <p className="text-gray-400">Total Revenue</p>
-                  </div>
-                  <div className="p-6 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10">
-                    <p className="text-3xl font-bold">{stats.totalOrders}</p>
-                    <p className="text-gray-400">Total Orders</p>
-                  </div>
-                  <div className="p-6 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10">
-                    <p className="text-3xl font-bold">{stats.totalEvents}</p>
-                    <p className="text-gray-400">Active Events</p>
-                  </div>
-                  <div className="p-6 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10">
-                    <p className="text-3xl font-bold">{stats.totalCustomers}</p>
-                    <p className="text-gray-400">Customers</p>
-                  </div>
-                </div>
+          <div className="p-6 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10">
+            <p className="text-3xl font-bold">{stats?.orders || 0}</p>
+            <p className="text-gray-400">Total Orders</p>
+          </div>
+          <div className="p-6 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10">
+            <p className="text-3xl font-bold">{stats?.customers || 0}</p>
+            <p className="text-gray-400">Customers</p>
+          </div>
+          <div className="p-6 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10">
+            <p className="text-3xl font-bold">{stats?.events || 0}</p>
+            <p className="text-gray-400">Active Events</p>
+          </div>
+        </div>
 
-                {/* Recent Orders */}
-                <div className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-6">
-                  <h2 className="text-xl font-bold mb-4">Recent Orders</h2>
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="border-b border-white/10">
-                        <tr>
-                          <th className="text-left py-2">Order ID</th>
-                          <th className="text-left py-2">Customer</th>
-                          <th className="text-left py-2">Seats</th>
-                          <th className="text-left py-2">Total</th>
-                          <th className="text-left py-2">Date</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {orders.slice(0, 10).map(order => (
-                          <tr key={order.id} className="border-b border-white/5">
-                            <td className="py-2">{order.orderId}</td>
-                            <td className="py-2">{order.customerEmail}</td>
-                            <td className="py-2">{order.seats?.length || 0}</td>
-                            <td className="py-2">${order.total?.toFixed(2)}</td>
-                            <td className="py-2">{new Date(order.createdAt).toLocaleDateString()}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            )}
+        {/* Quick Actions */}
+        <div className="grid md:grid-cols-3 gap-6 mb-8">
+          <button 
+            onClick={() => router.push('/admin/events')}
+            className="p-6 bg-gradient-to-br from-purple-600/20 to-pink-600/20 rounded-xl border border-purple-500/30 text-left hover:scale-105 transition"
+          >
+            <div className="text-3xl mb-3">🎭</div>
+            <h3 className="font-bold mb-2">Manage Events</h3>
+            <p className="text-sm text-gray-400">Create and manage events</p>
+          </button>
+          <button 
+            onClick={() => router.push('/admin/orders')}
+            className="p-6 bg-gradient-to-br from-blue-600/20 to-cyan-600/20 rounded-xl border border-blue-500/30 text-left hover:scale-105 transition"
+          >
+            <div className="text-3xl mb-3">🎫</div>
+            <h3 className="font-bold mb-2">View Orders</h3>
+            <p className="text-sm text-gray-400">Track all orders</p>
+          </button>
+          <button 
+            onClick={() => router.push('/admin/promotions')}
+            className="p-6 bg-gradient-to-br from-green-600/20 to-emerald-600/20 rounded-xl border border-green-500/30 text-left hover:scale-105 transition"
+          >
+            <div className="text-3xl mb-3">🎁</div>
+            <h3 className="font-bold mb-2">Promotions</h3>
+            <p className="text-sm text-gray-400">Manage discount codes</p>
+          </button>
+        </div>
 
-            {activeTab === 'events' && (
-              <div className="space-y-6">
-                <div className="flex justify-between items-center">
-                  <h2 className="text-2xl font-bold">Event Management</h2>
-                  <button 
-                    onClick={() => router.push('/admin/events/new')}
-                    className="px-6 py-2 bg-purple-600 rounded-lg"
-                  >
-                    + Add Event
-                  </button>
-                </div>
-
-                <div className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-6">
-                  <div className="grid gap-4">
-                    {events.map(event => (
-                      <div key={event.id} className="flex justify-between items-center p-4 bg-white/5 rounded-lg">
-                        <div>
-                          <p className="font-bold">{event.name}</p>
-                          <p className="text-sm text-gray-400">{event.venue} • {event.date}</p>
-                        </div>
-                        <div className="flex gap-2">
-                          <button className="px-4 py-2 bg-purple-600/20 rounded-lg">Edit</button>
-                          <button className="px-4 py-2 bg-red-600/20 text-red-400 rounded-lg">Delete</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'orders' && (
-              <div className="space-y-6">
-                <h2 className="text-2xl font-bold">Order Management</h2>
-                <div className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-6">
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="border-b border-white/10">
-                        <tr>
-                          <th className="text-left py-2">Order ID</th>
-                          <th className="text-left py-2">Customer</th>
-                          <th className="text-left py-2">Email</th>
-                          <th className="text-left py-2">Phone</th>
-                          <th className="text-left py-2">Total</th>
-                          <th className="text-left py-2">Status</th>
-                          <th className="text-left py-2">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {orders.map(order => (
-                          <tr key={order.id} className="border-b border-white/5">
-                            <td className="py-2">{order.orderId}</td>
-                            <td className="py-2">{order.customerName}</td>
-                            <td className="py-2">{order.customerEmail}</td>
-                            <td className="py-2">{order.customerPhone}</td>
-                            <td className="py-2">${order.total?.toFixed(2)}</td>
-                            <td className="py-2">
-                              <span className="px-2 py-1 bg-green-600/20 text-green-400 rounded text-xs">
-                                {order.status}
-                              </span>
-                            </td>
-                            <td className="py-2">
-                              <button className="text-purple-400 hover:text-purple-300">View</button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Add more tab content as needed */}
-          </>
-        )}
+        {/* Recent Orders */}
+        <div className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-6">
+          <h2 className="text-xl font-bold mb-4">Recent Orders</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="border-b border-white/10">
+                <tr>
+                  <th className="text-left py-2">Order ID</th>
+                  <th className="text-left py-2">Customer</th>
+                  <th className="text-left py-2">Amount</th>
+                  <th className="text-left py-2">Status</th>
+                  <th className="text-left py-2">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats?.recentOrders?.map((order: any) => (
+                  <tr key={order.id} className="border-b border-white/5">
+                    <td className="py-2">{order.orderId || order.id.slice(0,8)}</td>
+                    <td className="py-2">{order.customerEmail}</td>
+                    <td className="py-2">${order.total?.toFixed(2)}</td>
+                    <td className="py-2">
+                      <span className="px-2 py-1 bg-green-600/20 text-green-400 rounded text-xs">
+                        {order.status || 'confirmed'}
+                      </span>
+                    </td>
+                    <td className="py-2">
+                      {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'N/A'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   )
