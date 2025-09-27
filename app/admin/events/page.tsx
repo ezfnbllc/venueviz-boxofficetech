@@ -111,7 +111,8 @@ export default function EventsManagement() {
     setWizardStep(1)
   }
 
-  const handleDelete = async (id: string, name: string) => {
+  const handleDelete = async (e: React.MouseEvent, id: string, name: string) => {
+    e.stopPropagation()
     if (confirm(`Are you sure you want to delete "${name}"?`)) {
       try {
         await AdminService.deleteEvent(id)
@@ -410,41 +411,54 @@ export default function EventsManagement() {
           </div>
         </div>
 
-        {/* Events Grid */}
+        {/* Events Grid with icon buttons */}
         {!loading && (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {events.map(event => (
-              <div key={event.id} className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden">
-                {event.images?.[0] && (
-                  <img src={event.images[0]} alt={event.name} className="w-full h-48 object-cover" />
-                )}
-                {!event.images?.[0] && (
-                  <div className="w-full h-48 bg-gradient-to-br from-purple-600/20 to-pink-600/20 flex items-center justify-center">
-                    <span className="text-6xl opacity-20">🎭</span>
+              <div key={event.id} className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden group">
+                <div className="relative">
+                  {event.images?.[0] ? (
+                    <img src={event.images[0]} alt={event.name} className="w-full h-48 object-cover" />
+                  ) : (
+                    <div className="w-full h-48 bg-gradient-to-br from-purple-600/20 to-pink-600/20 flex items-center justify-center">
+                      <span className="text-6xl opacity-20">🎭</span>
+                    </div>
+                  )}
+                  
+                  {/* Action buttons overlay on top-right of image */}
+                  <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleEdit(event)
+                      }}
+                      className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center hover:bg-blue-700 transition"
+                      title="Edit Event"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                    </button>
+                    <button 
+                      onClick={(e) => handleDelete(e, event.id, event.name)}
+                      className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center hover:bg-red-700 transition"
+                      title="Delete Event"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
                   </div>
-                )}
+                </div>
+                
                 <div className="p-6">
                   <h3 className="text-xl font-bold mb-2">{event.name}</h3>
                   <p className="text-gray-400 text-sm mb-1">{event.venue}</p>
-                  <p className="text-gray-400 text-sm mb-1">
+                  <p className="text-gray-400 text-sm mb-4">
                     {event.date ? new Date(event.date).toLocaleDateString() : 'TBD'}
                   </p>
-                  <div className="text-lg font-bold mb-4">
+                  <div className="text-lg font-bold">
                     {event.pricing?.[0] ? `From $${event.pricing[0].price}` : `$${event.price || 0}`}
-                  </div>
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => handleEdit(event)}
-                      className="flex-1 py-2 bg-blue-600/20 text-blue-400 rounded-lg hover:bg-blue-600/30 transition"
-                    >
-                      Edit
-                    </button>
-                    <button 
-                      onClick={() => handleDelete(event.id, event.name)}
-                      className="flex-1 py-2 bg-red-600/20 text-red-400 rounded-lg hover:bg-red-600/30 transition"
-                    >
-                      Delete
-                    </button>
                   </div>
                 </div>
               </div>
@@ -483,7 +497,7 @@ export default function EventsManagement() {
                 ))}
               </div>
 
-              {/* Step 1: Basic Info */}
+              {/* Step 1: Basic Info - keeping existing */}
               {wizardStep === 1 && (
                 <div className="space-y-4 max-h-[60vh] overflow-y-auto">
                   {/* URL Import */}
@@ -628,7 +642,7 @@ export default function EventsManagement() {
                 </div>
               )}
 
-              {/* Step 2: Venue & Layout */}
+              {/* Step 2: Venue & Layout - keeping existing */}
               {wizardStep === 2 && (
                 <div className="space-y-4">
                   <div>
@@ -688,7 +702,7 @@ export default function EventsManagement() {
                 </div>
               )}
 
-              {/* Step 3: Pricing */}
+              {/* Step 3: Pricing with LABELS */}
               {wizardStep === 3 && (
                 <div className="space-y-4 max-h-[60vh] overflow-y-auto">
                   <h3 className="text-lg font-semibold">Pricing Tiers</h3>
@@ -696,60 +710,77 @@ export default function EventsManagement() {
                   {formData.pricing.map((tier, index) => (
                     <div key={index} className="bg-white/5 rounded-lg p-4">
                       <div className="grid grid-cols-2 gap-4">
-                        <input
-                          type="text"
-                          placeholder="Tier Name (e.g., VIP)"
-                          value={tier.level}
-                          onChange={(e) => {
-                            const newPricing = [...formData.pricing]
-                            newPricing[index].level = e.target.value
-                            setFormData({...formData, pricing: newPricing})
-                          }}
-                          className="px-4 py-2 bg-white/10 rounded-lg"
-                        />
-                        <input
-                          type="number"
-                          placeholder="Base Price"
-                          value={tier.price}
-                          onChange={(e) => {
-                            const newPricing = [...formData.pricing]
-                            newPricing[index].price = parseInt(e.target.value)
-                            setFormData({...formData, pricing: newPricing})
-                          }}
-                          className="px-4 py-2 bg-white/10 rounded-lg"
-                        />
-                        <input
-                          type="number"
-                          placeholder="Service Fee"
-                          value={tier.serviceFee}
-                          onChange={(e) => {
-                            const newPricing = [...formData.pricing]
-                            newPricing[index].serviceFee = parseInt(e.target.value)
-                            setFormData({...formData, pricing: newPricing})
-                          }}
-                          className="px-4 py-2 bg-white/10 rounded-lg"
-                        />
-                        <input
-                          type="number"
-                          placeholder="Tax %"
-                          value={tier.tax}
-                          onChange={(e) => {
-                            const newPricing = [...formData.pricing]
-                            newPricing[index].tax = parseInt(e.target.value)
-                            setFormData({...formData, pricing: newPricing})
-                          }}
-                          className="px-4 py-2 bg-white/10 rounded-lg"
-                        />
+                        <div>
+                          <label className="block text-xs text-gray-400 mb-1">Tier Name</label>
+                          <input
+                            type="text"
+                            placeholder="e.g., VIP, Orchestra, General"
+                            value={tier.level}
+                            onChange={(e) => {
+                              const newPricing = [...formData.pricing]
+                              newPricing[index].level = e.target.value
+                              setFormData({...formData, pricing: newPricing})
+                            }}
+                            className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-400 mb-1">Base Price ($)</label>
+                          <input
+                            type="number"
+                            placeholder="50"
+                            value={tier.price}
+                            onChange={(e) => {
+                              const newPricing = [...formData.pricing]
+                              newPricing[index].price = parseInt(e.target.value) || 0
+                              setFormData({...formData, pricing: newPricing})
+                            }}
+                            className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-400 mb-1">Service Fee ($)</label>
+                          <input
+                            type="number"
+                            placeholder="5"
+                            value={tier.serviceFee}
+                            onChange={(e) => {
+                              const newPricing = [...formData.pricing]
+                              newPricing[index].serviceFee = parseInt(e.target.value) || 0
+                              setFormData({...formData, pricing: newPricing})
+                            }}
+                            className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-400 mb-1">Tax (%)</label>
+                          <input
+                            type="number"
+                            placeholder="8"
+                            value={tier.tax}
+                            onChange={(e) => {
+                              const newPricing = [...formData.pricing]
+                              newPricing[index].tax = parseInt(e.target.value) || 0
+                              setFormData({...formData, pricing: newPricing})
+                            }}
+                            className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                          />
+                        </div>
                       </div>
-                      <button
-                        onClick={() => {
-                          const newPricing = formData.pricing.filter((_, i) => i !== index)
-                          setFormData({...formData, pricing: newPricing})
-                        }}
-                        className="mt-2 text-red-400 text-sm"
-                      >
-                        Remove Tier
-                      </button>
+                      <div className="mt-3 flex justify-between items-center">
+                        <span className="text-sm text-gray-400">
+                          Total per ticket: ${((tier.price || 0) + (tier.serviceFee || 0)) * (1 + (tier.tax || 0) / 100)}
+                        </span>
+                        <button
+                          onClick={() => {
+                            const newPricing = formData.pricing.filter((_, i) => i !== index)
+                            setFormData({...formData, pricing: newPricing})
+                          }}
+                          className="text-red-400 text-sm hover:text-red-300"
+                        >
+                          Remove Tier
+                        </button>
+                      </div>
                     </div>
                   ))}
 
@@ -813,7 +844,7 @@ export default function EventsManagement() {
                 </div>
               )}
 
-              {/* Step 4: Schedule */}
+              {/* Step 4: Schedule - keeping existing */}
               {wizardStep === 4 && (
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
@@ -915,7 +946,7 @@ export default function EventsManagement() {
                 </div>
               )}
 
-              {/* Step 5: Review */}
+              {/* Step 5: Review - keeping existing */}
               {wizardStep === 5 && (
                 <div className="space-y-4 max-h-[60vh] overflow-y-auto">
                   <h3 className="text-xl font-bold mb-4">Review Event Details</h3>
@@ -938,7 +969,7 @@ export default function EventsManagement() {
                         <ul className="ml-4 mt-1">
                           {formData.pricing.map((tier, i) => (
                             <li key={i} className="text-sm">
-                              {tier.level}: ${tier.price} (+ ${tier.serviceFee} fee, {tier.tax}% tax)
+                              {tier.level}: ${tier.price} (+ ${tier.serviceFee} fee, {tier.tax}% tax) = ${((tier.price + tier.serviceFee) * (1 + tier.tax / 100)).toFixed(2)} total
                             </li>
                           ))}
                         </ul>
