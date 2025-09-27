@@ -256,3 +256,35 @@ export class AdminService {
     }
   }
 }
+
+  static async getLayoutsByVenueId(venueId: string): Promise<any[]> {
+    try {
+      const q = query(collection(db, 'layouts'), where('venueId', '==', venueId))
+      const snapshot = await getDocs(q)
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+    } catch (error) {
+      console.error('Error fetching layouts:', error)
+      return []
+    }
+  }
+
+  static async updateVenue(id: string, data: any) {
+    const updateData: any = {
+      ...data,
+      updatedAt: Timestamp.now()
+    }
+    await updateDoc(doc(db, 'venues', id), updateData)
+  }
+
+  static async deleteVenue(id: string) {
+    // First delete all layouts for this venue
+    const layouts = await this.getLayoutsByVenueId(id)
+    for (const layout of layouts) {
+      await deleteDoc(doc(db, 'layouts', layout.id))
+    }
+    // Then delete the venue
+    await deleteDoc(doc(db, 'venues', id))
+  }
