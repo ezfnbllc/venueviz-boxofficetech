@@ -9,7 +9,7 @@ export default function BoxOffice(){
   const router=useRouter()
   const{selectedSeats,selectSeat,deselectSeat}=useStore()
   const[event,setEvent]=useState<any>(null)
-  const[loading,setLoading]==useState(false)
+  const[loading,setLoading]=useState(false)
 
   const sections=[
     {name:'Orchestra',rows:12,seatsPerRow:20,price:150,color:'from-purple-600 to-pink-600'},
