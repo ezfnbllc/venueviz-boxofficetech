@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useFirebaseAuth } from '@/lib/firebase-auth'
 
@@ -7,29 +7,55 @@ export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const router = useRouter()
-  const { signIn } = useFirebaseAuth()
+  const { signIn, user, loading } = useFirebaseAuth()
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!loading && user) {
+      console.log('User already logged in, redirecting...')
+      router.push('/admin')
+    }
+  }, [user, loading, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    setLoading(true)
+    setIsSubmitting(true)
 
-    const result = await signIn(email, password)
-    
-    if (result.success) {
-      router.push('/admin')
-    } else {
-      setError(result.error)
-      setLoading(false)
+    try {
+      console.log('Submitting login form...')
+      const result = await signIn(email, password)
+      
+      if (result.success) {
+        console.log('Login successful, waiting for redirect...')
+        // The redirect will happen automatically in the auth provider
+      } else {
+        console.log('Login failed:', result.error)
+        setError(result.error)
+        setIsSubmitting(false)
+      }
+    } catch (err: any) {
+      console.error('Unexpected error:', err)
+      setError('An unexpected error occurred. Please try again.')
+      setIsSubmitting(false)
     }
   }
 
   const handleDemoLogin = () => {
-    setEmail('admin@venueviz.com')
-    setPassword('ChangeMeNow!')
-    setError('Use these credentials with Firebase Auth configured')
+    setEmail('boxofficetechllp@gmail.com')
+    setPassword('')
+    setError('Enter your Firebase password')
+  }
+
+  // Show loading while checking auth state
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-purple-500"/>
+      </div>
+    )
   }
 
   return (
@@ -51,7 +77,7 @@ export default function Login() {
               className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white" 
               placeholder="Email" 
               required
-              disabled={loading}
+              disabled={isSubmitting}
             />
           </div>
           
@@ -63,7 +89,7 @@ export default function Login() {
               className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white" 
               placeholder="Password" 
               required
-              disabled={loading}
+              disabled={isSubmitting}
             />
           </div>
           
@@ -75,10 +101,10 @@ export default function Login() {
           
           <button 
             type="submit" 
-            disabled={loading}
+            disabled={isSubmitting}
             className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg font-semibold disabled:opacity-50"
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+            {isSubmitting ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
         
@@ -87,14 +113,13 @@ export default function Login() {
             onClick={handleDemoLogin}
             className="w-full p-4 bg-purple-600/10 rounded-lg text-purple-400 text-sm hover:bg-purple-600/20"
           >
-            Need demo credentials? Click here
+            Admin Email: boxofficetechllp@gmail.com
           </button>
         </div>
         
         <div className="mt-4 text-center text-xs text-gray-500">
-          <p>To create admin account:</p>
-          <p>1. Register in Firebase Console</p>
-          <p>2. Set user role to 'admin' in Firestore</p>
+          <p>Make sure Email/Password auth is enabled in</p>
+          <p>Firebase Console → Authentication → Sign-in method</p>
         </div>
       </div>
     </div>
