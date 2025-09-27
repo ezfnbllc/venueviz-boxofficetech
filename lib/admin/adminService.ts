@@ -23,7 +23,7 @@ export class AdminService {
     const layoutData = {
       venueId: data.venueId,
       name: data.name,
-      type: data.type, // 'seating_chart' or 'general_admission'
+      type: data.type,
       configuration: data.configuration,
       createdAt: Timestamp.now()
     }
@@ -71,7 +71,14 @@ export class AdminService {
       promotionIds: data.promotionIds || [],
       allowPromotionStacking: false,
       ticketPurchaseUrl: data.sourceUrl || '',
-      scrapeUrl: data.sourceUrl || ''
+      scrapeUrl: data.sourceUrl || '',
+      seo: data.seo || {
+        pageTitle: '',
+        pageDescription: '',
+        keywords: [],
+        urlSlug: '',
+        structuredData: {}
+      }
     }
     
     const docRef = await addDoc(collection(db, 'events'), eventData)
@@ -134,7 +141,7 @@ export class AdminService {
     return docRef.id
   }
 
-  // Keep all other existing methods...
+  // Keep all existing methods...
   static async getOrders(): Promise<any[]> {
     try {
       const ordersRef = collection(db, 'orders')
