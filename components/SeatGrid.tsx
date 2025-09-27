@@ -28,6 +28,17 @@ export default function SeatGrid({ sections, readOnly = false, onSeatClick, sele
     }
   }
   
+  // Check if sections have valid data
+  const validSections = sections.filter(s => s.rows > 0 && s.seatsPerRow > 0)
+  
+  if (validSections.length === 0) {
+    return (
+      <div className="bg-black/40 rounded-lg p-4">
+        <p className="text-center text-gray-400">No seats to display</p>
+      </div>
+    )
+  }
+  
   return (
     <div className="bg-black/40 rounded-lg p-4 overflow-auto">
       {/* Stage */}
@@ -37,33 +48,60 @@ export default function SeatGrid({ sections, readOnly = false, onSeatClick, sele
       
       {/* Sections */}
       <div className="space-y-6">
-        {sections.map((section) => (
-          <div key={section.id} className="text-center">
+        {validSections.map((section) => (
+          <div key={section.id || section.name} className="text-center">
             <h5 className="text-sm font-semibold mb-2">{section.name}</h5>
-            <div className="inline-block">
-              {Array.from({ length: section.rows || 0 }, (_, rowIndex) => (
-                <div key={rowIndex} className="flex justify-center gap-1 mb-1">
+            
+            {/* Seats Grid */}
+            <div className="inline-block bg-black/20 p-2 rounded">
+              {Array.from({ length: section.rows }, (_, rowIndex) => (
+                <div key={rowIndex} className="flex items-center gap-1 mb-1">
+                  {/* Row Label */}
                   <span className="text-xs text-gray-500 w-6 text-right pr-1">
                     {String.fromCharCode(65 + rowIndex)}
                   </span>
-                  {Array.from({ length: section.seatsPerRow || 0 }, (_, seatIndex) => {
-                    const seatId = getSeatId(section.id, rowIndex + 1, seatIndex + 1)
-                    return (
-                      <button
-                        key={seatIndex}
-                        className={`w-3 h-3 rounded-sm transition-all ${getSeatColor(section, seatId)} ${
-                          !readOnly ? 'hover:scale-110 cursor-pointer' : ''
-                        }`}
-                        onClick={() => !readOnly && onSeatClick && onSeatClick(section.id, rowIndex + 1, seatIndex + 1)}
-                        onMouseEnter={() => !readOnly && setHoveredSeat(seatId)}
-                        onMouseLeave={() => !readOnly && setHoveredSeat(null)}
-                        title={`${section.name} Row ${String.fromCharCode(65 + rowIndex)} Seat ${seatIndex + 1}`}
-                      />
-                    )
-                  })}
+                  
+                  {/* Seats */}
+                  <div className="flex gap-1">
+                    {Array.from({ length: section.seatsPerRow }, (_, seatIndex) => {
+                      const seatId = getSeatId(section.id || section.name, rowIndex + 1, seatIndex + 1)
+                      return (
+                        <button
+                          key={seatIndex}
+                          className={`w-3 h-3 rounded-sm transition-all ${getSeatColor(section, seatId)} ${
+                            !readOnly ? 'hover:scale-110 cursor-pointer' : ''
+                          }`}
+                          onClick={() => !readOnly && onSeatClick && onSeatClick(section.id || section.name, rowIndex + 1, seatIndex + 1)}
+                          onMouseEnter={() => !readOnly && setHoveredSeat(seatId)}
+                          onMouseLeave={() => !readOnly && setHoveredSeat(null)}
+                          title={`${section.name} Row ${String.fromCharCode(65 + rowIndex)} Seat ${seatIndex + 1}`}
+                          disabled={readOnly}
+                        />
+                      )
+                    })}
+                  </div>
+                  
+                  {/* Seat numbers for first row */}
+                  {rowIndex === 0 && (
+                    <div className="flex gap-1 ml-1">
+                      {Array.from({ length: Math.min(3, section.seatsPerRow) }, (_, i) => (
+                        <span key={i} className="text-xs text-gray-600 w-3 text-center">
+                          {i + 1}
+                        </span>
+                      ))}
+                      {section.seatsPerRow > 3 && (
+                        <span className="text-xs text-gray-600">...</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
+            
+            {/* Section info */}
+            <p className="text-xs text-gray-400 mt-1">
+              {section.rows} rows × {section.seatsPerRow} seats = {section.rows * section.seatsPerRow} total
+            </p>
           </div>
         ))}
       </div>

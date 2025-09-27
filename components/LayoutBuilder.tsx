@@ -2,7 +2,6 @@
 import {useState, useEffect} from 'react'
 import {AdminService} from '@/lib/admin/adminService'
 import SeatGrid from './SeatGrid'
-import LayoutAI from './LayoutAI'
 
 interface LayoutBuilderProps {
   venue: any
@@ -19,7 +18,7 @@ export default function LayoutBuilder({ venue, onClose }: LayoutBuilderProps) {
   
   const [formData, setFormData] = useState({
     name: '',
-    type: 'seating_chart', // seating_chart or general_admission
+    type: 'seating_chart',
     sections: [] as any[],
     totalCapacity: 0,
     configuration: {} as any
@@ -99,9 +98,14 @@ export default function LayoutBuilder({ venue, onClose }: LayoutBuilderProps) {
           totalCapacity: data.totalCapacity || venue.capacity,
           configuration: data.configuration || {}
         }))
+      } else {
+        const error = await response.json()
+        console.error('AI generation error:', error)
+        alert('Error generating layout: ' + (error.error || 'Unknown error'))
       }
     } catch (error) {
       console.error('AI generation error:', error)
+      alert('Error generating layout')
     }
     setAiGenerating(false)
   }
@@ -115,7 +119,7 @@ export default function LayoutBuilder({ venue, onClose }: LayoutBuilderProps) {
           if (formData.type === 'general_admission') {
             return sum + (section.capacity || 0)
           } else {
-            return sum + (section.rows * section.seatsPerRow || 0)
+            return sum + ((section.rows || 0) * (section.seatsPerRow || 0))
           }
         }, 0)
       }
@@ -171,8 +175,9 @@ export default function LayoutBuilder({ venue, onClose }: LayoutBuilderProps) {
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-      <div className="bg-gray-900 rounded-xl p-6 w-full max-w-7xl h-[90vh] flex flex-col">
-        <div className="flex justify-between items-center mb-6">
+      <div className="bg-gray-900 rounded-xl w-full max-w-7xl h-[90vh] flex flex-col">
+        {/* Header - Fixed */}
+        <div className="flex justify-between items-center p-6 border-b border-white/10">
           <div>
             <h2 className="text-2xl font-bold">Layout Manager - {venue.name}</h2>
             <p className="text-gray-400 text-sm">Capacity: {venue.capacity}</p>
@@ -180,7 +185,8 @@ export default function LayoutBuilder({ venue, onClose }: LayoutBuilderProps) {
           <button onClick={onClose} className="text-gray-400 hover:text-white text-2xl">✕</button>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        {/* Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto p-6">
           {!showCreateModal ? (
             <>
               {/* Layout List */}
@@ -273,7 +279,7 @@ export default function LayoutBuilder({ venue, onClose }: LayoutBuilderProps) {
                         onChange={(e) => setFormData({
                           ...formData, 
                           type: e.target.value,
-                          sections: [] // Reset sections when changing type
+                          sections: []
                         })}
                         className="w-full px-4 py-2 bg-white/10 rounded-lg"
                       >
@@ -310,9 +316,9 @@ export default function LayoutBuilder({ venue, onClose }: LayoutBuilderProps) {
                       </p>
                     </div>
                   ) : (
-                    <div className="space-y-3">
+                    <div className="space-y-3 max-h-60 overflow-y-auto">
                       {formData.sections.map((section, index) => (
-                        <div key={section.id} className="bg-white/5 rounded-lg p-3">
+                        <div key={section.id || index} className="bg-white/5 rounded-lg p-3">
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             <div>
                               <label className="text-xs text-gray-400">Section Name</label>
@@ -331,7 +337,7 @@ export default function LayoutBuilder({ venue, onClose }: LayoutBuilderProps) {
                                   <input
                                     type="number"
                                     value={section.rows}
-                                    onChange={(e) => updateSection(index, {rows: parseInt(e.target.value)})}
+                                    onChange={(e) => updateSection(index, {rows: parseInt(e.target.value) || 0})}
                                     className="w-full px-2 py-1 bg-white/10 rounded text-sm"
                                   />
                                 </div>
@@ -340,7 +346,7 @@ export default function LayoutBuilder({ venue, onClose }: LayoutBuilderProps) {
                                   <input
                                     type="number"
                                     value={section.seatsPerRow}
-                                    onChange={(e) => updateSection(index, {seatsPerRow: parseInt(e.target.value)})}
+                                    onChange={(e) => updateSection(index, {seatsPerRow: parseInt(e.target.value) || 0})}
                                     className="w-full px-2 py-1 bg-white/10 rounded text-sm"
                                   />
                                 </div>
@@ -365,7 +371,7 @@ export default function LayoutBuilder({ venue, onClose }: LayoutBuilderProps) {
                                   <input
                                     type="number"
                                     value={section.capacity}
-                                    onChange={(e) => updateSection(index, {capacity: parseInt(e.target.value)})}
+                                    onChange={(e) => updateSection(index, {capacity: parseInt(e.target.value) || 0})}
                                     className="w-full px-2 py-1 bg-white/10 rounded text-sm"
                                   />
                                 </div>
@@ -381,31 +387,24 @@ export default function LayoutBuilder({ venue, onClose }: LayoutBuilderProps) {
                                     <option value="mixed">Mixed</option>
                                   </select>
                                 </div>
-                                <div className="flex items-end">
-                                  <button
-                                    onClick={() => removeSection(index)}
-                                    className="px-2 py-1 bg-red-600/20 text-red-400 rounded text-sm"
-                                  >
-                                    Remove
-                                  </button>
-                                </div>
                               </>
                             )}
                           </div>
                           
-                          {formData.type === 'seating_chart' && (
-                            <div className="flex justify-between items-center mt-2">
-                              <span className="text-xs text-gray-400">
-                                Total seats: {section.rows * section.seatsPerRow || 0}
-                              </span>
-                              <button
-                                onClick={() => removeSection(index)}
-                                className="px-2 py-1 bg-red-600/20 text-red-400 rounded text-sm"
-                              >
-                                Remove
-                              </button>
-                            </div>
-                          )}
+                          <div className="flex justify-between items-center mt-2">
+                            <span className="text-xs text-gray-400">
+                              {formData.type === 'seating_chart' 
+                                ? `Total seats: ${(section.rows || 0) * (section.seatsPerRow || 0)}`
+                                : `Capacity: ${section.capacity || 0}`
+                              }
+                            </span>
+                            <button
+                              onClick={() => removeSection(index)}
+                              className="px-2 py-1 bg-red-600/20 text-red-400 rounded text-sm"
+                            >
+                              Remove
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -439,8 +438,8 @@ export default function LayoutBuilder({ venue, onClose }: LayoutBuilderProps) {
           )}
         </div>
 
-        {/* Footer Actions */}
-        <div className="flex justify-end gap-4 mt-6 pt-6 border-t border-white/10">
+        {/* Footer Actions - Fixed */}
+        <div className="flex justify-end gap-4 p-6 border-t border-white/10 bg-gray-900">
           {showCreateModal ? (
             <>
               <button
