@@ -39,13 +39,33 @@ export class AdminService {
       promoterName: 'BoxOfficeTech',
       price: data.price || 100,
       capacity: data.capacity || 500,
-      images: [],
-      performers: [],
-      promotionIds: []
+      images: data.images || [],
+      performers: data.performers || [],
+      promotionIds: data.promotionIds || [],
+      allowPromotionStacking: false,
+      ticketPurchaseUrl: ''
     }
     
     const docRef = await addDoc(collection(db, 'events'), eventData)
     return docRef.id
+  }
+
+  static async updateEvent(id: string, data: any) {
+    const updateData: any = {
+      name: data.name,
+      description: data.description || '',
+      date: data.date ? Timestamp.fromDate(new Date(data.date)) : Timestamp.now(),
+      startTime: data.time || data.startTime || '19:00',
+      type: data.type || 'concert',
+      venueName: data.venue || '',
+      venueId: data.venueId || '',
+      price: data.price || 100,
+      capacity: data.capacity || 500,
+      performers: data.performers || [],
+      updatedAt: Timestamp.now()
+    }
+    
+    await updateDoc(doc(db, 'events', id), updateData)
   }
 
   static async deleteEvent(id: string) {
@@ -194,20 +214,5 @@ export class AdminService {
       console.error('Promoters error:', error.message, error.code)
       return []
     }
-  }
-
-  static async createPromoter(data: any) {
-    return await addDoc(collection(db, 'promoters'), {
-      ...data,
-      createdAt: Timestamp.now()
-    })
-  }
-
-  static async updatePromoter(id: string, data: any) {
-    await updateDoc(doc(db, 'promoters', id), data)
-  }
-
-  static async deletePromoter(id: string) {
-    await deleteDoc(doc(db, 'promoters', id))
   }
 }
