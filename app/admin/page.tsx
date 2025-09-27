@@ -2,18 +2,17 @@
 import {useEffect, useState} from 'react'
 import {useRouter} from 'next/navigation'
 import {AdminService} from '@/lib/admin/adminService'
+import ProtectedRoute from '@/components/ProtectedRoute'
+import {useFirebaseAuth} from '@/lib/firebase-auth'
 
-export default function AdminDashboard() {
+function AdminDashboardContent() {
   const router = useRouter()
+  const {signOut, userData} = useFirebaseAuth()
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<any>(null)
   const [activeTab, setActiveTab] = useState('dashboard')
 
   useEffect(() => {
-    if (!document.cookie.includes('auth=true')) {
-      router.push('/login')
-      return
-    }
     loadDashboard()
   }, [])
 
@@ -61,16 +60,15 @@ export default function AdminDashboard() {
             <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-600 bg-clip-text text-transparent">
               Admin CMS - VenueViz
             </h1>
-            <div className="flex gap-4">
-              <span className="text-sm text-gray-400">Connected to Firebase</span>
+            <div className="flex gap-4 items-center">
+              <span className="text-sm text-gray-400">
+                {userData?.email} ({userData?.role || 'user'})
+              </span>
               <button onClick={() => router.push('/')} className="px-4 py-2 bg-purple-600 rounded-lg">
                 View Site
               </button>
               <button 
-                onClick={() => {
-                  document.cookie = 'auth=;max-age=0;path=/'
-                  router.push('/login')
-                }}
+                onClick={signOut}
                 className="px-4 py-2 bg-red-600/20 text-red-400 rounded-lg"
               >
                 Logout
@@ -188,5 +186,13 @@ export default function AdminDashboard() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function AdminDashboard() {
+  return (
+    <ProtectedRoute requirePromoter>
+      <AdminDashboardContent />
+    </ProtectedRoute>
   )
 }
