@@ -19,10 +19,6 @@ export default function EventsManagement() {
   })
 
   useEffect(() => {
-    if (!document.cookie.includes('auth=true')) {
-      router.push('/login')
-      return
-    }
     loadEvents()
   }, [])
 
@@ -95,7 +91,6 @@ export default function EventsManagement() {
                     <th className="text-left py-2">Date</th>
                     <th className="text-left py-2">Price</th>
                     <th className="text-left py-2">Capacity</th>
-                    <th className="text-left py-2">Status</th>
                     <th className="text-left py-2">Actions</th>
                   </tr>
                 </thead>
@@ -107,11 +102,6 @@ export default function EventsManagement() {
                       <td className="py-2">{event.date ? new Date(event.date).toLocaleDateString() : 'N/A'}</td>
                       <td className="py-2">${event.price}</td>
                       <td className="py-2">{event.capacity || 500}</td>
-                      <td className="py-2">
-                        <span className="px-2 py-1 bg-green-600/20 text-green-400 rounded text-xs">
-                          {event.status || 'active'}
-                        </span>
-                      </td>
                       <td className="py-2">
                         <button onClick={() => handleDelete(event.id)} className="text-red-400 hover:text-red-300">
                           Delete
@@ -125,7 +115,6 @@ export default function EventsManagement() {
           </div>
         )}
 
-        {/* Create Event Modal */}
         {showModal && (
           <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
             <div className="bg-gray-900 rounded-xl p-6 w-full max-w-md">
@@ -149,7 +138,6 @@ export default function EventsManagement() {
                   <option value="Main Theater">Main Theater</option>
                   <option value="Concert Hall">Concert Hall</option>
                   <option value="Jazz Club">Jazz Club</option>
-                  <option value="Opera House">Opera House</option>
                 </select>
                 <input
                   type="date"
@@ -173,27 +161,12 @@ export default function EventsManagement() {
                   onChange={(e) => setFormData({...formData, price: parseInt(e.target.value)})}
                   className="w-full px-4 py-2 bg-white/10 rounded-lg"
                 />
-                <input
-                  type="number"
-                  placeholder="Capacity"
-                  required
-                  value={formData.capacity}
-                  onChange={(e) => setFormData({...formData, capacity: parseInt(e.target.value)})}
-                  className="w-full px-4 py-2 bg-white/10 rounded-lg"
-                />
-                <textarea
-                  placeholder="Description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({...formData, description: e.target.value})}
-                  className="w-full px-4 py-2 bg-white/10 rounded-lg"
-                  rows={3}
-                />
                 <div className="flex gap-2">
                   <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-2 bg-gray-700 rounded-lg">
                     Cancel
                   </button>
                   <button type="submit" className="flex-1 py-2 bg-purple-600 rounded-lg">
-                    Create Event
+                    Create
                   </button>
                 </div>
               </form>

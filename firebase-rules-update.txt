@@ -1,0 +1,22 @@
+IMPORTANT: Update Firebase Security Rules
+
+Go to: https://console.firebase.google.com/project/venueviz/firestore/rules
+
+Replace the orders section with:
+
+    // Orders - allow admin to read
+    match /orders/{orderId} {
+      // Allow admin/master users to read all orders
+      allow read: if request.auth != null && 
+                   (isMasterAdmin() || 
+                    (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
+      
+      // Keep existing write rules
+      allow create: if request.auth != null && isValidEmail();
+      allow update: if isMasterAdmin() || 
+                    (isPromoter() && resource.data.promoterId == getUserPromoterId());
+      allow delete: if isMasterAdmin();
+    }
+
+This allows authenticated admin users to read orders.
