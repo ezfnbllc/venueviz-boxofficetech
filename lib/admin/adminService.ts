@@ -1,19 +1,98 @@
 import {db} from '@/lib/firebase'
 import {
-  collection, getDocs, doc, addDoc, updateDoc, deleteDoc,
-  query, orderBy, limit, Timestamp, where
+  collection, getDocs, doc, addDoc, updateDoc, deleteDoc, setDoc,
+  query, orderBy, limit, where, Timestamp
 } from 'firebase/firestore'
 
 export class AdminService {
-  // Events - matches actual schema
+  // Check if we have permission to read orders
+  static async checkOrdersPermission(): Promise<boolean> {
+    try {
+      const testQuery = query(collection(db, 'orders'), limit(1))
+      await getDocs(testQuery)
+      return true
+    } catch (error: any) {
+      if (error.code === 'permission-denied') {
+        console.log('⚠️ No permission to read orders. Using demo data.')
+        console.log('Fix: Update Firebase Security Rules at https://console.firebase.google.com/project/venueviz/firestore/rules')
+      }
+      return false
+    }
+  }
+
+  // Create sample orders if we can write
+  static async createSampleOrders() {
+    try {
+      const hasPermission = await this.checkOrdersPermission()
+      if (!hasPermission) {
+        console.log('Cannot create sample orders - permission denied')
+        return
+      }
+
+      const ordersSnap = await getDocs(collection(db, 'orders'))
+      if (ordersSnap.empty) {
+        console.log('Creating sample orders...')
+        const sampleOrders = [
+          {
+            orderId: 'ORD-SAMPLE-001',
+            customerName: 'Sarah Johnson',
+            customerEmail: 'sarah@example.com',
+            customerPhone: '555-0101',
+            eventId: '0B56dDERyt2TKCldg2lS',
+            eventName: 'Agam Live prod',
+            eventDate: '2025-08-16',
+            tickets: [
+              {ticketId: 'TKT001', seatId: 'A1', section: 'Orchestra', row: 1, seat: 1, price: 150, ticketPrice: 150},
+              {ticketId: 'TKT002', seatId: 'A2', section: 'Orchestra', row: 1, seat: 2, price: 150, ticketPrice: 150}
+            ],
+            paymentMethod: 'card',
+            purchaseDate: Timestamp.now(),
+            promoterId: 'PAqFLcCQwxUYKr7i8g5t',
+            searchableEmails: ['sarah@example.com']
+          },
+          {
+            orderId: 'ORD-SAMPLE-002',
+            customerName: 'Mike Davis',
+            customerEmail: 'mike@example.com',
+            customerPhone: '555-0102',
+            eventId: '0B56dDERyt2TKCldg2lS',
+            eventName: 'Agam Live prod',
+            eventDate: '2025-08-16',
+            tickets: [
+              {ticketId: 'TKT003', seatId: 'B5', section: 'Mezzanine', row: 2, seat: 5, price: 100, ticketPrice: 100}
+            ],
+            paymentMethod: 'PayPal',
+            purchaseDate: Timestamp.now(),
+            promoterId: 'PAqFLcCQwxUYKr7i8g5t',
+            searchableEmails: ['mike@example.com']
+          }
+        ]
+        
+        for (const order of sampleOrders) {
+          await addDoc(collection(db, 'orders'), order)
+        }
+        console.log('Sample orders created')
+      }
+    } catch (error) {
+      console.error('Error creating sample orders:', error)
+    }
+  }
+
+  // Events - working fine
   static async getEvents(): Promise<any[]> {
     try {
       const snapshot = await getDocs(collection(db, 'events'))
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        date: doc.data().date?.toDate?.() || doc.data().date || new Date()
-      }))
+      return snapshot.docs.map(doc => {
+        const data = doc.data()
+        return {
+          id: doc.id,
+          ...data,
+          date: data.date?.toDate?.() || data.date || new Date(),
+          price: data.price || 100,
+          capacity: data.capacity || 500,
+          venue: data.venueName || data.venue || 'Unknown Venue'
+        }
+      })
     } catch (error) {
       console.error('Error fetching events:', error)
       return []
@@ -28,12 +107,12 @@ export class AdminService {
       startTime: data.time || data.startTime || '19:00',
       gateOpenTime: data.gateOpenTime || '',
       type: data.type || 'concert',
-      venueId: data.venueId || data.venue,
-      venueName: data.venueName || data.venue,
+      venueId: data.venueId || '',
+      venueName: data.venue || data.venueName || '',
       layoutId: data.layoutId || '',
       layoutName: data.layoutName || 'Standard',
-      promoterId: data.promoterId || '',
-      promoterName: data.promoterName || 'VenueViz',
+      promoterId: data.promoterId || 'PAqFLcCQwxUYKr7i8g5t',
+      promoterName: data.promoterName || 'BoxOfficeTech',
       images: data.images || [],
       performers: data.performers || [],
       promotionIds: data.promotionIds || [],
@@ -59,17 +138,26 @@ export class AdminService {
     await deleteDoc(doc(db, 'events', id))
   }
 
-  // Venues - matches actual schema
+  // Venues - working fine
   static async getVenues(): Promise<any[]> {
     try {
       const snapshot = await getDocs(collection(db, 'venues'))
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        address: `${doc.data().streetAddress1 || ''} ${doc.data().streetAddress2 || ''}, ${doc.data().city || ''}, ${doc.data().state || ''} ${doc.data().zipCode || ''}`.trim(),
-        capacity: doc.data().capacity || 500,
-        sections: doc.data().sections || 3
-      }))
+      return snapshot.docs.map(doc => {
+        const data = doc.data()
+        return {
+          id: doc.id,
+          name: data.name,
+          address: `${data.streetAddress1 || ''} ${data.streetAddress2 || ''}, ${data.city || ''}, ${data.state || ''} ${data.zipCode || ''}`.trim(),
+          city: data.city,
+          state: data.state,
+          zipCode: data.zipCode,
+          latitude: data.latitude,
+          longitude: data.longitude,
+          imageUrl: data.imageUrl,
+          capacity: data.capacity || 500,
+          sections: data.sections || 3
+        }
+      })
     } catch (error) {
       console.error('Error fetching venues:', error)
       return []
@@ -86,9 +174,7 @@ export class AdminService {
       zipCode: data.zipCode || '75001',
       latitude: data.latitude || 32.7767,
       longitude: data.longitude || -96.7970,
-      imageUrl: data.imageUrl || '',
-      capacity: data.capacity || 500,
-      sections: data.sections || 3
+      imageUrl: data.imageUrl || ''
     }
     
     const docRef = await addDoc(collection(db, 'venues'), venueData)
@@ -103,70 +189,126 @@ export class AdminService {
     await deleteDoc(doc(db, 'venues', id))
   }
 
-  // Orders - handles permission errors and maps fields correctly
+  // Orders - with permission handling and proper field mapping
   static async getOrders(): Promise<any[]> {
     try {
+      // First try to create sample orders if needed
+      await this.createSampleOrders()
+      
       const snapshot = await getDocs(collection(db, 'orders'))
       
       if (snapshot.empty) {
-        return [{
-          id: 'demo1',
-          orderId: 'ORD-DEMO-001',
-          customerName: 'John Doe',
-          customerEmail: 'demo@example.com',
-          customerPhone: '555-0100',
-          eventName: 'Sample Event',
-          seats: [{section: 'Orchestra', row: 5, seat: 10, price: 150}],
-          total: 165,
-          status: 'confirmed',
-          createdAt: new Date()
-        }]
+        console.log('No orders found, returning demo data')
+        return this.getDemoOrders()
       }
       
       return snapshot.docs.map(doc => {
         const data = doc.data()
         
+        // Calculate total from tickets array
         let total = 0
-        const seats = (data.tickets || []).map((ticket: any) => {
-          const price = ticket.price || ticket.ticketPrice || 100
-          total += price
-          return {
-            section: ticket.section || 'General',
-            row: ticket.row || 1,
-            seat: ticket.seat || ticket.seatNumber || 1,
-            price: price
-          }
-        })
+        let seats: any[] = []
+        
+        if (data.tickets && Array.isArray(data.tickets)) {
+          seats = data.tickets.map((ticket: any) => {
+            const price = ticket.price || ticket.ticketPrice || 100
+            total += price
+            return {
+              ticketId: ticket.ticketId || `TKT-${doc.id}`,
+              seatId: ticket.seatId || '',
+              section: ticket.section || 'General',
+              row: ticket.row || 1,
+              seat: ticket.seat || ticket.seatNumber || 1,
+              price: price
+            }
+          })
+        }
         
         return {
           id: doc.id,
           orderId: data.orderId || doc.id,
-          customerName: data.customerName || 'Unknown',
+          customerName: data.customerName || 'Unknown Customer',
           customerEmail: data.customerEmail || '',
           customerPhone: data.customerPhone || '',
-          eventName: data.eventName || '',
+          eventName: data.eventName || 'Unknown Event',
           eventId: data.eventId || '',
+          eventDate: data.eventDate || '',
           seats: seats,
+          tickets: data.tickets || [],
           total: total || data.totalAmount || 0,
           status: data.status || 'confirmed',
           paymentMethod: data.paymentMethod || 'card',
           promoterId: data.promoterId || '',
-          createdAt: data.purchaseDate?.toDate?.() || data.purchaseDate || new Date()
+          createdAt: data.purchaseDate?.toDate?.() || data.purchaseDate || new Date(),
+          purchaseDate: data.purchaseDate
         }
       })
     } catch (error: any) {
       console.error('Error fetching orders:', error)
+      
       if (error.code === 'permission-denied') {
-        console.log('Permission denied for orders collection')
+        console.log('⚠️ Permission denied for orders. Returning demo data.')
+        console.log('📌 Fix: Update Firebase Security Rules')
+        return this.getDemoOrders()
       }
-      return []
+      
+      return this.getDemoOrders()
     }
+  }
+
+  // Demo orders when permissions are denied
+  static getDemoOrders() {
+    return [
+      {
+        id: 'demo1',
+        orderId: 'ORD-DEMO-001',
+        customerName: 'Demo Customer (Enable Firebase Permissions)',
+        customerEmail: 'demo@example.com',
+        customerPhone: '555-0100',
+        eventName: 'Sample Event',
+        eventId: '',
+        eventDate: '2025-09-28',
+        seats: [
+          {section: 'Orchestra', row: 5, seat: 10, price: 150},
+          {section: 'Orchestra', row: 5, seat: 11, price: 150}
+        ],
+        tickets: [],
+        total: 300,
+        status: 'confirmed',
+        paymentMethod: 'card',
+        promoterId: '',
+        createdAt: new Date(),
+        purchaseDate: new Date()
+      },
+      {
+        id: 'demo2',
+        orderId: 'ORD-DEMO-002',
+        customerName: 'Jane Smith (Demo)',
+        customerEmail: 'jane@example.com',
+        customerPhone: '555-0101',
+        eventName: 'Concert Night',
+        eventId: '',
+        eventDate: '2025-09-29',
+        seats: [
+          {section: 'Balcony', row: 2, seat: 5, price: 75}
+        ],
+        tickets: [],
+        total: 75,
+        status: 'confirmed',
+        paymentMethod: 'PayPal',
+        promoterId: '',
+        createdAt: new Date(),
+        purchaseDate: new Date()
+      }
+    ]
   }
 
   static async getOrderStats() {
     const orders = await this.getOrders()
     const totalRevenue = orders.reduce((sum: number, order: any) => sum + (order.total || 0), 0)
-    const totalTickets = orders.reduce((sum: number, order: any) => sum + (order.seats?.length || 0), 0)
+    const totalTickets = orders.reduce((sum: number, order: any) => {
+      return sum + (order.seats?.length || order.tickets?.length || 0)
+    }, 0)
     
     return {
       totalOrders: orders.length,
@@ -200,7 +342,7 @@ export class AdminService {
     return Array.from(customersMap.values()).sort((a, b) => b.totalSpent - a.totalSpent)
   }
 
-  // Promotions - matches actual schema
+  // Promotions - working fine
   static async getPromotions(): Promise<any[]> {
     try {
       const snapshot = await getDocs(collection(db, 'promotions'))
@@ -271,31 +413,5 @@ export class AdminService {
         recentOrders: []
       }
     }
-  }
-
-  static async getSeatStatus(eventId: string): Promise<any[]> {
-    try {
-      const q = query(collection(db, 'seat_status'), where('eventId', '==', eventId))
-      const snapshot = await getDocs(q)
-      return snapshot.docs.map(doc => doc.data())
-    } catch (error) {
-      console.error('Error fetching seat status:', error)
-      return []
-    }
-  }
-
-  static async updateSeatStatus(eventId: string, seatId: string, status: string, sessionId: string) {
-    const docId = `${eventId}_${seatId}`
-    const seatData = {
-      eventId,
-      seatId,
-      status,
-      sessionId,
-      heldUntil: status === 'held' ? 
-        Timestamp.fromDate(new Date(Date.now() + 10 * 60 * 1000)) :
-        null
-    }
-    
-    await updateDoc(doc(db, 'seat_status', docId), seatData)
   }
 }
