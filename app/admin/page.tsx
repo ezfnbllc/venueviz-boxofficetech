@@ -3,19 +3,28 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { auth } from '@/lib/firebase'
 import { onAuthStateChanged } from 'firebase/auth'
+import { AdminService } from '@/lib/admin/adminService'
 
 export default function AdminDashboard() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState<any>({
+    events: 0,
+    venues: 0,
+    orders: 0,
+    promotions: 0,
+    revenue: 0
+  })
   
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        console.log('Admin page - User authenticated:', firebaseUser.email)
+        console.log('Admin dashboard - User authenticated:', firebaseUser.email)
         setUser(firebaseUser)
+        await loadDashboardData()
       } else {
-        console.log('Admin page - No user, redirecting to login')
+        console.log('Admin dashboard - No user, redirecting to login')
         router.push('/login')
       }
       setLoading(false)
@@ -23,6 +32,37 @@ export default function AdminDashboard() {
     
     return () => unsubscribe()
   }, [router])
+
+  const loadDashboardData = async () => {
+    try {
+      console.log('Loading dashboard data...')
+      
+      const [events, venues, orders, promotions, orderStats] = await Promise.all([
+        AdminService.getEvents(),
+        AdminService.getVenues(),
+        AdminService.getOrders(),
+        AdminService.getPromotions(),
+        AdminService.getOrderStats()
+      ])
+      
+      console.log('Dashboard data loaded:', {
+        events: events.length,
+        venues: venues.length,
+        orders: orders.length,
+        promotions: promotions.length
+      })
+      
+      setStats({
+        events: events.length,
+        venues: venues.length,
+        orders: orders.length,
+        promotions: promotions.length,
+        revenue: orderStats.totalRevenue
+      })
+    } catch (error) {
+      console.error('Error loading dashboard:', error)
+    }
+  }
   
   if (loading) {
     return (
@@ -70,22 +110,26 @@ export default function AdminDashboard() {
       
       {/* Quick Stats */}
       <div className="max-w-7xl mx-auto p-6">
-        <div className="grid md:grid-cols-4 gap-6 mb-8">
+        <div className="grid md:grid-cols-5 gap-6 mb-8">
           <div className="p-6 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10">
-            <p className="text-3xl font-bold">5</p>
+            <p className="text-3xl font-bold">{stats.events}</p>
             <p className="text-gray-400">Events</p>
           </div>
           <div className="p-6 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10">
-            <p className="text-3xl font-bold">5</p>
+            <p className="text-3xl font-bold">{stats.venues}</p>
             <p className="text-gray-400">Venues</p>
           </div>
           <div className="p-6 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10">
-            <p className="text-3xl font-bold">0</p>
+            <p className="text-3xl font-bold">{stats.orders}</p>
             <p className="text-gray-400">Orders</p>
           </div>
           <div className="p-6 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10">
-            <p className="text-3xl font-bold">1</p>
+            <p className="text-3xl font-bold">{stats.promotions}</p>
             <p className="text-gray-400">Promotions</p>
+          </div>
+          <div className="p-6 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10">
+            <p className="text-3xl font-bold">${stats.revenue.toLocaleString()}</p>
+            <p className="text-gray-400">Revenue</p>
           </div>
         </div>
         
