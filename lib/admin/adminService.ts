@@ -1,100 +1,17 @@
 import {db} from '@/lib/firebase'
 import {
-  collection, getDocs, doc, addDoc, updateDoc, deleteDoc, setDoc,
-  query, orderBy, limit, where, Timestamp
+  collection, getDocs, doc, addDoc, updateDoc, deleteDoc,
+  query, orderBy, limit, Timestamp
 } from 'firebase/firestore'
 
 export class AdminService {
-  // Seed initial data if collections are empty
-  static async seedInitialData() {
-    try {
-      // Check if data exists
-      const eventsSnap = await getDocs(collection(db, 'events'))
-      if (eventsSnap.empty) {
-        console.log('Seeding initial events...')
-        const events = [
-          {name: 'Hamilton', venue: 'Main Theater', date: '2025-09-28T19:30:00', price: 150, capacity: 500, status: 'active'},
-          {name: 'The Lion King', venue: 'Grand Opera House', date: '2025-09-29T14:00:00', price: 125, capacity: 800, status: 'active'},
-          {name: 'Phantom of the Opera', venue: 'Royal Theater', date: '2025-09-30T20:00:00', price: 95, capacity: 450, status: 'active'}
-        ]
-        for (const event of events) {
-          await addDoc(collection(db, 'events'), {...event, createdAt: Timestamp.now()})
-        }
-      }
-
-      const venuesSnap = await getDocs(collection(db, 'venues'))
-      if (venuesSnap.empty) {
-        console.log('Seeding initial venues...')
-        const venues = [
-          {name: 'Main Theater', address: '123 Broadway Ave', capacity: 500, sections: 3},
-          {name: 'Grand Opera House', address: '456 Symphony Blvd', capacity: 800, sections: 4},
-          {name: 'Royal Theater', address: '789 Performance Way', capacity: 450, sections: 3}
-        ]
-        for (const venue of venues) {
-          await addDoc(collection(db, 'venues'), {...venue, createdAt: Timestamp.now(), status: 'active'})
-        }
-      }
-
-      const ordersSnap = await getDocs(collection(db, 'orders'))
-      if (ordersSnap.empty) {
-        console.log('Seeding initial orders...')
-        const orders = [
-          {
-            orderId: 'ORD-001',
-            customerName: 'John Smith',
-            customerEmail: 'john@example.com',
-            customerPhone: '555-0100',
-            seats: [{section: 'Orchestra', row: 5, seat: 10, price: 150}],
-            total: 165,
-            status: 'confirmed',
-            qrCode: 'QR-001',
-            createdAt: Timestamp.now()
-          },
-          {
-            orderId: 'ORD-002',
-            customerName: 'Sarah Johnson',
-            customerEmail: 'sarah@example.com',
-            customerPhone: '555-0101',
-            seats: [{section: 'Mezzanine', row: 2, seat: 5, price: 100}, {section: 'Mezzanine', row: 2, seat: 6, price: 100}],
-            total: 220,
-            status: 'confirmed',
-            qrCode: 'QR-002',
-            createdAt: Timestamp.now()
-          },
-          {
-            orderId: 'ORD-003',
-            customerName: 'Mike Davis',
-            customerEmail: 'mike@example.com',
-            customerPhone: '555-0102',
-            seats: [{section: 'Balcony', row: 1, seat: 15, price: 75}],
-            total: 82.50,
-            status: 'confirmed',
-            qrCode: 'QR-003',
-            createdAt: Timestamp.now()
-          }
-        ]
-        for (const order of orders) {
-          await addDoc(collection(db, 'orders'), order)
-        }
-      }
-    } catch (error) {
-      console.error('Error seeding data:', error)
-    }
-  }
-
   static async getEvents(): Promise<any[]> {
     try {
-      await this.seedInitialData() // Ensure data exists
-      const q = query(collection(db, 'events'), orderBy('createdAt', 'desc'))
-      const snapshot = await getDocs(q)
+      const snapshot = await getDocs(collection(db, 'events'))
       return snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}))
     } catch (error) {
-      console.error('Error fetching events:', error)
-      // Return fallback data
-      return [
-        {id: '1', name: 'Hamilton', venue: 'Main Theater', date: '2025-09-28', price: 150, capacity: 500, status: 'active'},
-        {id: '2', name: 'The Lion King', venue: 'Grand Opera House', date: '2025-09-29', price: 125, capacity: 800, status: 'active'}
-      ]
+      console.error('Error:', error)
+      return []
     }
   }
 
@@ -121,15 +38,11 @@ export class AdminService {
 
   static async getVenues(): Promise<any[]> {
     try {
-      await this.seedInitialData()
       const snapshot = await getDocs(collection(db, 'venues'))
       return snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}))
     } catch (error) {
-      console.error('Error fetching venues:', error)
-      return [
-        {id: '1', name: 'Main Theater', address: '123 Broadway Ave', capacity: 500, sections: 3},
-        {id: '2', name: 'Grand Opera House', address: '456 Symphony Blvd', capacity: 800, sections: 4}
-      ]
+      console.error('Error:', error)
+      return []
     }
   }
 
@@ -154,32 +67,44 @@ export class AdminService {
 
   static async getOrders(): Promise<any[]> {
     try {
-      await this.seedInitialData()
       const snapshot = await getDocs(collection(db, 'orders'))
-      const orders = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}))
       
-      // Sort by createdAt if it exists
-      return orders.sort((a, b) => {
-        const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt) || new Date()
-        const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt) || new Date()
-        return dateB.getTime() - dateA.getTime()
+      // Map Firebase data to expected format
+      return snapshot.docs.map(doc => {
+        const data = doc.data()
+        
+        // Calculate total from tickets array
+        let total = 0
+        let seatCount = 0
+        if (data.tickets && Array.isArray(data.tickets)) {
+          seatCount = data.tickets.length
+          total = data.tickets.reduce((sum: number, ticket: any) => {
+            return sum + (ticket.price || ticket.ticketPrice || 0)
+          }, 0)
+        }
+        
+        return {
+          id: doc.id,
+          orderId: data.orderId || doc.id,
+          customerName: data.customerName || 'Unknown',
+          customerEmail: data.customerEmail || '',
+          customerPhone: data.customerPhone || '',
+          eventName: data.eventName || '',
+          eventId: data.eventId || '',
+          // Map tickets to seats format for compatibility
+          seats: data.tickets || [],
+          total: total || data.totalAmount || data.total || 0,
+          status: data.status || 'confirmed',
+          paymentMethod: data.paymentMethod || 'card',
+          promoterId: data.promoterId || '',
+          // Use purchaseDate or createdAt
+          createdAt: data.purchaseDate || data.createdAt || Timestamp.now(),
+          qrCode: data.qrCode || `QR-${doc.id}`
+        }
       })
     } catch (error) {
       console.error('Error fetching orders:', error)
-      // Return demo data
-      return [
-        {
-          id: 'demo1',
-          orderId: 'ORD-DEMO-001',
-          customerName: 'Demo User',
-          customerEmail: 'demo@example.com',
-          customerPhone: '555-0000',
-          seats: [{section: 'Orchestra', row: 5, seat: 10, price: 150}],
-          total: 165,
-          status: 'confirmed',
-          createdAt: new Date().toISOString()
-        }
-      ]
+      return []
     }
   }
 
@@ -189,8 +114,8 @@ export class AdminService {
     const totalTickets = orders.reduce((sum: number, order: any) => sum + (order.seats?.length || 0), 0)
     return {
       totalOrders: orders.length,
-      totalRevenue: totalRevenue || 0,
-      totalTickets: totalTickets || 0,
+      totalRevenue,
+      totalTickets,
       avgOrderValue: orders.length > 0 ? totalRevenue / orders.length : 0
     }
   }
@@ -216,28 +141,15 @@ export class AdminService {
       }
     })
     
-    const customers = Array.from(customersMap.values())
-    return customers.sort((a, b) => b.totalSpent - a.totalSpent)
+    return Array.from(customersMap.values()).sort((a, b) => b.totalSpent - a.totalSpent)
   }
 
   static async getPromotions(): Promise<any[]> {
     try {
       const snapshot = await getDocs(collection(db, 'promotions'))
-      if (snapshot.empty) {
-        // Create sample promotions
-        const samplePromos = [
-          {code: 'OPENING20', type: 'percentage', value: 20, maxUses: 100, status: 'active'},
-          {code: 'SAVE10', type: 'percentage', value: 10, maxUses: 200, status: 'active'}
-        ]
-        for (const promo of samplePromos) {
-          await addDoc(collection(db, 'promotions'), {...promo, createdAt: Timestamp.now(), usageCount: 0})
-        }
-        const newSnap = await getDocs(collection(db, 'promotions'))
-        return newSnap.docs.map(doc => ({id: doc.id, ...doc.data()}))
-      }
       return snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}))
     } catch (error) {
-      console.error('Error fetching promotions:', error)
+      console.error('Error:', error)
       return []
     }
   }
@@ -279,7 +191,6 @@ export class AdminService {
       }
     } catch (error) {
       console.error('Error getting dashboard stats:', error)
-      // Return default stats
       return {
         events: 0,
         venues: 0,
