@@ -38,11 +38,25 @@ export class AdminService {
       venueId: data.venueId,
       name: data.name,
       type: data.type,
-      configuration: data.configuration,
+      sections: data.sections || [],
+      totalCapacity: data.totalCapacity || 0,
+      configuration: data.configuration || {},
       createdAt: Timestamp.now()
     }
     const docRef = await addDoc(collection(db, 'layouts'), layoutData)
     return docRef.id
+  }
+
+  static async updateLayout(id: string, data: any) {
+    const updateData: any = {
+      ...data,
+      updatedAt: Timestamp.now()
+    }
+    await updateDoc(doc(db, 'layouts', id), updateData)
+  }
+
+  static async deleteLayout(id: string) {
+    await deleteDoc(doc(db, 'layouts', id))
   }
   
   static async getEvents(): Promise<any[]> {
@@ -310,15 +324,3 @@ export class AdminService {
     }
   }
 }
-
-  static async updateLayout(id: string, data: any) {
-    const updateData: any = {
-      ...data,
-      updatedAt: Timestamp.now()
-    }
-    await updateDoc(doc(db, 'layouts', id), updateData)
-  }
-
-  static async deleteLayout(id: string) {
-    await deleteDoc(doc(db, 'layouts', id))
-  }
