@@ -310,3 +310,15 @@ export class AdminService {
     }
   }
 }
+
+  static async updateLayout(id: string, data: any) {
+    const updateData: any = {
+      ...data,
+      updatedAt: Timestamp.now()
+    }
+    await updateDoc(doc(db, 'layouts', id), updateData)
+  }
+
+  static async deleteLayout(id: string) {
+    await deleteDoc(doc(db, 'layouts', id))
+  }
