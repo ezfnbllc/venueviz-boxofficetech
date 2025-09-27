@@ -2,27 +2,40 @@
 import {useState, useEffect} from 'react'
 import {useRouter} from 'next/navigation'
 import {AdminService} from '@/lib/admin/adminService'
+import {auth} from '@/lib/firebase'
+import {onAuthStateChanged} from 'firebase/auth'
 
 export default function OrdersManagement() {
   const router = useRouter()
   const [orders, setOrders] = useState<any[]>([])
   const [stats, setStats] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState<any>(null)
 
   useEffect(() => {
-    if (!document.cookie.includes('auth=true')) {
-      router.push('/login')
-      return
-    }
-    loadOrders()
-  }, [])
+    // Wait for auth before fetching
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        console.log('Orders page - User authenticated:', firebaseUser.email)
+        setUser(firebaseUser)
+        loadOrders()
+      } else {
+        console.log('Orders page - No user')
+        router.push('/login')
+      }
+    })
+    
+    return () => unsubscribe()
+  }, [router])
 
   const loadOrders = async () => {
     try {
+      console.log('Loading orders...')
       const [ordersData, orderStats] = await Promise.all([
         AdminService.getOrders(),
         AdminService.getOrderStats()
       ])
+      console.log('Orders loaded:', ordersData.length)
       setOrders(ordersData)
       setStats(orderStats)
     } catch (error) {
@@ -72,40 +85,48 @@ export default function OrdersManagement() {
           </div>
         ) : (
           <div className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-6">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="border-b border-white/10">
-                  <tr>
-                    <th className="text-left py-2">Order ID</th>
-                    <th className="text-left py-2">Customer</th>
-                    <th className="text-left py-2">Email</th>
-                    <th className="text-left py-2">Seats</th>
-                    <th className="text-left py-2">Total</th>
-                    <th className="text-left py-2">Status</th>
-                    <th className="text-left py-2">Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {orders.map(order => (
-                    <tr key={order.id} className="border-b border-white/5">
-                      <td className="py-2">{order.orderId || order.id.slice(0,8)}</td>
-                      <td className="py-2">{order.customerName}</td>
-                      <td className="py-2">{order.customerEmail}</td>
-                      <td className="py-2">{order.seats?.length || 0}</td>
-                      <td className="py-2">${order.total?.toFixed(2)}</td>
-                      <td className="py-2">
-                        <span className="px-2 py-1 bg-green-600/20 text-green-400 rounded text-xs">
-                          {order.status || 'confirmed'}
-                        </span>
-                      </td>
-                      <td className="py-2">
-                        {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'N/A'}
-                      </td>
+            {orders.length === 0 ? (
+              <p className="text-center py-8 text-gray-400">
+                No orders found. Orders will appear here once customers make purchases.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="border-b border-white/10">
+                    <tr>
+                      <th className="text-left py-2">Order ID</th>
+                      <th className="text-left py-2">Customer</th>
+                      <th className="text-left py-2">Email</th>
+                      <th className="text-left py-2">Event</th>
+                      <th className="text-left py-2">Seats</th>
+                      <th className="text-left py-2">Total</th>
+                      <th className="text-left py-2">Status</th>
+                      <th className="text-left py-2">Date</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {orders.map(order => (
+                      <tr key={order.id} className="border-b border-white/5">
+                        <td className="py-2">{order.orderId || order.id.slice(0,8)}</td>
+                        <td className="py-2">{order.customerName}</td>
+                        <td className="py-2">{order.customerEmail}</td>
+                        <td className="py-2">{order.eventName}</td>
+                        <td className="py-2">{order.seats?.length || 0}</td>
+                        <td className="py-2">${order.total?.toFixed(2)}</td>
+                        <td className="py-2">
+                          <span className="px-2 py-1 bg-green-600/20 text-green-400 rounded text-xs">
+                            {order.status}
+                          </span>
+                        </td>
+                        <td className="py-2">
+                          {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'N/A'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </div>
