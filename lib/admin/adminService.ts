@@ -19,6 +19,20 @@ export class AdminService {
     }
   }
 
+  static async getLayoutsByVenueId(venueId: string): Promise<any[]> {
+    try {
+      const q = query(collection(db, 'layouts'), where('venueId', '==', venueId))
+      const snapshot = await getDocs(q)
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+    } catch (error) {
+      console.error('Error fetching layouts:', error)
+      return []
+    }
+  }
+
   static async createLayout(data: any): Promise<string> {
     const layoutData = {
       venueId: data.venueId,
@@ -114,6 +128,20 @@ export class AdminService {
           city: data.city,
           state: data.state,
           capacity: data.capacity || 500,
+          streetAddress1: data.streetAddress1,
+          streetAddress2: data.streetAddress2,
+          zipCode: data.zipCode,
+          latitude: data.latitude,
+          longitude: data.longitude,
+          type: data.type,
+          amenities: data.amenities,
+          parkingCapacity: data.parkingCapacity,
+          images: data.images,
+          defaultLayoutId: data.defaultLayoutId,
+          contactEmail: data.contactEmail,
+          contactPhone: data.contactPhone,
+          website: data.website,
+          description: data.description,
           layouts: data.layouts || []
         }
       })
@@ -126,22 +154,48 @@ export class AdminService {
   static async createVenue(data: any): Promise<string> {
     const venueData = {
       name: data.name,
-      streetAddress1: data.address || '',
-      streetAddress2: '',
+      streetAddress1: data.streetAddress1 || '',
+      streetAddress2: data.streetAddress2 || '',
       city: data.city || 'Dallas',
       state: data.state || 'TX',
       zipCode: data.zipCode || '75001',
       latitude: data.latitude || 32.7767,
       longitude: data.longitude || -96.7970,
       imageUrl: data.imageUrl || '',
-      capacity: data.capacity || 500
+      capacity: data.capacity || 500,
+      type: data.type || 'theater',
+      amenities: data.amenities || [],
+      parkingCapacity: data.parkingCapacity || 500,
+      images: data.images || [],
+      defaultLayoutId: data.defaultLayoutId || '',
+      contactEmail: data.contactEmail || '',
+      contactPhone: data.contactPhone || '',
+      website: data.website || '',
+      description: data.description || ''
     }
     
     const docRef = await addDoc(collection(db, 'venues'), venueData)
     return docRef.id
   }
 
-  // Keep all existing methods...
+  static async updateVenue(id: string, data: any) {
+    const updateData: any = {
+      ...data,
+      updatedAt: Timestamp.now()
+    }
+    await updateDoc(doc(db, 'venues', id), updateData)
+  }
+
+  static async deleteVenue(id: string) {
+    // First delete all layouts for this venue
+    const layouts = await this.getLayoutsByVenueId(id)
+    for (const layout of layouts) {
+      await deleteDoc(doc(db, 'layouts', layout.id))
+    }
+    // Then delete the venue
+    await deleteDoc(doc(db, 'venues', id))
+  }
+
   static async getOrders(): Promise<any[]> {
     try {
       const ordersRef = collection(db, 'orders')
@@ -256,35 +310,3 @@ export class AdminService {
     }
   }
 }
-
-  static async getLayoutsByVenueId(venueId: string): Promise<any[]> {
-    try {
-      const q = query(collection(db, 'layouts'), where('venueId', '==', venueId))
-      const snapshot = await getDocs(q)
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }))
-    } catch (error) {
-      console.error('Error fetching layouts:', error)
-      return []
-    }
-  }
-
-  static async updateVenue(id: string, data: any) {
-    const updateData: any = {
-      ...data,
-      updatedAt: Timestamp.now()
-    }
-    await updateDoc(doc(db, 'venues', id), updateData)
-  }
-
-  static async deleteVenue(id: string) {
-    // First delete all layouts for this venue
-    const layouts = await this.getLayoutsByVenueId(id)
-    for (const layout of layouts) {
-      await deleteDoc(doc(db, 'layouts', layout.id))
-    }
-    // Then delete the venue
-    await deleteDoc(doc(db, 'venues', id))
-  }
