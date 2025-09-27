@@ -6,6 +6,31 @@ import {
 
 export class AdminService {
   
+  static async getLayouts(): Promise<any[]> {
+    try {
+      const snapshot = await getDocs(collection(db, 'layouts'))
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+    } catch (error) {
+      console.error('Error fetching layouts:', error)
+      return []
+    }
+  }
+
+  static async createLayout(data: any): Promise<string> {
+    const layoutData = {
+      venueId: data.venueId,
+      name: data.name,
+      type: data.type, // 'seating_chart' or 'general_admission'
+      configuration: data.configuration,
+      createdAt: Timestamp.now()
+    }
+    const docRef = await addDoc(collection(db, 'layouts'), layoutData)
+    return docRef.id
+  }
+  
   static async getEvents(): Promise<any[]> {
     try {
       const snapshot = await getDocs(collection(db, 'events'))
@@ -35,9 +60,11 @@ export class AdminService {
       type: data.type || 'concert',
       venueName: data.venue || '',
       venueId: data.venueId || '',
+      layoutId: data.layoutId || '',
       promoterId: 'PAqFLcCQwxUYKr7i8g5t',
       promoterName: 'BoxOfficeTech',
-      price: data.price || 100,
+      pricing: data.pricing || [],
+      dynamicPricing: data.dynamicPricing || {},
       capacity: data.capacity || 500,
       images: data.images || [],
       performers: data.performers || [],
@@ -53,19 +80,12 @@ export class AdminService {
 
   static async updateEvent(id: string, data: any) {
     const updateData: any = {
-      name: data.name,
-      description: data.description || '',
-      date: data.date ? Timestamp.fromDate(new Date(data.date)) : Timestamp.now(),
-      startTime: data.time || data.startTime || '19:00',
-      type: data.type || 'concert',
-      venueName: data.venue || '',
-      venueId: data.venueId || '',
-      price: data.price || 100,
-      capacity: data.capacity || 500,
-      performers: data.performers || [],
-      ticketPurchaseUrl: data.sourceUrl || '',
-      scrapeUrl: data.sourceUrl || '',
+      ...data,
       updatedAt: Timestamp.now()
+    }
+    
+    if (data.date) {
+      updateData.date = Timestamp.fromDate(new Date(data.date))
     }
     
     await updateDoc(doc(db, 'events', id), updateData)
@@ -86,7 +106,8 @@ export class AdminService {
           address: `${data.streetAddress1 || ''} ${data.streetAddress2 || ''}, ${data.city || ''}, ${data.state || ''} ${data.zipCode || ''}`.trim(),
           city: data.city,
           state: data.state,
-          capacity: data.capacity || 500
+          capacity: data.capacity || 500,
+          layouts: data.layouts || []
         }
       })
     } catch (error) {
@@ -113,14 +134,11 @@ export class AdminService {
     return docRef.id
   }
 
+  // Keep all other existing methods...
   static async getOrders(): Promise<any[]> {
     try {
-      console.log('Fetching orders with user:', auth.currentUser?.email)
-      
       const ordersRef = collection(db, 'orders')
       const snapshot = await getDocs(ordersRef)
-      
-      console.log(`Found ${snapshot.size} orders`)
       
       return snapshot.docs.map(doc => {
         const data = doc.data()
@@ -203,10 +221,7 @@ export class AdminService {
       const snapshot = await getDocs(collection(db, 'promotions'))
       return snapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data(),
-        maxUses: doc.data().maxUses || 100,
-        usageCount: doc.data().usageCount || 0,
-        status: doc.data().status || 'active'
+        ...doc.data()
       }))
     } catch (error: any) {
       console.error('Error fetching promotions:', error.message)
@@ -217,15 +232,12 @@ export class AdminService {
   static async createPromotion(data: any) {
     return await addDoc(collection(db, 'promotions'), {
       ...data,
-      createdAt: Timestamp.now(),
-      usageCount: 0,
-      status: 'active'
+      createdAt: Timestamp.now()
     })
   }
 
   static async getPromoters(): Promise<any[]> {
     try {
-      console.log('Fetching promoters with user:', auth.currentUser?.email)
       const snapshot = await getDocs(collection(db, 'promoters'))
       return snapshot.docs.map(doc => ({
         id: doc.id,
