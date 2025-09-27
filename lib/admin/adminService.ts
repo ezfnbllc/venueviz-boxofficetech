@@ -1,87 +1,135 @@
-import {db} from '@/lib/firebase'
+import {db, auth} from '@/lib/firebase'
 import {
-  collection, getDocs, doc, addDoc, updateDoc, deleteDoc, setDoc,
+  collection, getDocs, doc, getDoc, addDoc, updateDoc, deleteDoc,
   query, orderBy, limit, where, Timestamp
 } from 'firebase/firestore'
 
 export class AdminService {
-  // Check if we have permission to read orders
-  static async checkOrdersPermission(): Promise<boolean> {
-    try {
-      const testQuery = query(collection(db, 'orders'), limit(1))
-      await getDocs(testQuery)
-      return true
-    } catch (error: any) {
-      if (error.code === 'permission-denied') {
-        console.log('⚠️ No permission to read orders. Using demo data.')
-        console.log('Fix: Update Firebase Security Rules at https://console.firebase.google.com/project/venueviz/firestore/rules')
+  // Get current user's promoter ID if they are a promoter
+  static async getCurrentUserPromoterId(): Promise<string | null> {
+    if (!auth.currentUser) return null
+    
+    const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid))
+    if (userDoc.exists()) {
+      const userData = userDoc.data()
+      if (userData.role === 'promoter') {
+        return userData.promoterId || null
       }
-      return false
     }
+    return null
   }
 
-  // Create sample orders if we can write
-  static async createSampleOrders() {
+  // Check if user is admin
+  static async isUserAdmin(): Promise<boolean> {
+    if (!auth.currentUser) return false
+    
+    const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid))
+    if (userDoc.exists()) {
+      const userData = userDoc.data()
+      return userData.isMaster === true || userData.role === 'admin'
+    }
+    return false
+  }
+
+  // Promoters management
+  static async getPromoters(): Promise<any[]> {
     try {
-      const hasPermission = await this.checkOrdersPermission()
-      if (!hasPermission) {
-        console.log('Cannot create sample orders - permission denied')
-        return
+      const isAdmin = await this.isUserAdmin()
+      const promoterId = await this.getCurrentUserPromoterId()
+      
+      if (!isAdmin && !promoterId) {
+        return []
       }
 
-      const ordersSnap = await getDocs(collection(db, 'orders'))
-      if (ordersSnap.empty) {
-        console.log('Creating sample orders...')
-        const sampleOrders = [
-          {
-            orderId: 'ORD-SAMPLE-001',
-            customerName: 'Sarah Johnson',
-            customerEmail: 'sarah@example.com',
-            customerPhone: '555-0101',
-            eventId: '0B56dDERyt2TKCldg2lS',
-            eventName: 'Agam Live prod',
-            eventDate: '2025-08-16',
-            tickets: [
-              {ticketId: 'TKT001', seatId: 'A1', section: 'Orchestra', row: 1, seat: 1, price: 150, ticketPrice: 150},
-              {ticketId: 'TKT002', seatId: 'A2', section: 'Orchestra', row: 1, seat: 2, price: 150, ticketPrice: 150}
-            ],
-            paymentMethod: 'card',
-            purchaseDate: Timestamp.now(),
-            promoterId: 'PAqFLcCQwxUYKr7i8g5t',
-            searchableEmails: ['sarah@example.com']
-          },
-          {
-            orderId: 'ORD-SAMPLE-002',
-            customerName: 'Mike Davis',
-            customerEmail: 'mike@example.com',
-            customerPhone: '555-0102',
-            eventId: '0B56dDERyt2TKCldg2lS',
-            eventName: 'Agam Live prod',
-            eventDate: '2025-08-16',
-            tickets: [
-              {ticketId: 'TKT003', seatId: 'B5', section: 'Mezzanine', row: 2, seat: 5, price: 100, ticketPrice: 100}
-            ],
-            paymentMethod: 'PayPal',
-            purchaseDate: Timestamp.now(),
-            promoterId: 'PAqFLcCQwxUYKr7i8g5t',
-            searchableEmails: ['mike@example.com']
-          }
-        ]
-        
-        for (const order of sampleOrders) {
-          await addDoc(collection(db, 'orders'), order)
-        }
-        console.log('Sample orders created')
+      let q
+      if (isAdmin) {
+        q = query(collection(db, 'promoters'))
+      } else {
+        // Promoter can only see their own info
+        return promoterId ? [await this.getPromoter(promoterId)] : []
       }
+
+      const snapshot = await getDocs(q)
+      const promoters = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}))
+      
+      // Get event count for each promoter
+      for (const promoter of promoters) {
+        const eventsQuery = query(collection(db, 'events'), where('promoterId', '==', promoter.id))
+        const eventsSnap = await getDocs(eventsQuery)
+        promoter.eventCount = eventsSnap.size
+      }
+      
+      return promoters
     } catch (error) {
-      console.error('Error creating sample orders:', error)
+      console.error('Error fetching promoters:', error)
+      return []
     }
   }
 
-  // Events - working fine
+  static async getPromoter(id: string): Promise<any> {
+    try {
+      const docSnap = await getDoc(doc(db, 'promoters', id))
+      if (docSnap.exists()) {
+        return {id: docSnap.id, ...docSnap.data()}
+      }
+      return null
+    } catch (error) {
+      console.error('Error fetching promoter:', error)
+      return null
+    }
+  }
+
+  static async createPromoter(data: any) {
+    const isAdmin = await this.isUserAdmin()
+    if (!isAdmin) throw new Error('Admin access required')
+
+    const promoterData = {
+      ...data,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+      status: 'active'
+    }
+    
+    const docRef = await addDoc(collection(db, 'promoters'), promoterData)
+    return docRef.id
+  }
+
+  static async updatePromoter(id: string, data: any) {
+    const isAdmin = await this.isUserAdmin()
+    if (!isAdmin) throw new Error('Admin access required')
+
+    await updateDoc(doc(db, 'promoters', id), {
+      ...data,
+      updatedAt: Timestamp.now()
+    })
+  }
+
+  static async deletePromoter(id: string) {
+    const isAdmin = await this.isUserAdmin()
+    if (!isAdmin) throw new Error('Admin access required')
+
+    await deleteDoc(doc(db, 'promoters', id))
+  }
+
+  // Events with promoter access control
   static async getEvents(): Promise<any[]> {
     try {
-      const snapshot = await getDocs(collection(db, 'events'))
+      const isAdmin = await this.isUserAdmin()
+      const promoterId = await this.getCurrentUserPromoterId()
+      
+      let q
+      if (isAdmin) {
+        // Admin sees all events
+        q = query(collection(db, 'events'))
+      } else if (promoterId) {
+        // Promoter sees only their events
+        q = query(collection(db, 'events'), where('promoterId', '==', promoterId))
+      } else {
+        // Public/no auth sees all events (for public pages)
+        q = query(collection(db, 'events'))
+      }
+
+      const snapshot = await getDocs(q)
       return snapshot.docs.map(doc => {
         const data = doc.data()
         return {
@@ -100,6 +148,11 @@ export class AdminService {
   }
 
   static async createEvent(data: any) {
+    const isAdmin = await this.isUserAdmin()
+    const promoterId = await this.getCurrentUserPromoterId()
+    
+    if (!isAdmin && !promoterId) throw new Error('Promoter access required')
+
     const eventData = {
       name: data.name,
       description: data.description || '',
@@ -111,8 +164,8 @@ export class AdminService {
       venueName: data.venue || data.venueName || '',
       layoutId: data.layoutId || '',
       layoutName: data.layoutName || 'Standard',
-      promoterId: data.promoterId || 'PAqFLcCQwxUYKr7i8g5t',
-      promoterName: data.promoterName || 'BoxOfficeTech',
+      promoterId: isAdmin ? (data.promoterId || promoterId || '') : promoterId,
+      promoterName: data.promoterName || '',
       images: data.images || [],
       performers: data.performers || [],
       promotionIds: data.promotionIds || [],
@@ -127,6 +180,17 @@ export class AdminService {
   }
 
   static async updateEvent(id: string, data: any) {
+    const isAdmin = await this.isUserAdmin()
+    const promoterId = await this.getCurrentUserPromoterId()
+    
+    // Check if user has permission to update this event
+    if (!isAdmin && promoterId) {
+      const eventDoc = await getDoc(doc(db, 'events', id))
+      if (eventDoc.exists() && eventDoc.data().promoterId !== promoterId) {
+        throw new Error('You can only update your own events')
+      }
+    }
+
     const updateData: any = {...data}
     if (data.date && typeof data.date === 'string') {
       updateData.date = Timestamp.fromDate(new Date(data.date))
@@ -135,10 +199,84 @@ export class AdminService {
   }
 
   static async deleteEvent(id: string) {
+    const isAdmin = await this.isUserAdmin()
+    const promoterId = await this.getCurrentUserPromoterId()
+    
+    // Check if user has permission to delete this event
+    if (!isAdmin && promoterId) {
+      const eventDoc = await getDoc(doc(db, 'events', id))
+      if (eventDoc.exists() && eventDoc.data().promoterId !== promoterId) {
+        throw new Error('You can only delete your own events')
+      }
+    }
+
     await deleteDoc(doc(db, 'events', id))
   }
 
-  // Venues - working fine
+  // Orders with promoter filtering
+  static async getOrders(): Promise<any[]> {
+    try {
+      const isAdmin = await this.isUserAdmin()
+      const promoterId = await this.getCurrentUserPromoterId()
+      
+      let q
+      if (isAdmin) {
+        q = query(collection(db, 'orders'))
+      } else if (promoterId) {
+        q = query(collection(db, 'orders'), where('promoterId', '==', promoterId))
+      } else {
+        return []
+      }
+
+      const snapshot = await getDocs(q)
+      
+      if (snapshot.empty) {
+        return []
+      }
+      
+      return snapshot.docs.map(doc => {
+        const data = doc.data()
+        
+        let total = 0
+        const seats = (data.tickets || []).map((ticket: any) => {
+          const price = ticket.price || ticket.ticketPrice || 100
+          total += price
+          return {
+            ticketId: ticket.ticketId || `TKT-${doc.id}`,
+            seatId: ticket.seatId || '',
+            section: ticket.section || 'General',
+            row: ticket.row || 1,
+            seat: ticket.seat || ticket.seatNumber || 1,
+            price: price
+          }
+        })
+        
+        return {
+          id: doc.id,
+          orderId: data.orderId || doc.id,
+          customerName: data.customerName || 'Unknown Customer',
+          customerEmail: data.customerEmail || '',
+          customerPhone: data.customerPhone || '',
+          eventName: data.eventName || 'Unknown Event',
+          eventId: data.eventId || '',
+          eventDate: data.eventDate || '',
+          seats: seats,
+          tickets: data.tickets || [],
+          total: total || data.totalAmount || 0,
+          status: data.status || 'confirmed',
+          paymentMethod: data.paymentMethod || 'card',
+          promoterId: data.promoterId || '',
+          createdAt: data.purchaseDate?.toDate?.() || data.purchaseDate || new Date(),
+          purchaseDate: data.purchaseDate
+        }
+      })
+    } catch (error: any) {
+      console.error('Error fetching orders:', error)
+      return []
+    }
+  }
+
+  // Venues - all users can read
   static async getVenues(): Promise<any[]> {
     try {
       const snapshot = await getDocs(collection(db, 'venues'))
@@ -165,6 +303,11 @@ export class AdminService {
   }
 
   static async createVenue(data: any) {
+    const isAdmin = await this.isUserAdmin()
+    const promoterId = await this.getCurrentUserPromoterId()
+    
+    if (!isAdmin && !promoterId) throw new Error('Access denied')
+
     const venueData = {
       name: data.name,
       streetAddress1: data.streetAddress1 || data.address || '',
@@ -182,127 +325,20 @@ export class AdminService {
   }
 
   static async updateVenue(id: string, data: any) {
+    const isAdmin = await this.isUserAdmin()
+    if (!isAdmin) throw new Error('Admin access required')
+
     await updateDoc(doc(db, 'venues', id), data)
   }
 
   static async deleteVenue(id: string) {
+    const isAdmin = await this.isUserAdmin()
+    if (!isAdmin) throw new Error('Admin access required')
+
     await deleteDoc(doc(db, 'venues', id))
   }
 
-  // Orders - with permission handling and proper field mapping
-  static async getOrders(): Promise<any[]> {
-    try {
-      // First try to create sample orders if needed
-      await this.createSampleOrders()
-      
-      const snapshot = await getDocs(collection(db, 'orders'))
-      
-      if (snapshot.empty) {
-        console.log('No orders found, returning demo data')
-        return this.getDemoOrders()
-      }
-      
-      return snapshot.docs.map(doc => {
-        const data = doc.data()
-        
-        // Calculate total from tickets array
-        let total = 0
-        let seats: any[] = []
-        
-        if (data.tickets && Array.isArray(data.tickets)) {
-          seats = data.tickets.map((ticket: any) => {
-            const price = ticket.price || ticket.ticketPrice || 100
-            total += price
-            return {
-              ticketId: ticket.ticketId || `TKT-${doc.id}`,
-              seatId: ticket.seatId || '',
-              section: ticket.section || 'General',
-              row: ticket.row || 1,
-              seat: ticket.seat || ticket.seatNumber || 1,
-              price: price
-            }
-          })
-        }
-        
-        return {
-          id: doc.id,
-          orderId: data.orderId || doc.id,
-          customerName: data.customerName || 'Unknown Customer',
-          customerEmail: data.customerEmail || '',
-          customerPhone: data.customerPhone || '',
-          eventName: data.eventName || 'Unknown Event',
-          eventId: data.eventId || '',
-          eventDate: data.eventDate || '',
-          seats: seats,
-          tickets: data.tickets || [],
-          total: total || data.totalAmount || 0,
-          status: data.status || 'confirmed',
-          paymentMethod: data.paymentMethod || 'card',
-          promoterId: data.promoterId || '',
-          createdAt: data.purchaseDate?.toDate?.() || data.purchaseDate || new Date(),
-          purchaseDate: data.purchaseDate
-        }
-      })
-    } catch (error: any) {
-      console.error('Error fetching orders:', error)
-      
-      if (error.code === 'permission-denied') {
-        console.log('⚠️ Permission denied for orders. Returning demo data.')
-        console.log('📌 Fix: Update Firebase Security Rules')
-        return this.getDemoOrders()
-      }
-      
-      return this.getDemoOrders()
-    }
-  }
-
-  // Demo orders when permissions are denied
-  static getDemoOrders() {
-    return [
-      {
-        id: 'demo1',
-        orderId: 'ORD-DEMO-001',
-        customerName: 'Demo Customer (Enable Firebase Permissions)',
-        customerEmail: 'demo@example.com',
-        customerPhone: '555-0100',
-        eventName: 'Sample Event',
-        eventId: '',
-        eventDate: '2025-09-28',
-        seats: [
-          {section: 'Orchestra', row: 5, seat: 10, price: 150},
-          {section: 'Orchestra', row: 5, seat: 11, price: 150}
-        ],
-        tickets: [],
-        total: 300,
-        status: 'confirmed',
-        paymentMethod: 'card',
-        promoterId: '',
-        createdAt: new Date(),
-        purchaseDate: new Date()
-      },
-      {
-        id: 'demo2',
-        orderId: 'ORD-DEMO-002',
-        customerName: 'Jane Smith (Demo)',
-        customerEmail: 'jane@example.com',
-        customerPhone: '555-0101',
-        eventName: 'Concert Night',
-        eventId: '',
-        eventDate: '2025-09-29',
-        seats: [
-          {section: 'Balcony', row: 2, seat: 5, price: 75}
-        ],
-        tickets: [],
-        total: 75,
-        status: 'confirmed',
-        paymentMethod: 'PayPal',
-        promoterId: '',
-        createdAt: new Date(),
-        purchaseDate: new Date()
-      }
-    ]
-  }
-
+  // Rest of the methods remain the same...
   static async getOrderStats() {
     const orders = await this.getOrders()
     const totalRevenue = orders.reduce((sum: number, order: any) => sum + (order.total || 0), 0)
@@ -342,7 +378,6 @@ export class AdminService {
     return Array.from(customersMap.values()).sort((a, b) => b.totalSpent - a.totalSpent)
   }
 
-  // Promotions - working fine
   static async getPromotions(): Promise<any[]> {
     try {
       const snapshot = await getDocs(collection(db, 'promotions'))
@@ -378,11 +413,12 @@ export class AdminService {
 
   static async getDashboardStats() {
     try {
-      const [events, venues, orders, promotions] = await Promise.all([
+      const [events, venues, orders, promotions, promoters] = await Promise.all([
         this.getEvents(),
         this.getVenues(),
         this.getOrders(),
-        this.getPromotions()
+        this.getPromotions(),
+        this.getPromoters()
       ])
 
       const orderStats = await this.getOrderStats()
@@ -394,6 +430,7 @@ export class AdminService {
         orders: orders.length,
         customers: customers.length,
         promotions: promotions.length,
+        promoters: promoters.length,
         revenue: orderStats.totalRevenue,
         tickets: orderStats.totalTickets,
         avgOrderValue: orderStats.avgOrderValue,
@@ -407,6 +444,7 @@ export class AdminService {
         orders: 0,
         customers: 0,
         promotions: 0,
+        promoters: 0,
         revenue: 0,
         tickets: 0,
         avgOrderValue: 0,
