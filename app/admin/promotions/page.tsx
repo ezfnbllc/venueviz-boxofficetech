@@ -2,6 +2,8 @@
 import {useState, useEffect} from 'react'
 import {useRouter} from 'next/navigation'
 import {AdminService} from '@/lib/admin/adminService'
+import {auth} from '@/lib/firebase'
+import {onAuthStateChanged} from 'firebase/auth'
 
 export default function PromotionsManagement() {
   const router = useRouter()
@@ -18,16 +20,23 @@ export default function PromotionsManagement() {
   })
 
   useEffect(() => {
-    if (!document.cookie.includes('auth=true')) {
-      router.push('/login')
-      return
-    }
-    loadPromotions()
-  }, [])
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        console.log('Promotions page - User authenticated:', firebaseUser.email)
+        loadPromotions()
+      } else {
+        router.push('/login')
+      }
+    })
+    
+    return () => unsubscribe()
+  }, [router])
 
   const loadPromotions = async () => {
     try {
+      console.log('Loading promotions...')
       const promoData = await AdminService.getPromotions()
+      console.log('Promotions loaded:', promoData.length)
       setPromotions(promoData)
     } catch (error) {
       console.error('Error loading promotions:', error)
@@ -84,14 +93,14 @@ export default function PromotionsManagement() {
                           ? 'bg-green-600/20 text-green-400' 
                           : 'bg-gray-600/20 text-gray-400'
                       }`}>
-                        {promo.status}
+                        {promo.status || 'active'}
                       </span>
                     </div>
                     <p className="text-gray-400 text-sm mb-2">
                       {promo.type === 'percentage' ? `${promo.value}% off` : `$${promo.value} off`}
                     </p>
                     <p className="text-gray-400 text-sm">
-                      Used: {promo.usageCount || 0} / {promo.maxUses}
+                      Used: {promo.usageCount || 0} / {promo.maxUses || 100}
                     </p>
                     {promo.expiryDate && (
                       <p className="text-gray-400 text-sm">
