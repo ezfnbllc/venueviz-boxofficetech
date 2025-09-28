@@ -18,12 +18,13 @@ export default function SeatingChartDesigner({
   pricingTiers = []
 }: SeatingChartDesignerProps) {
   const svgRef = useRef<SVGSVGElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [layout, setLayout] = useState<SeatingLayout>(initialLayout)
   const [state, setState] = useState<DesignerState>({
     selectedSection: null,
     selectedSeats: new Set(),
-    zoom: 1,
+    zoom: 0.8, // Start at 80% for better visibility
     pan: { x: 0, y: 0 },
     mode: 'select',
     showGrid: true,
@@ -66,7 +67,6 @@ export default function SeatingChartDesigner({
     const file = e.target.files?.[0]
     if (!file) return
 
-    // Convert to base64 for display
     const reader = new FileReader()
     reader.onload = (event) => {
       const base64 = event.target?.result as string
@@ -82,7 +82,6 @@ export default function SeatingChartDesigner({
     
     setAiProcessing(true)
     try {
-      // Send image to AI analysis endpoint
       const response = await fetch('/api/analyze-seating-chart', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -96,7 +95,6 @@ export default function SeatingChartDesigner({
       if (response.ok) {
         const data = await response.json()
         
-        // Apply the AI-generated layout
         if (data.sections && data.sections.length > 0) {
           setLayout(prev => ({
             ...prev,
@@ -105,8 +103,10 @@ export default function SeatingChartDesigner({
             stage: data.stage || prev.stage
           }))
           
-          alert(`AI detected ${data.sections.length} sections with ${data.totalCapacity} total seats`)
+          alert(data.message || `AI detected ${data.sections.length} sections with ${data.totalCapacity} total seats`)
         }
+      } else {
+        alert('Error analyzing image. Please try manual creation.')
       }
     } catch (error) {
       console.error('AI analysis error:', error)
@@ -151,7 +151,7 @@ export default function SeatingChartDesigner({
       const delta = e.deltaY > 0 ? 0.9 : 1.1
       setState(prev => ({
         ...prev,
-        zoom: Math.max(0.5, Math.min(3, prev.zoom * delta))
+        zoom: Math.max(0.3, Math.min(2, prev.zoom * delta))
       }))
     }
   }, [])
@@ -160,7 +160,6 @@ export default function SeatingChartDesigner({
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     const target = e.target as SVGElement
     
-    // Check if clicking on a section for dragging
     if (mode === 'edit' && target.dataset.sectionId) {
       const sectionId = target.dataset.sectionId
       const section = layout.sections.find(s => s.id === sectionId)
@@ -176,7 +175,6 @@ export default function SeatingChartDesigner({
       }
     }
     
-    // Pan with middle mouse or shift+click
     if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
       setIsPanning(true)
       setDragStart({ x: e.clientX - state.pan.x, y: e.clientY - state.pan.y })
@@ -186,7 +184,6 @@ export default function SeatingChartDesigner({
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (isDragging && state.selectedSection) {
-      // Drag selected section
       const newX = e.clientX - sectionDragStart.x
       const newY = e.clientY - sectionDragStart.y
       
@@ -199,7 +196,6 @@ export default function SeatingChartDesigner({
         )
       }))
     } else if (isPanning) {
-      // Pan the view
       setState(prev => ({
         ...prev,
         pan: {
@@ -215,17 +211,16 @@ export default function SeatingChartDesigner({
     setIsPanning(false)
   }, [])
 
-  // Generate row labels (A, B, C, etc.)
   const getRowLabel = (index: number): string => {
     return String.fromCharCode(65 + index)
   }
 
-  // Render a single seat
-  const renderSeat = (seat: Seat, section: Section) => {
+  // Render seat with better curved positioning
+  const renderSeat = (seat: Seat, section: Section, actualX?: number, actualY?: number, angle?: number) => {
     const seatStatus = seatStatuses.get(seat.id) || seat.status
     const isSelected = state.selectedSeats.has(seat.id)
     
-    let fillColor = '#4a5568' // Default gray
+    let fillColor = '#4a5568'
     if (mode === 'preview') {
       switch (seatStatus) {
         case 'available': fillColor = '#48bb78'; break
@@ -234,7 +229,6 @@ export default function SeatingChartDesigner({
         case 'blocked': fillColor = '#718096'; break
       }
     } else {
-      // Edit mode - show pricing colors
       switch (section.pricing) {
         case 'vip': fillColor = '#ffd700'; break
         case 'premium': fillColor = '#c0c0c0'; break
@@ -244,11 +238,13 @@ export default function SeatingChartDesigner({
     }
 
     const seatSize = seat.type === 'wheelchair' ? 16 : 12
-    const seatShape = seat.type === 'wheelchair' ? 'rect' : 'circle'
+    const x = actualX !== undefined ? actualX : seat.x
+    const y = actualY !== undefined ? actualY : seat.y
+    const rotation = angle !== undefined ? angle : seat.angle || 0
 
     return (
-      <g key={seat.id} transform={`translate(${seat.x}, ${seat.y}) rotate(${seat.angle || 0})`}>
-        {seatShape === 'rect' ? (
+      <g key={seat.id} transform={`translate(${x}, ${y}) rotate(${rotation})`}>
+        {seat.type === 'wheelchair' ? (
           <rect
             x={-seatSize/2}
             y={-seatSize/2}
@@ -271,7 +267,7 @@ export default function SeatingChartDesigner({
             onClick={() => mode === 'preview' && handleSeatClick(seat)}
           />
         )}
-        {state.zoom > 0.8 && (
+        {state.zoom > 0.6 && (
           <text
             textAnchor="middle"
             dominantBaseline="middle"
@@ -286,25 +282,31 @@ export default function SeatingChartDesigner({
     )
   }
 
-  // Render a curved row
+  // Improved curved row rendering with proper spacing
   const renderCurvedRow = (row: Row, section: Section) => {
     if (!row.curve) return null
     
     const { radius, startAngle, endAngle } = row.curve
     const centerX = 0
     const centerY = 0
+    const seatCount = row.seats.length
     
     return row.seats.map((seat, index) => {
-      const angleStep = (endAngle - startAngle) / (row.seats.length - 1)
+      const angleRange = endAngle - startAngle
+      const angleStep = angleRange / (seatCount - 1)
       const angle = startAngle + angleStep * index
-      const x = centerX + radius * Math.cos(angle * Math.PI / 180)
-      const y = centerY + radius * Math.sin(angle * Math.PI / 180)
+      const radians = angle * Math.PI / 180
       
-      return renderSeat({ ...seat, x, y, angle }, section)
+      const x = centerX + radius * Math.cos(radians)
+      const y = centerY + radius * Math.sin(radians)
+      
+      // Adjust seat rotation to face the stage
+      const seatRotation = angle + 90
+      
+      return renderSeat(seat, section, x, y, seatRotation)
     })
   }
 
-  // Render a section
   const renderSection = (section: Section) => {
     const isSelected = state.selectedSection === section.id
     
@@ -312,10 +314,10 @@ export default function SeatingChartDesigner({
       <g key={section.id} transform={`translate(${section.x}, ${section.y}) rotate(${section.rotation})`}>
         {mode === 'edit' && (
           <rect
-            x={-50}
+            x={-100}
             y={-50}
-            width={300}
-            height={200}
+            width={400}
+            height={300}
             fill="transparent"
             stroke={isSelected ? '#fff' : 'transparent'}
             strokeWidth={2}
@@ -327,11 +329,12 @@ export default function SeatingChartDesigner({
         )}
         <text 
           x={0} 
-          y={-30} 
-          fontSize={14} 
+          y={-35} 
+          fontSize={16} 
           fill="#fff" 
           textAnchor="middle"
           pointerEvents="none"
+          fontWeight="bold"
         >
           {section.name}
         </text>
@@ -339,15 +342,16 @@ export default function SeatingChartDesigner({
           if (section.curved && row.curve) {
             return <g key={row.id}>{renderCurvedRow(row, section)}</g>
           }
-          return <g key={row.id}>
-            {row.seats.map(seat => renderSeat(seat, section))}
-          </g>
+          return (
+            <g key={row.id}>
+              {row.seats.map(seat => renderSeat(seat, section))}
+            </g>
+          )
         })}
       </g>
     )
   }
 
-  // Handle seat selection
   const handleSeatClick = (seat: Seat) => {
     if (mode !== 'preview') return
     
@@ -362,13 +366,12 @@ export default function SeatingChartDesigner({
     })
   }
 
-  // Add new section
   const addSection = () => {
     const newSection: Section = {
       id: `section-${Date.now()}`,
       name: `Section ${layout.sections.length + 1}`,
       x: 400 + (layout.sections.length * 50),
-      y: 300,
+      y: 350,
       rows: [],
       pricing: 'standard',
       rotation: 0,
@@ -376,23 +379,21 @@ export default function SeatingChartDesigner({
       curved: false
     }
     
-    // Generate default rows
     for (let r = 0; r < 10; r++) {
       const row: Row = {
         id: `${newSection.id}-row-${r}`,
         label: getRowLabel(r),
         seats: [],
-        y: r * 20
+        y: r * 25
       }
       
-      // Generate seats
       for (let s = 0; s < 15; s++) {
         const seat: Seat = {
           id: `${newSection.id}-R${r}S${s}`,
           sectionId: newSection.id,
           row: row.label,
           number: (s + 1).toString(),
-          x: s * 15,
+          x: (s - 7) * 18,
           y: row.y,
           status: 'available',
           type: 'regular'
@@ -405,11 +406,10 @@ export default function SeatingChartDesigner({
     setLayout(prev => ({
       ...prev,
       sections: [...prev.sections, newSection],
-      capacity: prev.capacity + (10 * 15)
+      capacity: prev.capacity + 150
     }))
   }
 
-  // Delete selected section
   const deleteSection = () => {
     if (!state.selectedSection) return
     const section = layout.sections.find(s => s.id === state.selectedSection)
@@ -425,7 +425,6 @@ export default function SeatingChartDesigner({
     setState(prev => ({ ...prev, selectedSection: null }))
   }
 
-  // Make section curved
   const toggleCurve = () => {
     if (!state.selectedSection) return
     setLayout(prev => ({
@@ -434,17 +433,15 @@ export default function SeatingChartDesigner({
         if (section.id === state.selectedSection) {
           const curved = !section.curved
           if (curved) {
-            // Add curve data to rows
             section.rows = section.rows.map((row, index) => ({
               ...row,
               curve: {
-                radius: 100 + index * 15,
-                startAngle: -30,
-                endAngle: 30
+                radius: 150 + index * 35, // More spacing between curved rows
+                startAngle: -45,
+                endAngle: 45
               }
             }))
           } else {
-            // Remove curve data
             section.rows = section.rows.map(row => {
               const { curve, ...rest } = row
               return rest
@@ -457,20 +454,18 @@ export default function SeatingChartDesigner({
     }))
   }
 
-  // Rotate selected section
   const rotateSection = (angle: number) => {
     if (!state.selectedSection) return
     setLayout(prev => ({
       ...prev,
       sections: prev.sections.map(section => 
         section.id === state.selectedSection 
-          ? { ...section, rotation: section.rotation + angle }
+          ? { ...section, rotation: (section.rotation + angle) % 360 }
           : section
       )
     }))
   }
 
-  // Change pricing tier for selected section
   const changePricing = (pricing: 'vip' | 'premium' | 'standard' | 'economy') => {
     if (!state.selectedSection) return
     setLayout(prev => ({
@@ -483,7 +478,6 @@ export default function SeatingChartDesigner({
     }))
   }
 
-  // Clear all sections
   const clearLayout = () => {
     if (confirm('Are you sure you want to clear all sections?')) {
       setLayout(prev => ({
@@ -494,11 +488,10 @@ export default function SeatingChartDesigner({
     }
   }
 
-  const viewBox = layout.viewBox || { x: 0, y: 0, width: 1200, height: 800 }
+  const viewBox = layout.viewBox || { x: 0, y: 0, width: 1400, height: 900 }
 
   return (
-    <div className="relative h-full bg-gray-900">
-      {/* Hidden file input */}
+    <div ref={containerRef} className="relative h-full bg-gray-900 overflow-hidden">
       <input
         ref={fileInputRef}
         type="file"
@@ -507,11 +500,11 @@ export default function SeatingChartDesigner({
         className="hidden"
       />
 
-      {/* AI Panel - Shows when image is uploaded */}
+      {/* AI Panel - Fixed positioning */}
       {showAIPanel && mode === 'edit' && (
-        <div className="absolute top-16 left-4 z-20 bg-black/90 backdrop-blur rounded-lg p-4 w-80">
+        <div className="absolute top-20 left-4 z-20 bg-black/90 backdrop-blur rounded-lg p-4 w-72">
           <div className="flex justify-between items-center mb-3">
-            <h3 className="font-semibold">AI Layout Assistant</h3>
+            <h3 className="font-semibold text-sm">AI Layout Assistant</h3>
             <button
               onClick={() => {
                 setShowAIPanel(false)
@@ -524,17 +517,17 @@ export default function SeatingChartDesigner({
           </div>
           
           {backgroundImage && (
-            <div className="mb-4">
-              <img src={backgroundImage} alt="Reference" className="w-full h-32 object-contain rounded" />
+            <div className="mb-3">
+              <img src={backgroundImage} alt="Reference" className="w-full h-24 object-contain rounded" />
               <div className="mt-2">
-                <label className="text-xs">Image Opacity</label>
+                <label className="text-xs">Opacity</label>
                 <input
                   type="range"
                   min="0"
                   max="100"
                   value={imageOpacity * 100}
                   onChange={(e) => setImageOpacity(parseInt(e.target.value) / 100)}
-                  className="w-full"
+                  className="w-full h-1"
                 />
               </div>
             </div>
@@ -544,138 +537,120 @@ export default function SeatingChartDesigner({
             <button
               onClick={analyzeImage}
               disabled={aiProcessing || !backgroundImage}
-              className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded text-sm font-medium"
+              className="w-full px-3 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded text-xs font-medium"
             >
               {aiProcessing ? '🤖 Analyzing...' : '✨ AI Detect Sections'}
             </button>
             
-            <div className="text-xs text-gray-400 mt-2">Or use a template:</div>
+            <div className="text-xs text-gray-400">Templates:</div>
             
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-1">
               <button
                 onClick={() => generateFromTemplate('theater')}
                 disabled={aiProcessing}
-                className="px-2 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs"
+                className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs"
               >
                 🎭 Theater
               </button>
               <button
                 onClick={() => generateFromTemplate('arena')}
                 disabled={aiProcessing}
-                className="px-2 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs"
+                className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs"
               >
                 🏟️ Arena
               </button>
-              <button
-                onClick={() => generateFromTemplate('stadium')}
-                disabled={aiProcessing}
-                className="px-2 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs"
-              >
-                🏟️ Stadium
-              </button>
-              <button
-                onClick={() => generateFromTemplate('club')}
-                disabled={aiProcessing}
-                className="px-2 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs"
-              >
-                🎵 Club
-              </button>
             </div>
-            
-            <button
-              onClick={clearLayout}
-              className="w-full px-3 py-1.5 bg-red-900 hover:bg-red-800 rounded text-xs"
-            >
-              Clear All Sections
-            </button>
           </div>
         </div>
       )}
 
-      {/* Toolbar - Fixed at top */}
+      {/* Main Toolbar - Improved positioning */}
       {mode === 'edit' && (
-        <div className="absolute top-4 left-4 right-4 z-10 flex gap-4">
-          {/* Main actions */}
-          <div className="bg-black/80 backdrop-blur rounded-lg p-3 flex gap-2">
+        <div className="absolute top-4 left-4 right-4 z-10 flex flex-wrap gap-3 pointer-events-none">
+          <div className="bg-black/80 backdrop-blur rounded-lg p-2 flex gap-2 pointer-events-auto">
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded text-sm font-medium"
-              title="Upload reference image"
+              className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded text-xs font-medium whitespace-nowrap"
             >
-              📷 Upload Image
+              📷 Upload
             </button>
             <button
               onClick={addSection}
-              className="px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded text-sm font-medium"
+              className="px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded text-xs font-medium whitespace-nowrap"
             >
-              + Add Section
+              + Section
             </button>
             <button
               onClick={deleteSection}
               disabled={!state.selectedSection}
-              className="px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+              className="px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded text-xs disabled:opacity-50 font-medium whitespace-nowrap"
             >
               Delete
             </button>
             <button
               onClick={toggleCurve}
               disabled={!state.selectedSection}
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-xs disabled:opacity-50 font-medium whitespace-nowrap"
             >
-              Toggle Curve
+              Curve
+            </button>
+            <button
+              onClick={clearLayout}
+              className="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 rounded text-xs font-medium whitespace-nowrap"
+            >
+              Clear All
             </button>
           </div>
 
-          {/* Section tools */}
+          {/* Section tools - separate row on small screens */}
           {state.selectedSection && (
-            <div className="bg-black/80 backdrop-blur rounded-lg p-3 flex gap-2">
+            <div className="bg-black/80 backdrop-blur rounded-lg p-2 flex gap-2 pointer-events-auto">
               <button
                 onClick={() => rotateSection(-15)}
-                className="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 rounded text-sm"
+                className="px-2 py-1.5 bg-gray-600 hover:bg-gray-700 rounded text-xs"
                 title="Rotate left"
               >
                 ↺
               </button>
               <button
                 onClick={() => rotateSection(15)}
-                className="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 rounded text-sm"
+                className="px-2 py-1.5 bg-gray-600 hover:bg-gray-700 rounded text-xs"
                 title="Rotate right"
               >
                 ↻
               </button>
-              <div className="border-l border-gray-600 mx-1"></div>
               <button
                 onClick={() => changePricing('vip')}
-                className="px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 rounded text-sm"
+                className="px-2 py-1.5 bg-yellow-600 hover:bg-yellow-700 rounded text-xs"
               >
                 VIP
               </button>
               <button
                 onClick={() => changePricing('premium')}
-                className="px-3 py-1.5 bg-gray-500 hover:bg-gray-600 rounded text-sm"
+                className="px-2 py-1.5 bg-gray-500 hover:bg-gray-600 rounded text-xs"
               >
-                Premium
+                Prem
               </button>
               <button
                 onClick={() => changePricing('standard')}
-                className="px-3 py-1.5 bg-orange-700 hover:bg-orange-800 rounded text-sm"
+                className="px-2 py-1.5 bg-orange-700 hover:bg-orange-800 rounded text-xs"
               >
-                Standard
+                Std
               </button>
               <button
                 onClick={() => changePricing('economy')}
-                className="px-3 py-1.5 bg-gray-700 hover:bg-gray-800 rounded text-sm"
+                className="px-2 py-1.5 bg-gray-700 hover:bg-gray-800 rounded text-xs"
               >
-                Economy
+                Eco
               </button>
             </div>
           )}
 
-          {/* Save button */}
-          <div className="ml-auto bg-black/80 backdrop-blur rounded-lg p-3">
+          {/* Save button - always visible */}
+          <div className="ml-auto bg-black/80 backdrop-blur rounded-lg p-2 pointer-events-auto">
             <button
               onClick={() => onSave(layout)}
-              className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 rounded text-sm font-medium"
+              className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 rounded text-xs font-medium"
             >
               Save Layout
             </button>
@@ -683,82 +658,87 @@ export default function SeatingChartDesigner({
         </div>
       )}
 
-      {/* Zoom controls - Fixed at right */}
-      <div className="absolute top-20 right-4 z-10 bg-black/80 backdrop-blur rounded-lg p-2 space-y-2">
+      {/* Zoom controls - more compact */}
+      <div className="absolute top-20 right-4 z-10 bg-black/80 backdrop-blur rounded-lg p-1.5 space-y-1">
         <button
-          onClick={() => setState(prev => ({ ...prev, zoom: Math.min(3, prev.zoom * 1.2) }))}
-          className="w-8 h-8 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-lg font-bold"
+          onClick={() => setState(prev => ({ ...prev, zoom: Math.min(2, prev.zoom * 1.2) }))}
+          className="w-7 h-7 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-sm font-bold"
         >
           +
         </button>
-        <div className="text-center text-xs">{Math.round(state.zoom * 100)}%</div>
+        <div className="text-center text-xs px-1">{Math.round(state.zoom * 100)}%</div>
         <button
-          onClick={() => setState(prev => ({ ...prev, zoom: Math.max(0.5, prev.zoom * 0.8) }))}
-          className="w-8 h-8 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-lg font-bold"
+          onClick={() => setState(prev => ({ ...prev, zoom: Math.max(0.3, prev.zoom * 0.8) }))}
+          className="w-7 h-7 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-sm font-bold"
         >
           −
         </button>
         <button
-          onClick={() => setState(prev => ({ ...prev, zoom: 1, pan: { x: 0, y: 0 } }))}
-          className="w-8 h-8 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-xs"
+          onClick={() => setState(prev => ({ ...prev, zoom: 0.8, pan: { x: 0, y: 0 } }))}
+          className="w-7 h-7 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-xs"
         >
           ⟲
         </button>
       </div>
 
-      {/* Legend - Fixed at bottom left */}
-      <div className="absolute bottom-4 left-4 z-10 bg-black/80 backdrop-blur rounded-lg p-3">
-        <div className="text-xs space-y-1.5">
+      {/* Legend - more compact */}
+      <div className="absolute bottom-4 left-4 z-10 bg-black/80 backdrop-blur rounded-lg p-2 max-w-xs">
+        <div className="text-xs space-y-1">
           <div className="font-semibold mb-1">
-            {mode === 'preview' ? 'Seat Status' : 'Pricing Tiers'}
+            {mode === 'preview' ? 'Status' : 'Pricing'}
           </div>
-          {mode === 'preview' ? (
-            <>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                <span>Available</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                <span>Sold</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-                <span>Held</span>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                <span>VIP</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-gray-400 rounded-full"></div>
-                <span>Premium</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-orange-700 rounded-full"></div>
-                <span>Standard</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-gray-600 rounded-full"></div>
-                <span>Economy</span>
-              </div>
-            </>
-          )}
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+            {mode === 'preview' ? (
+              <>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <span className="text-xs">Available</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                  <span className="text-xs">Sold</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                  <span className="text-xs">Held</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
+                  <span className="text-xs">Blocked</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                  <span className="text-xs">VIP</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                  <span className="text-xs">Premium</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-orange-700 rounded-full"></div>
+                  <span className="text-xs">Standard</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-gray-600 rounded-full"></div>
+                  <span className="text-xs">Economy</span>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Instructions */}
+      {/* Instructions - more compact */}
       {mode === 'edit' && (
-        <div className="absolute bottom-4 right-4 z-10 bg-black/80 backdrop-blur rounded-lg p-3 text-xs space-y-1">
-          <div className="font-semibold mb-1">Controls</div>
+        <div className="absolute bottom-4 right-4 z-10 bg-black/80 backdrop-blur rounded-lg p-2 text-xs space-y-0.5 max-w-xs">
+          <div className="font-semibold">Controls</div>
           <div>• Click section to select</div>
-          <div>• Drag selected section to move</div>
-          <div>• Ctrl/Cmd + Scroll to zoom</div>
-          <div>• Shift + Drag to pan</div>
-          <div>• Upload image for AI assist</div>
+          <div>• Drag to move section</div>
+          <div>• Ctrl+Scroll to zoom</div>
+          <div>• Shift+Drag to pan view</div>
         </div>
       )}
 
@@ -787,7 +767,7 @@ export default function SeatingChartDesigner({
             <rect x={viewBox.x} y={viewBox.y} width={viewBox.width} height={viewBox.height} fill="url(#grid)" />
           )}
 
-          {/* Background image overlay */}
+          {/* Background image */}
           {backgroundImage && mode === 'edit' && (
             <image
               href={backgroundImage}
@@ -800,7 +780,7 @@ export default function SeatingChartDesigner({
             />
           )}
 
-          {/* Stage/Screen */}
+          {/* Stage */}
           <rect
             x={layout.stage.x}
             y={layout.stage.y}
@@ -815,7 +795,7 @@ export default function SeatingChartDesigner({
             textAnchor="middle"
             dominantBaseline="middle"
             fill="#fff"
-            fontSize={16}
+            fontSize={18}
             fontWeight="bold"
             pointerEvents="none"
           >
@@ -824,6 +804,21 @@ export default function SeatingChartDesigner({
 
           {/* Sections */}
           {layout.sections.map(renderSection)}
+
+          {/* Selected Seats Count for Preview Mode */}
+          {mode === 'preview' && state.selectedSeats.size > 0 && (
+            <text
+              x={viewBox.width / 2}
+              y={viewBox.height - 20}
+              textAnchor="middle"
+              fill="#fff"
+              fontSize={16}
+              fontWeight="bold"
+              pointerEvents="none"
+            >
+              Selected: {state.selectedSeats.size} seats
+            </text>
+          )}
         </g>
       </svg>
     </div>
