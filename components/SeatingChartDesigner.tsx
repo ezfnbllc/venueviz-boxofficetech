@@ -29,7 +29,9 @@ export default function SeatingChartDesigner({
     gridSize: 20
   })
   const [isDragging, setIsDragging] = useState(false)
+  const [isPanning, setIsPanning] = useState(false)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+  const [sectionDragStart, setSectionDragStart] = useState({ x: 0, y: 0 })
   const [seatStatuses, setSeatStatuses] = useState<Map<string, string>>(new Map())
 
   // Load seat availability if in preview mode
@@ -61,21 +63,55 @@ export default function SeatingChartDesigner({
       const delta = e.deltaY > 0 ? 0.9 : 1.1
       setState(prev => ({
         ...prev,
-        zoom: Math.max(0.1, Math.min(5, prev.zoom * delta))
+        zoom: Math.max(0.5, Math.min(3, prev.zoom * delta))
       }))
     }
   }, [])
 
   // Pan handling
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
-      setIsDragging(true)
-      setDragStart({ x: e.clientX - state.pan.x, y: e.clientY - state.pan.y })
+    const target = e.target as SVGElement
+    
+    // Check if clicking on a section for dragging
+    if (mode === 'edit' && target.dataset.sectionId) {
+      const sectionId = target.dataset.sectionId
+      const section = layout.sections.find(s => s.id === sectionId)
+      if (section) {
+        setState(prev => ({ ...prev, selectedSection: sectionId }))
+        setIsDragging(true)
+        setSectionDragStart({ 
+          x: e.clientX - section.x, 
+          y: e.clientY - section.y 
+        })
+        e.preventDefault()
+        return
+      }
     }
-  }, [state.pan])
+    
+    // Pan with middle mouse or shift+click
+    if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
+      setIsPanning(true)
+      setDragStart({ x: e.clientX - state.pan.x, y: e.clientY - state.pan.y })
+      e.preventDefault()
+    }
+  }, [state.pan, mode, layout.sections])
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (isDragging) {
+    if (isDragging && state.selectedSection) {
+      // Drag selected section
+      const newX = e.clientX - sectionDragStart.x
+      const newY = e.clientY - sectionDragStart.y
+      
+      setLayout(prev => ({
+        ...prev,
+        sections: prev.sections.map(section => 
+          section.id === state.selectedSection 
+            ? { ...section, x: newX, y: newY }
+            : section
+        )
+      }))
+    } else if (isPanning) {
+      // Pan the view
       setState(prev => ({
         ...prev,
         pan: {
@@ -84,10 +120,11 @@ export default function SeatingChartDesigner({
         }
       }))
     }
-  }, [isDragging, dragStart])
+  }, [isDragging, isPanning, dragStart, sectionDragStart, state.selectedSection])
 
   const handleMouseUp = useCallback(() => {
     setIsDragging(false)
+    setIsPanning(false)
   }, [])
 
   // Generate row labels (A, B, C, etc.)
@@ -166,8 +203,8 @@ export default function SeatingChartDesigner({
     if (!row.curve) return null
     
     const { radius, startAngle, endAngle } = row.curve
-    const centerX = section.x
-    const centerY = section.y
+    const centerX = 0
+    const centerY = 0
     
     return row.seats.map((seat, index) => {
       const angleStep = (endAngle - startAngle) / (row.seats.length - 1)
@@ -191,22 +228,32 @@ export default function SeatingChartDesigner({
             y={-50}
             width={300}
             height={200}
-            fill="none"
+            fill="transparent"
             stroke={isSelected ? '#fff' : 'transparent'}
             strokeWidth={2}
             strokeDasharray="5,5"
             className="cursor-move"
-            onClick={() => handleSectionClick(section)}
+            data-section-id={section.id}
+            onMouseDown={handleMouseDown}
           />
         )}
-        <text x={0} y={-30} fontSize={14} fill="#fff" textAnchor="middle">
+        <text 
+          x={0} 
+          y={-30} 
+          fontSize={14} 
+          fill="#fff" 
+          textAnchor="middle"
+          pointerEvents="none"
+        >
           {section.name}
         </text>
         {section.rows.map((row, rowIndex) => {
           if (section.curved && row.curve) {
-            return renderCurvedRow(row, section)
+            return <g key={row.id}>{renderCurvedRow(row, section)}</g>
           }
-          return row.seats.map(seat => renderSeat(seat, section))
+          return <g key={row.id}>
+            {row.seats.map(seat => renderSeat(seat, section))}
+          </g>
         })}
       </g>
     )
@@ -227,18 +274,12 @@ export default function SeatingChartDesigner({
     })
   }
 
-  // Handle section selection
-  const handleSectionClick = (section: Section) => {
-    if (mode !== 'edit') return
-    setState(prev => ({ ...prev, selectedSection: section.id }))
-  }
-
   // Add new section
   const addSection = () => {
     const newSection: Section = {
       id: `section-${Date.now()}`,
       name: `Section ${layout.sections.length + 1}`,
-      x: 400,
+      x: 400 + (layout.sections.length * 50),
       y: 300,
       rows: [],
       pricing: 'standard',
@@ -250,7 +291,7 @@ export default function SeatingChartDesigner({
     // Generate default rows
     for (let r = 0; r < 10; r++) {
       const row: Row = {
-        id: `row-${r}`,
+        id: `${newSection.id}-row-${r}`,
         label: getRowLabel(r),
         seats: [],
         y: r * 20
@@ -275,16 +316,23 @@ export default function SeatingChartDesigner({
     
     setLayout(prev => ({
       ...prev,
-      sections: [...prev.sections, newSection]
+      sections: [...prev.sections, newSection],
+      capacity: prev.capacity + (10 * 15)
     }))
   }
 
   // Delete selected section
   const deleteSection = () => {
     if (!state.selectedSection) return
+    const section = layout.sections.find(s => s.id === state.selectedSection)
+    if (!section) return
+    
+    const seatCount = section.rows.reduce((sum, row) => sum + row.seats.length, 0)
+    
     setLayout(prev => ({
       ...prev,
-      sections: prev.sections.filter(s => s.id !== state.selectedSection)
+      sections: prev.sections.filter(s => s.id !== state.selectedSection),
+      capacity: prev.capacity - seatCount
     }))
     setState(prev => ({ ...prev, selectedSection: null }))
   }
@@ -321,68 +369,149 @@ export default function SeatingChartDesigner({
     }))
   }
 
+  // Rotate selected section
+  const rotateSection = (angle: number) => {
+    if (!state.selectedSection) return
+    setLayout(prev => ({
+      ...prev,
+      sections: prev.sections.map(section => 
+        section.id === state.selectedSection 
+          ? { ...section, rotation: section.rotation + angle }
+          : section
+      )
+    }))
+  }
+
+  // Change pricing tier for selected section
+  const changePricing = (pricing: 'vip' | 'premium' | 'standard' | 'economy') => {
+    if (!state.selectedSection) return
+    setLayout(prev => ({
+      ...prev,
+      sections: prev.sections.map(section => 
+        section.id === state.selectedSection 
+          ? { ...section, pricing }
+          : section
+      )
+    }))
+  }
+
   const viewBox = layout.viewBox || { x: 0, y: 0, width: 1200, height: 800 }
 
   return (
-    <div className="relative h-full">
-      {/* Toolbar */}
+    <div className="relative h-full bg-gray-900">
+      {/* Toolbar - Fixed at top */}
       {mode === 'edit' && (
-        <div className="absolute top-4 left-4 z-10 bg-black/80 rounded-lg p-4 space-x-2">
-          <button
-            onClick={addSection}
-            className="px-3 py-1 bg-green-600 rounded text-sm"
-          >
-            + Add Section
-          </button>
-          <button
-            onClick={deleteSection}
-            disabled={!state.selectedSection}
-            className="px-3 py-1 bg-red-600 rounded text-sm disabled:opacity-50"
-          >
-            Delete Section
-          </button>
-          <button
-            onClick={toggleCurve}
-            disabled={!state.selectedSection}
-            className="px-3 py-1 bg-blue-600 rounded text-sm disabled:opacity-50"
-          >
-            Toggle Curve
-          </button>
-          <button
-            onClick={() => onSave(layout)}
-            className="px-3 py-1 bg-purple-600 rounded text-sm"
-          >
-            Save Layout
-          </button>
+        <div className="absolute top-4 left-4 right-4 z-10 flex gap-4">
+          {/* Main actions */}
+          <div className="bg-black/80 backdrop-blur rounded-lg p-3 flex gap-2">
+            <button
+              onClick={addSection}
+              className="px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded text-sm font-medium"
+            >
+              + Add Section
+            </button>
+            <button
+              onClick={deleteSection}
+              disabled={!state.selectedSection}
+              className="px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+            >
+              Delete
+            </button>
+            <button
+              onClick={toggleCurve}
+              disabled={!state.selectedSection}
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+            >
+              Toggle Curve
+            </button>
+          </div>
+
+          {/* Section tools */}
+          {state.selectedSection && (
+            <div className="bg-black/80 backdrop-blur rounded-lg p-3 flex gap-2">
+              <button
+                onClick={() => rotateSection(-15)}
+                className="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 rounded text-sm"
+                title="Rotate left"
+              >
+                ↺
+              </button>
+              <button
+                onClick={() => rotateSection(15)}
+                className="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 rounded text-sm"
+                title="Rotate right"
+              >
+                ↻
+              </button>
+              <div className="border-l border-gray-600 mx-1"></div>
+              <button
+                onClick={() => changePricing('vip')}
+                className="px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 rounded text-sm"
+              >
+                VIP
+              </button>
+              <button
+                onClick={() => changePricing('premium')}
+                className="px-3 py-1.5 bg-gray-500 hover:bg-gray-600 rounded text-sm"
+              >
+                Premium
+              </button>
+              <button
+                onClick={() => changePricing('standard')}
+                className="px-3 py-1.5 bg-orange-700 hover:bg-orange-800 rounded text-sm"
+              >
+                Standard
+              </button>
+              <button
+                onClick={() => changePricing('economy')}
+                className="px-3 py-1.5 bg-gray-700 hover:bg-gray-800 rounded text-sm"
+              >
+                Economy
+              </button>
+            </div>
+          )}
+
+          {/* Save button */}
+          <div className="ml-auto bg-black/80 backdrop-blur rounded-lg p-3">
+            <button
+              onClick={() => onSave(layout)}
+              className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 rounded text-sm font-medium"
+            >
+              Save Layout
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Zoom controls */}
-      <div className="absolute top-4 right-4 z-10 bg-black/80 rounded-lg p-2 space-y-2">
+      {/* Zoom controls - Fixed at right */}
+      <div className="absolute top-20 right-4 z-10 bg-black/80 backdrop-blur rounded-lg p-2 space-y-2">
         <button
-          onClick={() => setState(prev => ({ ...prev, zoom: Math.min(5, prev.zoom * 1.2) }))}
-          className="w-8 h-8 bg-gray-700 rounded hover:bg-gray-600"
+          onClick={() => setState(prev => ({ ...prev, zoom: Math.min(3, prev.zoom * 1.2) }))}
+          className="w-8 h-8 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-lg font-bold"
         >
           +
         </button>
         <div className="text-center text-xs">{Math.round(state.zoom * 100)}%</div>
         <button
-          onClick={() => setState(prev => ({ ...prev, zoom: Math.max(0.1, prev.zoom * 0.8) }))}
-          className="w-8 h-8 bg-gray-700 rounded hover:bg-gray-600"
+          onClick={() => setState(prev => ({ ...prev, zoom: Math.max(0.5, prev.zoom * 0.8) }))}
+          className="w-8 h-8 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-lg font-bold"
         >
-          -
+          −
         </button>
         <button
           onClick={() => setState(prev => ({ ...prev, zoom: 1, pan: { x: 0, y: 0 } }))}
-          className="w-8 h-8 bg-gray-700 rounded hover:bg-gray-600 text-xs"
+          className="w-8 h-8 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-xs"
         >
           ⟲
         </button>
       </div>
 
-      {/* Legend */}
-      <div className="absolute bottom-4 left-4 z-10 bg-black/80 rounded-lg p-3">
-        <div className="text-xs space-y-1">
+      {/* Legend - Fixed at bottom left */}
+      <div className="absolute bottom-4 left-4 z-10 bg-black/80 backdrop-blur rounded-lg p-3">
+        <div className="text-xs space-y-1.5">
+          <div className="font-semibold mb-1">
+            {mode === 'preview' ? 'Seat Status' : 'Pricing Tiers'}
+          </div>
           {mode === 'preview' ? (
             <>
               <div className="flex items-center gap-2">
@@ -412,28 +541,50 @@ export default function SeatingChartDesigner({
                 <div className="w-3 h-3 bg-orange-700 rounded-full"></div>
                 <span>Standard</span>
               </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-gray-600 rounded-full"></div>
+                <span>Economy</span>
+              </div>
             </>
           )}
         </div>
       </div>
 
+      {/* Instructions */}
+      {mode === 'edit' && (
+        <div className="absolute bottom-4 right-4 z-10 bg-black/80 backdrop-blur rounded-lg p-3 text-xs space-y-1">
+          <div className="font-semibold mb-1">Controls</div>
+          <div>• Click section to select</div>
+          <div>• Drag selected section to move</div>
+          <div>• Ctrl/Cmd + Scroll to zoom</div>
+          <div>• Shift + Drag to pan</div>
+          <div>• Middle mouse to pan</div>
+        </div>
+      )}
+
       {/* Selected seats info */}
       {mode === 'preview' && state.selectedSeats.size > 0 && (
-        <div className="absolute bottom-4 right-4 z-10 bg-black/80 rounded-lg p-3">
-          <p className="text-sm">{state.selectedSeats.size} seats selected</p>
+        <div className="absolute top-4 right-4 z-10 bg-black/80 backdrop-blur rounded-lg p-3">
+          <p className="text-sm font-semibold">{state.selectedSeats.size} seats selected</p>
+          <button 
+            className="mt-2 px-3 py-1 bg-purple-600 hover:bg-purple-700 rounded text-sm w-full"
+          >
+            Continue
+          </button>
         </div>
       )}
 
       {/* SVG Canvas */}
       <svg
         ref={svgRef}
-        className="w-full h-full bg-gray-900"
+        className="w-full h-full"
         viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
+        style={{ cursor: isPanning ? 'grabbing' : mode === 'edit' ? 'default' : 'grab' }}
       >
         <g transform={`translate(${state.pan.x}, ${state.pan.y}) scale(${state.zoom})`}>
           {/* Grid */}
@@ -465,6 +616,7 @@ export default function SeatingChartDesigner({
             fill="#fff"
             fontSize={16}
             fontWeight="bold"
+            pointerEvents="none"
           >
             {layout.stage.label}
           </text>
