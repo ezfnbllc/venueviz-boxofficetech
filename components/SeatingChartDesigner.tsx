@@ -227,7 +227,12 @@ export default function SeatingChartDesigner({
         pricing: 'standard',
         sectionType: 'curved',
         curveRadius: baseRadius,
-        curveAngle: endAngle - startAngle
+        curveAngle: endAngle - startAngle,
+        curveRotation: 0,
+        rowAlignment: 'center',
+        rotation: 0,
+        rowPricing: {},
+        seatsByRow: {}
       }
     } else {
       for (let row = 0; row < rows; row++) {
@@ -255,7 +260,13 @@ export default function SeatingChartDesigner({
         seats,
         pricing: 'standard',
         sectionType: 'standard',
-        rotation: 0
+        rotation: 0,
+        rowAlignment: 'center',
+        rowPricing: {},
+        seatsByRow: {},
+        curveRadius: 0,
+        curveAngle: 0,
+        curveRotation: 0
       }
     }
   }
@@ -282,12 +293,51 @@ export default function SeatingChartDesigner({
     return null
   }
 
+  const rebuildCurvedSeats = (section: Section) => {
+    const seats: Seat[] = []
+    const centerX = section.x + 250
+    const centerY = section.y + 200
+    const startAngle = -section.curveAngle! / 2 + (section.curveRotation || 0)
+    const endAngle = section.curveAngle! / 2 + (section.curveRotation || 0)
+    
+    for (let row = 0; row < section.rows; row++) {
+      const rowLetter = String.fromCharCode(65 + row)
+      const seatCount = section.seatsByRow?.[rowLetter] || section.seatsPerRow
+      const radius = section.curveRadius! + row * 30
+      const angleStep = seatCount > 1 ? (endAngle - startAngle) / (seatCount - 1) : 0
+      
+      for (let col = 0; col < seatCount; col++) {
+        const seatAngle = (startAngle + angleStep * col) * Math.PI / 180
+        const seatX = centerX + radius * Math.sin(seatAngle)
+        const seatY = centerY - radius * Math.cos(seatAngle)
+        const existingSeat = section.seats.find(
+          s => s.row === rowLetter && s.number === col + 1
+        )
+        
+        seats.push({
+          id: existingSeat?.id || `seat-${section.id}-${row}-${col}`,
+          row: rowLetter,
+          number: col + 1,
+          x: seatX,
+          y: seatY,
+          status: existingSeat?.status || 'available',
+          price: existingSeat?.price || 100,
+          category: existingSeat?.category || section.pricing,
+          angle: seatAngle * 180 / Math.PI,
+          isAccessible: existingSeat?.isAccessible
+        })
+      }
+    }
+    
+    return seats
+  }
+
   const updateSection = (updates: Partial<Section>) => {
     if (!selectedSection) return
     
     const updatedSections = currentLayout.sections.map(section => {
       if (section.id === selectedSection.id) {
-        const updatedSection = { ...section, ...updates }
+        let updatedSection = { ...section, ...updates }
         
         // Handle row-level pricing
         if (updates.rowPricing) {
@@ -308,6 +358,17 @@ export default function SeatingChartDesigner({
           }))
         }
         
+        // Rebuild curved seats if curve properties changed
+        if (section.sectionType === 'curved' && 
+            (updates.curveAngle !== undefined || updates.curveRotation !== undefined)) {
+          updatedSection.seats = rebuildCurvedSeats(updatedSection)
+        }
+        
+        // Handle row alignment for standard sections
+        if (section.sectionType === 'standard' && updates.rowAlignment) {
+          updatedSection.seats = rebuildAlignedSeats(updatedSection)
+        }
+        
         return updatedSection
       }
       return section
@@ -315,6 +376,42 @@ export default function SeatingChartDesigner({
     
     setCurrentLayout({ ...currentLayout, sections: updatedSections })
     setSelectedSection(updatedSections.find(s => s.id === selectedSection.id) || null)
+  }
+
+  const rebuildAlignedSeats = (section: Section) => {
+    const seats: Seat[] = []
+    
+    for (let row = 0; row < section.rows; row++) {
+      const rowLetter = String.fromCharCode(65 + row)
+      const seatCount = section.seatsByRow?.[rowLetter] || section.seatsPerRow
+      
+      let startX = section.x
+      if (section.rowAlignment === 'center') {
+        startX = section.x + ((section.seatsPerRow - seatCount) * 25) / 2
+      } else if (section.rowAlignment === 'right') {
+        startX = section.x + (section.seatsPerRow - seatCount) * 25
+      }
+      
+      for (let col = 0; col < seatCount; col++) {
+        const existingSeat = section.seats.find(
+          s => s.row === rowLetter && s.number === col + 1
+        )
+        
+        seats.push({
+          id: existingSeat?.id || `seat-${section.id}-${row}-${col}`,
+          row: rowLetter,
+          number: col + 1,
+          x: startX + col * 25,
+          y: section.y + row * 25,
+          status: existingSeat?.status || 'available',
+          price: existingSeat?.price || 100,
+          category: existingSeat?.category || section.pricing,
+          isAccessible: existingSeat?.isAccessible
+        })
+      }
+    }
+    
+    return seats
   }
 
   const updateRowSeats = (row: string, newCount: number) => {
@@ -328,12 +425,14 @@ export default function SeatingChartDesigner({
         let newRowSeats: Seat[] = []
         const rowIndex = row.charCodeAt(0) - 65
         
+        const seatsByRow = { ...section.seatsByRow, [row]: newCount }
+        
         if (section.sectionType === 'curved' && section.curveRadius && section.curveAngle) {
           const centerX = section.x + 250
           const centerY = section.y + 200
           const radius = section.curveRadius + rowIndex * 30
-          const startAngle = -section.curveAngle / 2
-          const endAngle = section.curveAngle / 2
+          const startAngle = -section.curveAngle / 2 + (section.curveRotation || 0)
+          const endAngle = section.curveAngle / 2 + (section.curveRotation || 0)
           const angleStep = newCount > 1 ? (endAngle - startAngle) / (newCount - 1) : 0
           
           for (let i = 0; i < newCount; i++) {
@@ -356,13 +455,20 @@ export default function SeatingChartDesigner({
             })
           }
         } else {
+          let startX = section.x
+          if (section.rowAlignment === 'center') {
+            startX = section.x + ((section.seatsPerRow - newCount) * 25) / 2
+          } else if (section.rowAlignment === 'right') {
+            startX = section.x + (section.seatsPerRow - newCount) * 25
+          }
+          
           for (let i = 0; i < newCount; i++) {
             const existingSeat = currentRowSeats[i]
             newRowSeats.push({
               id: existingSeat?.id || `seat-${section.id}-${rowIndex}-${i}`,
               row: row,
               number: i + 1,
-              x: section.x + i * 25,
+              x: startX + i * 25,
               y: section.y + rowIndex * 25,
               status: existingSeat?.status || 'available',
               price: existingSeat?.price || 100,
@@ -371,8 +477,6 @@ export default function SeatingChartDesigner({
             })
           }
         }
-        
-        const seatsByRow = { ...section.seatsByRow, [row]: newCount }
         
         return {
           ...section,
@@ -399,7 +503,7 @@ export default function SeatingChartDesigner({
           return {
             ...seat,
             isAccessible: !seat.isAccessible,
-            status: seat.isAccessible ? 'available' : 'accessible'
+            status: seat.isAccessible ? 'available' : 'accessible' as const
           }
         }
         return seat
@@ -437,8 +541,20 @@ export default function SeatingChartDesigner({
   }
 
   const handleSave = () => {
+    // Clean up the data to remove any undefined values
+    const cleanedSections = currentLayout.sections.map(section => ({
+      ...section,
+      rowPricing: section.rowPricing || {},
+      seatsByRow: section.seatsByRow || {},
+      curveRadius: section.curveRadius || 0,
+      curveAngle: section.curveAngle || 0,
+      curveRotation: section.curveRotation || 0,
+      rowAlignment: section.rowAlignment || 'center'
+    }))
+    
     const updatedLayout = {
       ...currentLayout,
+      sections: cleanedSections,
       priceCategories,
       capacity: calculateTotalCapacity(currentLayout.sections)
     }
@@ -638,6 +754,45 @@ export default function SeatingChartDesigner({
                   </select>
                 </div>
 
+                {/* Row Alignment for Standard Sections */}
+                {selectedSection.sectionType === 'standard' && (
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Row Alignment</label>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => updateSection({ rowAlignment: 'left' })}
+                        className={`flex-1 px-2 py-1 rounded text-xs ${
+                          selectedSection.rowAlignment === 'left' 
+                            ? 'bg-purple-600' 
+                            : 'bg-white/10 hover:bg-white/20'
+                        }`}
+                      >
+                        ⬅️ Left
+                      </button>
+                      <button
+                        onClick={() => updateSection({ rowAlignment: 'center' })}
+                        className={`flex-1 px-2 py-1 rounded text-xs ${
+                          selectedSection.rowAlignment === 'center' 
+                            ? 'bg-purple-600' 
+                            : 'bg-white/10 hover:bg-white/20'
+                        }`}
+                      >
+                        ⬆️ Center
+                      </button>
+                      <button
+                        onClick={() => updateSection({ rowAlignment: 'right' })}
+                        className={`flex-1 px-2 py-1 rounded text-xs ${
+                          selectedSection.rowAlignment === 'right' 
+                            ? 'bg-purple-600' 
+                            : 'bg-white/10 hover:bg-white/20'
+                        }`}
+                      >
+                        ➡️ Right
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Row Management */}
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">Seats per Row</label>
@@ -687,58 +842,33 @@ export default function SeatingChartDesigner({
 
                 {/* Curve Settings for Curved Sections */}
                 {selectedSection.sectionType === 'curved' && (
-                  <div>
-                    <label className="block text-xs text-gray-400 mb-1">Curve Angle</label>
-                    <input
-                      type="range"
-                      value={selectedSection.curveAngle || 60}
-                      onChange={(e) => {
-                        const angle = parseInt(e.target.value)
-                        updateSection({ curveAngle: angle })
-                        // Rebuild curved seats
-                        const updatedSection = { ...selectedSection, curveAngle: angle }
-                        const newSeats = []
-                        const centerX = updatedSection.x + 250
-                        const centerY = updatedSection.y + 200
-                        const startAngle = -angle / 2
-                        const endAngle = angle / 2
-                        
-                        for (let row = 0; row < updatedSection.rows; row++) {
-                          const rowLetter = String.fromCharCode(65 + row)
-                          const seatCount = updatedSection.seats.filter(s => s.row === rowLetter).length
-                          const radius = (updatedSection.curveRadius || 150) + row * 30
-                          const angleStep = seatCount > 1 ? (endAngle - startAngle) / (seatCount - 1) : 0
-                          
-                          for (let col = 0; col < seatCount; col++) {
-                            const seatAngle = (startAngle + angleStep * col) * Math.PI / 180
-                            const seatX = centerX + radius * Math.sin(seatAngle)
-                            const seatY = centerY - radius * Math.cos(seatAngle)
-                            const existingSeat = updatedSection.seats.find(
-                              s => s.row === rowLetter && s.number === col + 1
-                            )
-                            
-                            newSeats.push({
-                              id: existingSeat?.id || `seat-${updatedSection.id}-${row}-${col}`,
-                              row: rowLetter,
-                              number: col + 1,
-                              x: seatX,
-                              y: seatY,
-                              status: existingSeat?.status || 'available',
-                              price: existingSeat?.price || 100,
-                              category: existingSeat?.category || updatedSection.pricing,
-                              angle: seatAngle * 180 / Math.PI,
-                              isAccessible: existingSeat?.isAccessible
-                            })
-                          }
-                        }
-                        updateSection({ seats: newSeats })
-                      }}
-                      className="w-full"
-                      min="20"
-                      max="180"
-                    />
-                    <span className="text-xs text-gray-400">{selectedSection.curveAngle || 60}°</span>
-                  </div>
+                  <>
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Curve Angle</label>
+                      <input
+                        type="range"
+                        value={selectedSection.curveAngle || 60}
+                        onChange={(e) => updateSection({ curveAngle: parseInt(e.target.value) })}
+                        className="w-full"
+                        min="20"
+                        max="180"
+                      />
+                      <span className="text-xs text-gray-400">{selectedSection.curveAngle || 60}°</span>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Curve Rotation</label>
+                      <input
+                        type="range"
+                        value={selectedSection.curveRotation || 0}
+                        onChange={(e) => updateSection({ curveRotation: parseInt(e.target.value) })}
+                        className="w-full"
+                        min="-90"
+                        max="90"
+                      />
+                      <span className="text-xs text-gray-400">{selectedSection.curveRotation || 0}°</span>
+                    </div>
+                  </>
                 )}
 
                 {/* Standard Rotation for Regular Sections */}

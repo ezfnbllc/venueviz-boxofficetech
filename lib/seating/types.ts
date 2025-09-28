@@ -15,7 +15,7 @@ export interface Seat {
   price: number
   category: string
   isAccessible?: boolean
-  angle?: number // For curved sections
+  angle?: number
 }
 
 export interface Section {
@@ -29,10 +29,12 @@ export interface Section {
   pricing: string
   rotation?: number
   rowPricing?: { [row: string]: string }
-  seatsByRow?: { [row: string]: number } // Variable seats per row
-  curveRadius?: number // For curved sections
-  curveAngle?: number // Total angle of curve
+  seatsByRow?: { [row: string]: number }
+  curveRadius?: number
+  curveAngle?: number
+  curveRotation?: number
   sectionType: 'standard' | 'curved'
+  rowAlignment?: 'left' | 'center' | 'right'
 }
 
 export interface Stage {
