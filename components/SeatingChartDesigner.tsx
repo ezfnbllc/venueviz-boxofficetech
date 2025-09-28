@@ -273,7 +273,6 @@ export default function SeatingChartDesigner({
     )
   }
 
-  // Improved curved row rendering with consistent spacing
   const renderCurvedRow = (row: Row, section: Section, rowIndex: number) => {
     if (!row.curve) return null
     
@@ -281,20 +280,13 @@ export default function SeatingChartDesigner({
     const centerX = 0
     const centerY = 0
     
-    // Calculate arc length
     const angleRange = endAngle - startAngle
     const arcLength = (angleRange * Math.PI * radius) / 180
     
-    // Desired seat spacing (consistent across all rows)
     const desiredSeatSpacing = 18
-    
-    // Calculate how many seats can fit with proper spacing
     const maxSeatsInRow = Math.floor(arcLength / desiredSeatSpacing)
-    
-    // Use the minimum of calculated seats or original seat count
     const seatCount = Math.min(row.seats.length, maxSeatsInRow)
     
-    // Recalculate angle step based on actual seat count
     const actualAngleRange = (desiredSeatSpacing * (seatCount - 1) * 180) / (Math.PI * radius)
     const actualStartAngle = -(actualAngleRange / 2)
     const actualEndAngle = actualAngleRange / 2
@@ -306,8 +298,6 @@ export default function SeatingChartDesigner({
       
       const x = centerX + radius * Math.cos(radians)
       const y = centerY + radius * Math.sin(radians)
-      
-      // Adjust seat rotation to face the stage
       const seatRotation = angle + 90
       
       return renderSeat(seat, section, x, y, seatRotation)
@@ -440,15 +430,11 @@ export default function SeatingChartDesigner({
         if (section.id === state.selectedSection) {
           const curved = !section.curved
           if (curved) {
-            // Create curved rows with consistent seat spacing
-            // Start with smaller radius and increment gradually
             section.rows = section.rows.map((row, index) => {
               const baseRadius = 120
               const radiusIncrement = 30
               const radius = baseRadius + (index * radiusIncrement)
-              
-              // Fixed angle range for theater-style seating
-              const angleRange = 70 // degrees
+              const angleRange = 70
               
               return {
                 ...row,
@@ -460,7 +446,6 @@ export default function SeatingChartDesigner({
               }
             })
           } else {
-            // Remove curve data
             section.rows = section.rows.map(row => {
               const { curve, ...rest } = row
               return rest
@@ -519,9 +504,9 @@ export default function SeatingChartDesigner({
         className="hidden"
       />
 
-      {/* AI Panel - Fixed top-left with proper spacing */}
+      {/* AI Panel - Moved further down to avoid overlap */}
       {showAIPanel && mode === 'edit' && (
-        <div className="absolute top-16 left-4 z-30 bg-black/90 backdrop-blur rounded-lg p-3 w-64">
+        <div className="absolute top-24 left-4 z-30 bg-black/90 backdrop-blur rounded-lg p-3 w-64">
           <div className="flex justify-between items-center mb-2">
             <h3 className="font-semibold text-sm">AI Assistant</h3>
             <button
@@ -581,7 +566,7 @@ export default function SeatingChartDesigner({
         </div>
       )}
 
-      {/* Main Toolbar - Top center with better spacing */}
+      {/* Main Toolbar - Top center */}
       {mode === 'edit' && (
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-20">
           <div className="bg-black/80 backdrop-blur rounded-lg px-3 py-2 flex gap-2">
@@ -642,7 +627,7 @@ export default function SeatingChartDesigner({
             </button>
           </div>
           
-          {/* Section pricing tools - below main toolbar when section selected */}
+          {/* Section pricing tools - below main toolbar */}
           {state.selectedSection && (
             <div className="bg-black/80 backdrop-blur rounded-lg px-3 py-2 flex gap-1 mt-2">
               <span className="text-xs text-gray-400 mr-2">Pricing:</span>
@@ -675,7 +660,7 @@ export default function SeatingChartDesigner({
         </div>
       )}
 
-      {/* Zoom controls - Top right with no overlap */}
+      {/* Zoom controls - Top right */}
       <div className="absolute top-4 right-4 z-20 bg-black/80 backdrop-blur rounded-lg p-1 flex flex-col items-center">
         <button
           onClick={() => setState(prev => ({ ...prev, zoom: Math.min(2, prev.zoom * 1.2) }))}
@@ -698,68 +683,7 @@ export default function SeatingChartDesigner({
         </button>
       </div>
 
-      {/* Legend - Bottom left with proper spacing */}
-      <div className="absolute bottom-4 left-4 z-10 bg-black/80 backdrop-blur rounded-lg p-2 pointer-events-none">
-        <div className="text-xs space-y-1">
-          <div className="font-semibold">
-            {mode === 'preview' ? 'Status' : 'Pricing'}
-          </div>
-          <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
-            {mode === 'preview' ? (
-              <>
-                <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-xs">Available</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                  <span className="text-xs">Sold</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-                  <span className="text-xs">Held</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
-                  <span className="text-xs">Blocked</span>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                  <span className="text-xs">VIP</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                  <span className="text-xs">Premium</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 bg-orange-700 rounded-full"></div>
-                  <span className="text-xs">Standard</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 bg-gray-600 rounded-full"></div>
-                  <span className="text-xs">Economy</span>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Controls help - Bottom right without overlap */}
-      {mode === 'edit' && (
-        <div className="absolute bottom-4 right-4 z-10 bg-black/80 backdrop-blur rounded-lg p-2 text-xs space-y-0.5 pointer-events-none">
-          <div className="font-semibold">Controls</div>
-          <div>• Click to select</div>
-          <div>• Drag to move</div>
-          <div>• Ctrl+Scroll: zoom</div>
-          <div>• Shift+Drag: pan</div>
-        </div>
-      )}
-
-      {/* SVG Canvas */}
+      {/* SVG Canvas - Main content area */}
       <svg
         ref={svgRef}
         className="w-full h-full"
