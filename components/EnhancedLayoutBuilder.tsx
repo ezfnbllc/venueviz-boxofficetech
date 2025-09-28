@@ -58,7 +58,6 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
   }
 
   const handleEditLayout = (layout: any) => {
-    // Convert existing layout to SeatingLayout format
     const seatingLayout: SeatingLayout = {
       id: layout.id,
       venueId: venue.id,
@@ -135,32 +134,12 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
 
   if (isDesigning && currentLayout) {
     return (
-      <div className="fixed inset-0 bg-black z-50">
-        <div className="flex flex-col h-full">
-          <div className="flex justify-between items-center p-4 bg-gray-900 border-b border-white/10">
-            <h2 className="text-xl font-bold">
-              {selectedLayout ? 'Edit Layout' : 'Create Layout'} - {venue.name}
-            </h2>
-            <button
-              onClick={() => {
-                setIsDesigning(false)
-                setCurrentLayout(null)
-                setSelectedLayout(null)
-              }}
-              className="text-gray-400 hover:text-white text-2xl"
-            >
-              ✕
-            </button>
-          </div>
-          <div className="flex-1 relative">
-            <SeatingChartDesigner
-              layout={currentLayout}
-              onSave={handleSaveLayout}
-              mode="edit"
-            />
-          </div>
-        </div>
-      </div>
+      <SeatingChartDesigner
+        layout={currentLayout}
+        onSave={handleSaveLayout}
+        mode="edit"
+        title={`${selectedLayout ? 'Edit' : 'Create'} Layout - ${venue.name}`}
+      />
     )
   }
 

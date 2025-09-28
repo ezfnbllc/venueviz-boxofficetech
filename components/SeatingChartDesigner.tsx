@@ -8,6 +8,7 @@ interface SeatingChartDesignerProps {
   mode: 'edit' | 'preview'
   selectedEventId?: string
   pricingTiers?: any[]
+  title?: string
 }
 
 export default function SeatingChartDesigner({ 
@@ -15,7 +16,8 @@ export default function SeatingChartDesigner({
   onSave, 
   mode = 'edit',
   selectedEventId,
-  pricingTiers = []
+  pricingTiers = [],
+  title = 'Seating Layout'
 }: SeatingChartDesignerProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -24,7 +26,7 @@ export default function SeatingChartDesigner({
   const [state, setState] = useState<DesignerState>({
     selectedSection: null,
     selectedSeats: new Set(),
-    zoom: 0.7,
+    zoom: 0.8,
     pan: { x: 0, y: 0 },
     mode: 'select',
     showGrid: true,
@@ -34,17 +36,56 @@ export default function SeatingChartDesigner({
   const [isPanning, setIsPanning] = useState(false)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
   const [sectionDragStart, setSectionDragStart] = useState({ x: 0, y: 0 })
+  const [labelDragStart, setLabelDragStart] = useState({ x: 0, y: 0 })
+  const [isDraggingLabel, setIsDraggingLabel] = useState(false)
   const [seatStatuses, setSeatStatuses] = useState<Map<string, string>>(new Map())
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null)
   const [imageOpacity, setImageOpacity] = useState(0.3)
   const [aiProcessing, setAiProcessing] = useState(false)
   const [showAIPanel, setShowAIPanel] = useState(false)
+  const [showColorPicker, setShowColorPicker] = useState(false)
+  const [selectedColor, setSelectedColor] = useState('#4a5568')
+  const [editingSection, setEditingSection] = useState<string | null>(null)
+  const [sectionLabels, setSectionLabels] = useState<Map<string, {x: number, y: number, rotation: number}>>(new Map())
+  const [rowVisibility, setRowVisibility] = useState<Map<string, boolean>>(new Map())
+  const [pricingNames, setPricingNames] = useState({
+    vip: 'VIP',
+    premium: 'Premium',
+    standard: 'Standard',
+    economy: 'Economy'
+  })
+  const [editingPricing, setEditingPricing] = useState<string | null>(null)
+
+  const colorPalette = [
+    '#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16',
+    '#22c55e', '#10b981', '#14b8a6', '#06b6d4', '#0ea5e9',
+    '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef',
+    '#ec4899', '#f43f5e', '#fbbf24', '#a78bfa', '#60a5fa',
+    '#4ade80', '#f87171', '#fb923c', '#fcd34d', '#86efac',
+    '#6ee7b7', '#5eead4', '#67e8f9', '#7dd3fc', '#93c5fd',
+    '#a5b4fc', '#c4b5fd', '#d8b4fe', '#e9d5ff', '#f5d0fe',
+    '#fce7f3', '#fecaca', '#fed7aa', '#fef3c7', '#d9f99d',
+    '#bbf7d0', '#a7f3d0', '#99f6e4', '#a5f3fc', '#bae6fd'
+  ]
 
   useEffect(() => {
     if (mode === 'preview' && selectedEventId) {
       loadSeatAvailability()
     }
   }, [selectedEventId, mode])
+
+  // Initialize section labels positions
+  useEffect(() => {
+    const newLabels = new Map()
+    layout.sections.forEach(section => {
+      if (!sectionLabels.has(section.id)) {
+        newLabels.set(section.id, { x: 0, y: -35, rotation: 0 })
+      }
+    })
+    if (newLabels.size > 0) {
+      setSectionLabels(prev => new Map([...prev, ...newLabels]))
+    }
+  }, [layout.sections])
 
   const loadSeatAvailability = async () => {
     if (!selectedEventId) return
@@ -152,6 +193,23 @@ export default function SeatingChartDesigner({
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     const target = e.target as SVGElement
     
+    // Check if clicking on a label
+    if (mode === 'edit' && target.dataset.labelId) {
+      const sectionId = target.dataset.labelId
+      setIsDraggingLabel(true)
+      setState(prev => ({ ...prev, selectedSection: sectionId }))
+      const label = sectionLabels.get(sectionId)
+      if (label) {
+        setLabelDragStart({ 
+          x: e.clientX - label.x, 
+          y: e.clientY - label.y 
+        })
+      }
+      e.preventDefault()
+      return
+    }
+    
+    // Check if clicking on a section
     if (mode === 'edit' && target.dataset.sectionId) {
       const sectionId = target.dataset.sectionId
       const section = layout.sections.find(s => s.id === sectionId)
@@ -172,10 +230,20 @@ export default function SeatingChartDesigner({
       setDragStart({ x: e.clientX - state.pan.x, y: e.clientY - state.pan.y })
       e.preventDefault()
     }
-  }, [state.pan, mode, layout.sections])
+  }, [state.pan, mode, layout.sections, sectionLabels])
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (isDragging && state.selectedSection) {
+    if (isDraggingLabel && state.selectedSection) {
+      const newX = e.clientX - labelDragStart.x
+      const newY = e.clientY - labelDragStart.y
+      
+      setSectionLabels(prev => {
+        const updated = new Map(prev)
+        const current = updated.get(state.selectedSection!) || { x: 0, y: -35, rotation: 0 }
+        updated.set(state.selectedSection!, { ...current, x: newX, y: newY })
+        return updated
+      })
+    } else if (isDragging && state.selectedSection) {
       const newX = e.clientX - sectionDragStart.x
       const newY = e.clientY - sectionDragStart.y
       
@@ -196,35 +264,158 @@ export default function SeatingChartDesigner({
         }
       }))
     }
-  }, [isDragging, isPanning, dragStart, sectionDragStart, state.selectedSection])
+  }, [isDragging, isDraggingLabel, isPanning, dragStart, sectionDragStart, labelDragStart, state.selectedSection])
 
   const handleMouseUp = useCallback(() => {
     setIsDragging(false)
+    setIsDraggingLabel(false)
     setIsPanning(false)
   }, [])
 
-  const getRowLabel = (index: number): string => {
-    return String.fromCharCode(65 + index)
+  const addSeatToRow = (sectionId: string, rowIndex: number) => {
+    setLayout(prev => ({
+      ...prev,
+      sections: prev.sections.map(section => {
+        if (section.id === sectionId) {
+          const updatedRows = [...section.rows]
+          const row = updatedRows[rowIndex]
+          const lastSeat = row.seats[row.seats.length - 1]
+          const newSeat: Seat = {
+            id: `${section.id}-R${rowIndex}S${row.seats.length}`,
+            sectionId: section.id,
+            row: row.label,
+            number: (row.seats.length + 1).toString(),
+            x: lastSeat ? lastSeat.x + 18 : 0,
+            y: row.y,
+            status: 'available',
+            type: 'regular'
+          }
+          row.seats.push(newSeat)
+          return { ...section, rows: updatedRows }
+        }
+        return section
+      }),
+      capacity: prev.capacity + 1
+    }))
+  }
+
+  const removeSeatFromRow = (sectionId: string, rowIndex: number) => {
+    setLayout(prev => ({
+      ...prev,
+      sections: prev.sections.map(section => {
+        if (section.id === sectionId && section.rows[rowIndex].seats.length > 0) {
+          const updatedRows = [...section.rows]
+          updatedRows[rowIndex].seats.pop()
+          return { ...section, rows: updatedRows }
+        }
+        return section
+      }),
+      capacity: prev.capacity - 1
+    }))
+  }
+
+  const addRowToSection = (sectionId: string, afterRowIndex: number) => {
+    setLayout(prev => ({
+      ...prev,
+      sections: prev.sections.map(section => {
+        if (section.id === sectionId) {
+          const updatedRows = [...section.rows]
+          const newRowIndex = afterRowIndex + 1
+          const newRow: Row = {
+            id: `${section.id}-row-${Date.now()}`,
+            label: String.fromCharCode(65 + newRowIndex),
+            seats: [],
+            y: (newRowIndex) * 25
+          }
+          
+          // Create seats for the new row
+          const seatsPerRow = section.rows[afterRowIndex]?.seats.length || 20
+          for (let s = 0; s < seatsPerRow; s++) {
+            newRow.seats.push({
+              id: `${section.id}-R${newRowIndex}S${s}`,
+              sectionId: section.id,
+              row: newRow.label,
+              number: (s + 1).toString(),
+              x: (s - seatsPerRow/2) * 18,
+              y: newRow.y,
+              status: 'available',
+              type: 'regular'
+            })
+          }
+          
+          updatedRows.splice(newRowIndex, 0, newRow)
+          
+          // Update row labels and positions for rows after the new one
+          for (let i = newRowIndex + 1; i < updatedRows.length; i++) {
+            updatedRows[i].label = String.fromCharCode(65 + i)
+            updatedRows[i].y = i * 25
+            updatedRows[i].seats.forEach(seat => {
+              seat.row = updatedRows[i].label
+              seat.y = updatedRows[i].y
+            })
+          }
+          
+          return { ...section, rows: updatedRows }
+        }
+        return section
+      }),
+      capacity: prev.capacity + 20
+    }))
+  }
+
+  const removeRowFromSection = (sectionId: string, rowIndex: number) => {
+    setLayout(prev => ({
+      ...prev,
+      sections: prev.sections.map(section => {
+        if (section.id === sectionId && section.rows.length > 1) {
+          const updatedRows = section.rows.filter((_, i) => i !== rowIndex)
+          
+          // Update row labels and positions
+          updatedRows.forEach((row, i) => {
+            row.label = String.fromCharCode(65 + i)
+            row.y = i * 25
+            row.seats.forEach(seat => {
+              seat.row = row.label
+              seat.y = row.y
+            })
+          })
+          
+          return { ...section, rows: updatedRows }
+        }
+        return section
+      }),
+      capacity: prev.capacity - (prev.sections.find(s => s.id === sectionId)?.rows[rowIndex]?.seats.length || 0)
+    }))
+  }
+
+  const toggleRowLabels = (rowId: string) => {
+    setRowVisibility(prev => {
+      const updated = new Map(prev)
+      updated.set(rowId, !prev.get(rowId))
+      return updated
+    })
+  }
+
+  const rotateSectionLabel = (sectionId: string, angle: number) => {
+    setSectionLabels(prev => {
+      const updated = new Map(prev)
+      const current = updated.get(sectionId) || { x: 0, y: -35, rotation: 0 }
+      updated.set(sectionId, { ...current, rotation: current.rotation + angle })
+      return updated
+    })
   }
 
   const renderSeat = (seat: Seat, section: Section, actualX?: number, actualY?: number, angle?: number) => {
     const seatStatus = seatStatuses.get(seat.id) || seat.status
     const isSelected = state.selectedSeats.has(seat.id)
     
-    let fillColor = '#4a5568'
+    let fillColor = section.color || '#4a5568'
     if (mode === 'preview') {
       switch (seatStatus) {
         case 'available': fillColor = '#48bb78'; break
         case 'sold': fillColor = '#e53e3e'; break
         case 'held': fillColor = '#ed8936'; break
         case 'blocked': fillColor = '#718096'; break
-      }
-    } else {
-      switch (section.pricing) {
-        case 'vip': fillColor = '#ffd700'; break
-        case 'premium': fillColor = '#c0c0c0'; break
-        case 'standard': fillColor = '#cd7f32'; break
-        case 'economy': fillColor = '#4a5568'; break
       }
     }
 
@@ -306,6 +497,7 @@ export default function SeatingChartDesigner({
 
   const renderSection = (section: Section) => {
     const isSelected = state.selectedSection === section.id
+    const labelPos = sectionLabels.get(section.id) || { x: 0, y: -35, rotation: 0 }
     
     return (
       <g key={section.id} transform={`translate(${section.x}, ${section.y}) rotate(${section.rotation})`}>
@@ -324,24 +516,160 @@ export default function SeatingChartDesigner({
             onMouseDown={handleMouseDown}
           />
         )}
-        <text 
-          x={0} 
-          y={-35} 
-          fontSize={16} 
-          fill="#fff" 
-          textAnchor="middle"
-          pointerEvents="none"
-          fontWeight="bold"
-        >
-          {section.name}
-        </text>
+        
+        {/* Section Label - Independent positioning */}
+        <g transform={`translate(${labelPos.x}, ${labelPos.y}) rotate(${labelPos.rotation})`}>
+          {editingSection === section.id ? (
+            <foreignObject x={-50} y={-10} width={100} height={30}>
+              <input
+                type="text"
+                value={section.name}
+                onChange={(e) => {
+                  setLayout(prev => ({
+                    ...prev,
+                    sections: prev.sections.map(s => 
+                      s.id === section.id ? { ...s, name: e.target.value } : s
+                    )
+                  }))
+                }}
+                onBlur={() => setEditingSection(null)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') setEditingSection(null)
+                }}
+                className="w-full px-2 py-1 bg-black/60 text-white text-center text-sm rounded"
+                autoFocus
+              />
+            </foreignObject>
+          ) : (
+            <text 
+              x={0} 
+              y={0} 
+              fontSize={16} 
+              fill="#fff" 
+              textAnchor="middle"
+              fontWeight="bold"
+              className={mode === 'edit' ? 'cursor-move' : ''}
+              data-label-id={section.id}
+              onDoubleClick={() => mode === 'edit' && setEditingSection(section.id)}
+            >
+              {section.name}
+            </text>
+          )}
+        </g>
+        
+        {/* Rows with controls */}
         {section.rows.map((row, rowIndex) => {
-          if (section.curved && row.curve) {
-            return <g key={row.id}>{renderCurvedRow(row, section, rowIndex)}</g>
-          }
+          const showLabels = rowVisibility.get(row.id) !== false
           return (
             <g key={row.id}>
-              {row.seats.map(seat => renderSeat(seat, section))}
+              {mode === 'edit' && (
+                <>
+                  {/* Row controls */}
+                  <g transform={`translate(-120, ${row.y})`}>
+                    {/* Row label toggle */}
+                    <rect
+                      x={-15}
+                      y={-8}
+                      width={20}
+                      height={16}
+                      fill="#4a5568"
+                      rx={2}
+                      className="cursor-pointer hover:fill-gray-500"
+                      onClick={() => toggleRowLabels(row.id)}
+                    />
+                    <text
+                      x={-5}
+                      y={3}
+                      fontSize={10}
+                      fill="#fff"
+                      textAnchor="middle"
+                      pointerEvents="none"
+                    >
+                      {showLabels ? row.label : '·'}
+                    </text>
+                    
+                    {/* Add/Remove row buttons */}
+                    <rect
+                      x={10}
+                      y={-8}
+                      width={16}
+                      height={16}
+                      fill="#10b981"
+                      rx={2}
+                      className="cursor-pointer hover:fill-green-600"
+                      onClick={() => addRowToSection(section.id, rowIndex)}
+                    />
+                    <text x={18} y={3} fontSize={12} fill="#fff" textAnchor="middle" pointerEvents="none">+</text>
+                    
+                    {section.rows.length > 1 && (
+                      <>
+                        <rect
+                          x={30}
+                          y={-8}
+                          width={16}
+                          height={16}
+                          fill="#ef4444"
+                          rx={2}
+                          className="cursor-pointer hover:fill-red-600"
+                          onClick={() => removeRowFromSection(section.id, rowIndex)}
+                        />
+                        <text x={38} y={3} fontSize={12} fill="#fff" textAnchor="middle" pointerEvents="none">−</text>
+                      </>
+                    )}
+                  </g>
+                  
+                  {/* Seat add/remove buttons */}
+                  <g transform={`translate(${(row.seats.length * 18) / 2 + 10}, ${row.y})`}>
+                    <rect
+                      x={0}
+                      y={-8}
+                      width={16}
+                      height={16}
+                      fill="#3b82f6"
+                      rx={2}
+                      className="cursor-pointer hover:fill-blue-600"
+                      onClick={() => addSeatToRow(section.id, rowIndex)}
+                    />
+                    <text x={8} y={3} fontSize={12} fill="#fff" textAnchor="middle" pointerEvents="none">+</text>
+                    
+                    {row.seats.length > 0 && (
+                      <>
+                        <rect
+                          x={20}
+                          y={-8}
+                          width={16}
+                          height={16}
+                          fill="#f59e0b"
+                          rx={2}
+                          className="cursor-pointer hover:fill-amber-600"
+                          onClick={() => removeSeatFromRow(section.id, rowIndex)}
+                        />
+                        <text x={28} y={3} fontSize={12} fill="#fff" textAnchor="middle" pointerEvents="none">−</text>
+                      </>
+                    )}
+                  </g>
+                </>
+              )}
+              
+              {/* Row label */}
+              {showLabels && (
+                <text
+                  x={row.seats[0]?.x - 25 || -25}
+                  y={row.y + 5}
+                  fontSize={12}
+                  fill="#fff"
+                  textAnchor="end"
+                >
+                  {row.label}
+                </text>
+              )}
+              
+              {/* Render seats */}
+              {section.curved && row.curve ? (
+                renderCurvedRow(row, section, rowIndex)
+              ) : (
+                row.seats.map(seat => renderSeat(seat, section))
+              )}
             </g>
           )
         })}
@@ -379,7 +707,7 @@ export default function SeatingChartDesigner({
     for (let r = 0; r < 10; r++) {
       const row: Row = {
         id: `${newSection.id}-row-${r}`,
-        label: getRowLabel(r),
+        label: String.fromCharCode(65 + r),
         seats: [],
         y: r * 25
       }
@@ -482,6 +810,20 @@ export default function SeatingChartDesigner({
     }))
   }
 
+  const changeColor = (color: string) => {
+    if (!state.selectedSection) return
+    setLayout(prev => ({
+      ...prev,
+      sections: prev.sections.map(section => 
+        section.id === state.selectedSection 
+          ? { ...section, color }
+          : section
+      )
+    }))
+    setSelectedColor(color)
+    setShowColorPicker(false)
+  }
+
   const clearLayout = () => {
     if (confirm('Are you sure you want to clear all sections?')) {
       setLayout(prev => ({
@@ -504,9 +846,94 @@ export default function SeatingChartDesigner({
         className="hidden"
       />
 
-      {/* AI Panel - Moved further down to avoid overlap */}
+      {/* Header with title and main controls */}
+      {mode === 'edit' && (
+        <div className="absolute top-0 left-0 right-0 z-30 bg-black/90 backdrop-blur border-b border-white/10">
+          <div className="flex items-center justify-between px-4 py-2">
+            <h2 className="text-lg font-bold">{title}</h2>
+            
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="px-3 py-1 bg-purple-600 hover:bg-purple-700 rounded text-sm font-medium flex items-center gap-1"
+                title="AI Assistant"
+              >
+                <span>🤖</span> AI
+              </button>
+              <button
+                onClick={addSection}
+                className="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-sm font-medium"
+              >
+                + New
+              </button>
+              <button
+                onClick={deleteSection}
+                disabled={!state.selectedSection}
+                className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm disabled:opacity-50 font-medium"
+              >
+                Delete
+              </button>
+              <button
+                onClick={toggleCurve}
+                disabled={!state.selectedSection}
+                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm disabled:opacity-50 font-medium"
+              >
+                Curve
+              </button>
+              <button
+                onClick={() => rotateSection(-15)}
+                disabled={!state.selectedSection}
+                className="px-2 py-1 bg-gray-600 hover:bg-gray-700 rounded text-sm disabled:opacity-50"
+                title="Rotate section left"
+              >
+                ↺
+              </button>
+              <button
+                onClick={() => rotateSection(15)}
+                disabled={!state.selectedSection}
+                className="px-2 py-1 bg-gray-600 hover:bg-gray-700 rounded text-sm disabled:opacity-50"
+                title="Rotate section right"
+              >
+                ↻
+              </button>
+              {state.selectedSection && (
+                <>
+                  <button
+                    onClick={() => rotateSectionLabel(state.selectedSection!, -15)}
+                    className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 rounded text-sm"
+                    title="Rotate label left"
+                  >
+                    ⟲
+                  </button>
+                  <button
+                    onClick={() => rotateSectionLabel(state.selectedSection!, 15)}
+                    className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 rounded text-sm"
+                    title="Rotate label right"
+                  >
+                    ⟳
+                  </button>
+                </>
+              )}
+              <button
+                onClick={clearLayout}
+                className="px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded text-sm font-medium"
+              >
+                Clear
+              </button>
+              <button
+                onClick={() => onSave(layout)}
+                className="px-4 py-1 bg-purple-600 hover:bg-purple-700 rounded text-sm font-medium ml-2"
+              >
+                ✓ Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Panel - Repositioned */}
       {showAIPanel && mode === 'edit' && (
-        <div className="absolute top-24 left-4 z-30 bg-black/90 backdrop-blur rounded-lg p-3 w-64">
+        <div className="absolute top-16 right-4 z-20 bg-black/90 backdrop-blur rounded-lg p-3 w-72">
           <div className="flex justify-between items-center mb-2">
             <h3 className="font-semibold text-sm">AI Assistant</h3>
             <button
@@ -521,43 +948,44 @@ export default function SeatingChartDesigner({
           </div>
           
           {backgroundImage && (
-            <div className="mb-2">
-              <img src={backgroundImage} alt="Reference" className="w-full h-20 object-contain rounded" />
-              <div className="mt-1">
-                <label className="text-xs">Opacity</label>
+            <div className="mb-3">
+              <img src={backgroundImage} alt="Reference" className="w-full h-32 object-contain rounded mb-2" />
+              <div>
+                <label className="text-xs text-gray-400">Opacity: {Math.round(imageOpacity * 100)}%</label>
                 <input
                   type="range"
                   min="0"
                   max="100"
                   value={imageOpacity * 100}
                   onChange={(e) => setImageOpacity(parseInt(e.target.value) / 100)}
-                  className="w-full h-1"
+                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
             </div>
           )}
 
-          <div className="space-y-1">
+          <div className="space-y-2">
             <button
               onClick={analyzeImage}
               disabled={aiProcessing || !backgroundImage}
-              className="w-full px-2 py-1 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded text-xs font-medium"
+              className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded text-sm font-medium"
             >
-              {aiProcessing ? '🤖 Analyzing...' : '✨ AI Detect'}
+              {aiProcessing ? '🔄 Analyzing...' : '✨ AI Detect Sections'}
             </button>
             
-            <div className="grid grid-cols-2 gap-1">
+            <div className="text-xs text-gray-400 mb-2">Or generate from template:</div>
+            <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => generateFromTemplate('theater')}
                 disabled={aiProcessing}
-                className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs"
+                className="px-2 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm"
               >
                 🎭 Theater
               </button>
               <button
                 onClick={() => generateFromTemplate('arena')}
                 disabled={aiProcessing}
-                className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs"
+                className="px-2 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm"
               >
                 🏟️ Arena
               </button>
@@ -566,124 +994,105 @@ export default function SeatingChartDesigner({
         </div>
       )}
 
-      {/* Main Toolbar - Top center */}
-      {mode === 'edit' && (
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-20">
-          <div className="bg-black/80 backdrop-blur rounded-lg px-3 py-2 flex gap-2">
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="px-3 py-1 bg-purple-600 hover:bg-purple-700 rounded text-xs font-medium"
-              title="Upload reference image"
-            >
-              📷
-            </button>
-            <button
-              onClick={addSection}
-              className="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-xs font-medium"
-            >
-              + Add
-            </button>
-            <button
-              onClick={deleteSection}
-              disabled={!state.selectedSection}
-              className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-xs disabled:opacity-50 font-medium"
-            >
-              Delete
-            </button>
-            <button
-              onClick={toggleCurve}
-              disabled={!state.selectedSection}
-              className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs disabled:opacity-50 font-medium"
-            >
-              Curve
-            </button>
-            <button
-              onClick={() => rotateSection(-15)}
-              disabled={!state.selectedSection}
-              className="px-2 py-1 bg-gray-600 hover:bg-gray-700 rounded text-xs disabled:opacity-50"
-              title="Rotate left"
-            >
-              ↺
-            </button>
-            <button
-              onClick={() => rotateSection(15)}
-              disabled={!state.selectedSection}
-              className="px-2 py-1 bg-gray-600 hover:bg-gray-700 rounded text-xs disabled:opacity-50"
-              title="Rotate right"
-            >
-              ↻
-            </button>
-            <button
-              onClick={clearLayout}
-              className="px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded text-xs font-medium"
-            >
-              Clear
-            </button>
-            <button
-              onClick={() => onSave(layout)}
-              className="px-3 py-1 bg-purple-600 hover:bg-purple-700 rounded text-xs font-medium ml-2"
-            >
-              Save
-            </button>
-          </div>
+      {/* Pricing and Color controls */}
+      {mode === 'edit' && state.selectedSection && (
+        <div className="absolute top-16 left-4 z-20 bg-black/90 backdrop-blur rounded-lg p-3 w-64">
+          <h3 className="text-sm font-semibold mb-2">Section Settings</h3>
           
-          {/* Section pricing tools - below main toolbar */}
-          {state.selectedSection && (
-            <div className="bg-black/80 backdrop-blur rounded-lg px-3 py-2 flex gap-1 mt-2">
-              <span className="text-xs text-gray-400 mr-2">Pricing:</span>
-              <button
-                onClick={() => changePricing('vip')}
-                className="px-2 py-1 bg-yellow-600 hover:bg-yellow-700 rounded text-xs"
-              >
-                VIP
-              </button>
-              <button
-                onClick={() => changePricing('premium')}
-                className="px-2 py-1 bg-gray-500 hover:bg-gray-600 rounded text-xs"
-              >
-                Premium
-              </button>
-              <button
-                onClick={() => changePricing('standard')}
-                className="px-2 py-1 bg-orange-700 hover:bg-orange-800 rounded text-xs"
-              >
-                Standard
-              </button>
-              <button
-                onClick={() => changePricing('economy')}
-                className="px-2 py-1 bg-gray-700 hover:bg-gray-800 rounded text-xs"
-              >
-                Economy
-              </button>
+          {/* Pricing controls */}
+          <div className="mb-3">
+            <div className="text-xs text-gray-400 mb-1">Pricing Tier:</div>
+            <div className="grid grid-cols-2 gap-1">
+              {['vip', 'premium', 'standard', 'economy'].map(tier => (
+                <div key={tier} className="flex items-center gap-1">
+                  <button
+                    onClick={() => changePricing(tier as any)}
+                    className={`flex-1 px-2 py-1 rounded text-xs ${
+                      layout.sections.find(s => s.id === state.selectedSection)?.pricing === tier
+                        ? 'bg-purple-600'
+                        : 'bg-gray-700 hover:bg-gray-600'
+                    }`}
+                  >
+                    {editingPricing === tier ? (
+                      <input
+                        type="text"
+                        value={pricingNames[tier as keyof typeof pricingNames]}
+                        onChange={(e) => setPricingNames(prev => ({
+                          ...prev,
+                          [tier]: e.target.value
+                        }))}
+                        onBlur={() => setEditingPricing(null)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') setEditingPricing(null)
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full bg-transparent text-center outline-none"
+                        autoFocus
+                      />
+                    ) : (
+                      <span onDoubleClick={() => setEditingPricing(tier)}>
+                        {pricingNames[tier as keyof typeof pricingNames]}
+                      </span>
+                    )}
+                  </button>
+                </div>
+              ))}
             </div>
-          )}
+          </div>
+
+          {/* Color picker */}
+          <div>
+            <div className="text-xs text-gray-400 mb-1">Section Color:</div>
+            <button
+              onClick={() => setShowColorPicker(!showColorPicker)}
+              className="w-full h-8 rounded border border-white/20"
+              style={{ 
+                backgroundColor: layout.sections.find(s => s.id === state.selectedSection)?.color || '#4a5568' 
+              }}
+            />
+            {showColorPicker && (
+              <div className="absolute left-0 right-0 mt-2 p-2 bg-black/95 rounded-lg max-h-48 overflow-y-auto">
+                <div className="grid grid-cols-8 gap-1">
+                  {colorPalette.map(color => (
+                    <button
+                      key={color}
+                      onClick={() => changeColor(color)}
+                      className="w-6 h-6 rounded hover:scale-110 transition-transform"
+                      style={{ backgroundColor: color }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Zoom controls - Top right */}
-      <div className="absolute top-4 right-4 z-20 bg-black/80 backdrop-blur rounded-lg p-1 flex flex-col items-center">
-        <button
-          onClick={() => setState(prev => ({ ...prev, zoom: Math.min(2, prev.zoom * 1.2) }))}
-          className="w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-xs font-bold"
-        >
-          +
-        </button>
-        <div className="text-xs px-1 py-0.5">{Math.round(state.zoom * 100)}%</div>
+      {/* Zoom controls */}
+      <div className="absolute bottom-4 right-4 z-20 bg-black/80 backdrop-blur rounded-lg p-1 flex items-center gap-2">
         <button
           onClick={() => setState(prev => ({ ...prev, zoom: Math.max(0.3, prev.zoom * 0.8) }))}
-          className="w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-xs font-bold"
+          className="w-8 h-8 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-sm font-bold"
         >
           −
         </button>
+        <div className="text-sm px-2">{Math.round(state.zoom * 100)}%</div>
         <button
-          onClick={() => setState(prev => ({ ...prev, zoom: 0.7, pan: { x: 0, y: 0 } }))}
-          className="w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-xs mt-1"
+          onClick={() => setState(prev => ({ ...prev, zoom: Math.min(2, prev.zoom * 1.2) }))}
+          className="w-8 h-8 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-sm font-bold"
+        >
+          +
+        </button>
+        <button
+          onClick={() => setState(prev => ({ ...prev, zoom: 0.8, pan: { x: 0, y: 0 } }))}
+          className="w-8 h-8 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-sm"
+          title="Reset view"
         >
           ⟲
         </button>
       </div>
 
-      {/* SVG Canvas - Main content area */}
+      {/* SVG Canvas */}
       <svg
         ref={svgRef}
         className="w-full h-full"
@@ -693,7 +1102,10 @@ export default function SeatingChartDesigner({
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        style={{ cursor: isPanning ? 'grabbing' : mode === 'edit' ? 'default' : 'grab' }}
+        style={{ 
+          cursor: isPanning ? 'grabbing' : mode === 'edit' ? 'default' : 'grab',
+          paddingTop: mode === 'edit' ? '48px' : '0'
+        }}
       >
         <g transform={`translate(${state.pan.x}, ${state.pan.y}) scale(${state.zoom})`}>
           {mode === 'edit' && state.showGrid && (
