@@ -18,6 +18,7 @@ export default function SeatingChartDesigner({
   pricingTiers = []
 }: SeatingChartDesignerProps) {
   const svgRef = useRef<SVGSVGElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [layout, setLayout] = useState<SeatingLayout>(initialLayout)
   const [state, setState] = useState<DesignerState>({
     selectedSection: null,
@@ -33,6 +34,10 @@ export default function SeatingChartDesigner({
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
   const [sectionDragStart, setSectionDragStart] = useState({ x: 0, y: 0 })
   const [seatStatuses, setSeatStatuses] = useState<Map<string, string>>(new Map())
+  const [backgroundImage, setBackgroundImage] = useState<string | null>(null)
+  const [imageOpacity, setImageOpacity] = useState(0.3)
+  const [aiProcessing, setAiProcessing] = useState(false)
+  const [showAIPanel, setShowAIPanel] = useState(false)
 
   // Load seat availability if in preview mode
   useEffect(() => {
@@ -54,6 +59,89 @@ export default function SeatingChartDesigner({
     } catch (error) {
       console.error('Error loading seat availability:', error)
     }
+  }
+
+  // Handle image upload
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Convert to base64 for display
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string
+      setBackgroundImage(base64)
+      setShowAIPanel(true)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  // AI Analysis of uploaded image
+  const analyzeImage = async () => {
+    if (!backgroundImage) return
+    
+    setAiProcessing(true)
+    try {
+      // Send image to AI analysis endpoint
+      const response = await fetch('/api/analyze-seating-chart', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          image: backgroundImage,
+          venueType: 'theater',
+          existingCapacity: layout.capacity
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        
+        // Apply the AI-generated layout
+        if (data.sections && data.sections.length > 0) {
+          setLayout(prev => ({
+            ...prev,
+            sections: data.sections,
+            capacity: data.totalCapacity || prev.capacity,
+            stage: data.stage || prev.stage
+          }))
+          
+          alert(`AI detected ${data.sections.length} sections with ${data.totalCapacity} total seats`)
+        }
+      }
+    } catch (error) {
+      console.error('AI analysis error:', error)
+      alert('Error analyzing image. Please try manual creation.')
+    }
+    setAiProcessing(false)
+  }
+
+  // Generate layout from template
+  const generateFromTemplate = async (template: string) => {
+    setAiProcessing(true)
+    try {
+      const response = await fetch('/api/generate-layout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          venueName: layout.name || 'Venue',
+          venueType: template,
+          capacity: layout.capacity || 1000,
+          layoutType: 'seating_chart'
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setLayout(prev => ({
+          ...prev,
+          sections: data.sections || [],
+          capacity: data.totalCapacity || prev.capacity
+        }))
+      }
+    } catch (error) {
+      console.error('Template generation error:', error)
+    }
+    setAiProcessing(false)
   }
 
   // Zoom handling
@@ -395,15 +483,127 @@ export default function SeatingChartDesigner({
     }))
   }
 
+  // Clear all sections
+  const clearLayout = () => {
+    if (confirm('Are you sure you want to clear all sections?')) {
+      setLayout(prev => ({
+        ...prev,
+        sections: [],
+        capacity: 0
+      }))
+    }
+  }
+
   const viewBox = layout.viewBox || { x: 0, y: 0, width: 1200, height: 800 }
 
   return (
     <div className="relative h-full bg-gray-900">
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleImageUpload}
+        className="hidden"
+      />
+
+      {/* AI Panel - Shows when image is uploaded */}
+      {showAIPanel && mode === 'edit' && (
+        <div className="absolute top-16 left-4 z-20 bg-black/90 backdrop-blur rounded-lg p-4 w-80">
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="font-semibold">AI Layout Assistant</h3>
+            <button
+              onClick={() => {
+                setShowAIPanel(false)
+                setBackgroundImage(null)
+              }}
+              className="text-gray-400 hover:text-white"
+            >
+              ✕
+            </button>
+          </div>
+          
+          {backgroundImage && (
+            <div className="mb-4">
+              <img src={backgroundImage} alt="Reference" className="w-full h-32 object-contain rounded" />
+              <div className="mt-2">
+                <label className="text-xs">Image Opacity</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={imageOpacity * 100}
+                  onChange={(e) => setImageOpacity(parseInt(e.target.value) / 100)}
+                  className="w-full"
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <button
+              onClick={analyzeImage}
+              disabled={aiProcessing || !backgroundImage}
+              className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded text-sm font-medium"
+            >
+              {aiProcessing ? '🤖 Analyzing...' : '✨ AI Detect Sections'}
+            </button>
+            
+            <div className="text-xs text-gray-400 mt-2">Or use a template:</div>
+            
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => generateFromTemplate('theater')}
+                disabled={aiProcessing}
+                className="px-2 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs"
+              >
+                🎭 Theater
+              </button>
+              <button
+                onClick={() => generateFromTemplate('arena')}
+                disabled={aiProcessing}
+                className="px-2 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs"
+              >
+                🏟️ Arena
+              </button>
+              <button
+                onClick={() => generateFromTemplate('stadium')}
+                disabled={aiProcessing}
+                className="px-2 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs"
+              >
+                🏟️ Stadium
+              </button>
+              <button
+                onClick={() => generateFromTemplate('club')}
+                disabled={aiProcessing}
+                className="px-2 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs"
+              >
+                🎵 Club
+              </button>
+            </div>
+            
+            <button
+              onClick={clearLayout}
+              className="w-full px-3 py-1.5 bg-red-900 hover:bg-red-800 rounded text-xs"
+            >
+              Clear All Sections
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Toolbar - Fixed at top */}
       {mode === 'edit' && (
         <div className="absolute top-4 left-4 right-4 z-10 flex gap-4">
           {/* Main actions */}
           <div className="bg-black/80 backdrop-blur rounded-lg p-3 flex gap-2">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded text-sm font-medium"
+              title="Upload reference image"
+            >
+              📷 Upload Image
+            </button>
             <button
               onClick={addSection}
               className="px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded text-sm font-medium"
@@ -558,19 +758,7 @@ export default function SeatingChartDesigner({
           <div>• Drag selected section to move</div>
           <div>• Ctrl/Cmd + Scroll to zoom</div>
           <div>• Shift + Drag to pan</div>
-          <div>• Middle mouse to pan</div>
-        </div>
-      )}
-
-      {/* Selected seats info */}
-      {mode === 'preview' && state.selectedSeats.size > 0 && (
-        <div className="absolute top-4 right-4 z-10 bg-black/80 backdrop-blur rounded-lg p-3">
-          <p className="text-sm font-semibold">{state.selectedSeats.size} seats selected</p>
-          <button 
-            className="mt-2 px-3 py-1 bg-purple-600 hover:bg-purple-700 rounded text-sm w-full"
-          >
-            Continue
-          </button>
+          <div>• Upload image for AI assist</div>
         </div>
       )}
 
@@ -599,6 +787,19 @@ export default function SeatingChartDesigner({
             <rect x={viewBox.x} y={viewBox.y} width={viewBox.width} height={viewBox.height} fill="url(#grid)" />
           )}
 
+          {/* Background image overlay */}
+          {backgroundImage && mode === 'edit' && (
+            <image
+              href={backgroundImage}
+              x={0}
+              y={0}
+              width={viewBox.width}
+              height={viewBox.height}
+              opacity={imageOpacity}
+              preserveAspectRatio="xMidYMid meet"
+            />
+          )}
+
           {/* Stage/Screen */}
           <rect
             x={layout.stage.x}
@@ -623,20 +824,6 @@ export default function SeatingChartDesigner({
 
           {/* Sections */}
           {layout.sections.map(renderSection)}
-
-          {/* Aisles */}
-          {layout.aisles.map(aisle => (
-            <line
-              key={aisle.id}
-              x1={aisle.startX}
-              y1={aisle.startY}
-              x2={aisle.endX}
-              y2={aisle.endY}
-              stroke="#333"
-              strokeWidth={aisle.width}
-              strokeDasharray="5,5"
-            />
-          ))}
         </g>
       </svg>
     </div>
