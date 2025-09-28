@@ -57,14 +57,12 @@ export default function SeatingChartDesigner({
     standard: 'Standard',
     economy: 'Economy'
   })
-  const [editingPricing, setEditingPricing] = useState<string | null>(null)
 
   const colorPalette = [
     '#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16',
     '#22c55e', '#10b981', '#14b8a6', '#06b6d4', '#0ea5e9',
     '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef',
-    '#ec4899', '#f43f5e', '#fbbf24', '#a78bfa', '#60a5fa',
-    '#4ade80', '#f87171', '#fb923c', '#fcd34d', '#86efac'
+    '#ec4899', '#f43f5e', '#fbbf24', '#a78bfa', '#60a5fa'
   ]
 
   useEffect(() => {
@@ -396,14 +394,6 @@ export default function SeatingChartDesigner({
     }))
   }
 
-  const toggleRowLabels = (rowId: string) => {
-    setRowVisibility(prev => {
-      const updated = new Map(prev)
-      updated.set(rowId, !prev.get(rowId))
-      return updated
-    })
-  }
-
   const rotateSectionLabel = (sectionId: string, angle: number) => {
     setSectionLabels(prev => {
       const updated = new Map(prev)
@@ -488,7 +478,6 @@ export default function SeatingChartDesigner({
     
     const actualAngleRange = (desiredSeatSpacing * (seatCount - 1) * 180) / (Math.PI * radius)
     const actualStartAngle = -(actualAngleRange / 2)
-    const actualEndAngle = actualAngleRange / 2
     const angleStep = actualAngleRange / (seatCount - 1)
     
     return row.seats.slice(0, seatCount).map((seat, index) => {
@@ -565,7 +554,6 @@ export default function SeatingChartDesigner({
         </g>
         
         {section.rows.map((row, rowIndex) => {
-          const showLabels = rowVisibility.get(row.id) !== false
           const isRowHovered = hoveredRow === row.id
           
           return (
@@ -590,7 +578,7 @@ export default function SeatingChartDesigner({
                       x={2}
                       y={5}
                       fontSize={14}
-                      fill={showLabels ? '#fff' : '#666'}
+                      fill="#fff"
                       textAnchor="middle"
                       fontWeight="bold"
                       pointerEvents="none"
@@ -651,7 +639,7 @@ export default function SeatingChartDesigner({
                 </>
               )}
               
-              {(!mode || mode === 'preview' || (mode === 'edit' && showLabels)) && (
+              {(!mode || mode === 'preview') && (
                 <text
                   x={row.seats[0]?.x - 25 || -25}
                   y={row.y + 5}
@@ -958,9 +946,7 @@ export default function SeatingChartDesigner({
       <div className="flex-1 relative overflow-hidden">
         {/* AI Panel - Fixed positioning within viewport */}
         {showAIPanel && mode === 'edit' && (
-          <div className="absolute top-2 left-2 sm:left-auto sm:right-2 z-20 bg-black/95 backdrop-blur rounded-lg p-3
-                          w-[calc(100%-1rem)] sm:w-72 md:w-80
-                          h-auto max-h-[calc(100vh-120px)] overflow-y-auto shadow-xl">
+          <div className="absolute top-2 left-2 sm:left-auto sm:right-2 z-20 bg-black/95 backdrop-blur rounded-lg p-3 w-[calc(100%-1rem)] sm:w-72 md:w-80 h-auto max-h-[calc(100vh-120px)] overflow-y-auto shadow-xl">
             <div className="flex justify-between items-center mb-3 sticky top-0 bg-black/95 pb-2">
               <h3 className="font-semibold text-sm">AI Assistant</h3>
               <button
@@ -1037,8 +1023,7 @@ export default function SeatingChartDesigner({
 
         {/* Section Settings Panel - Fixed positioning */}
         {mode === 'edit' && state.selectedSection && (
-          <div className="absolute bottom-20 left-2 z-20 bg-black/95 backdrop-blur rounded-lg p-3
-                          w-56 shadow-xl">
+          <div className="absolute bottom-20 left-2 z-20 bg-black/95 backdrop-blur rounded-lg p-3 w-56 shadow-xl">
             <h3 className="text-xs font-semibold mb-2">Section Settings</h3>
             
             <div className="mb-3">
@@ -1087,7 +1072,7 @@ export default function SeatingChartDesigner({
           </div>
         )}
 
-        {/* Zoom controls - Responsive */
+        {/* Zoom controls - Responsive */}
         <div className="absolute bottom-4 right-4 z-10 bg-black/80 backdrop-blur rounded-lg p-1 flex flex-col items-center shadow-lg">
           <button
             onClick={() => setState(prev => ({ ...prev, zoom: Math.max(0.3, prev.zoom * 0.8) }))}
