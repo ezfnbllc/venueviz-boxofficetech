@@ -132,17 +132,39 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
     }
   }
 
+  const handleCloseDesigner = () => {
+    setIsDesigning(false)
+    setCurrentLayout(null)
+    setSelectedLayout(null)
+  }
+
+  // Render the designer in fullscreen mode
   if (isDesigning && currentLayout) {
     return (
-      <SeatingChartDesigner
-        layout={currentLayout}
-        onSave={handleSaveLayout}
-        mode="edit"
-        title={`${selectedLayout ? 'Edit' : 'Create'} Layout - ${venue.name}`}
-      />
+      <div className="fixed inset-0 bg-black z-50">
+        <div className="relative w-full h-full">
+          {/* Close button overlay */}
+          <button
+            onClick={handleCloseDesigner}
+            className="absolute top-4 right-4 z-50 w-10 h-10 bg-red-600 hover:bg-red-700 rounded-full flex items-center justify-center text-white font-bold text-xl"
+            title="Close Designer"
+          >
+            ×
+          </button>
+          
+          {/* Designer Component */}
+          <SeatingChartDesigner
+            layout={currentLayout}
+            onSave={handleSaveLayout}
+            mode="edit"
+            title={`${selectedLayout ? 'Edit' : 'Create'} Layout - ${venue.name}`}
+          />
+        </div>
+      </div>
     )
   }
 
+  // Render the layout manager modal
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
       <div className="bg-gray-900 rounded-xl w-full max-w-6xl max-h-[90vh] flex flex-col">
@@ -151,7 +173,12 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
             <h2 className="text-2xl font-bold">Layout Manager - {venue.name}</h2>
             <p className="text-gray-400 text-sm">Capacity: {venue.capacity}</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-white text-2xl">✕</button>
+          <button 
+            onClick={onClose} 
+            className="w-10 h-10 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center text-xl"
+          >
+            ×
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
@@ -160,7 +187,7 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
               <h3 className="text-lg font-semibold">Seating Layouts</h3>
               <button
                 onClick={handleCreateNew}
-                className="px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700"
+                className="px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors"
               >
                 + Create New Layout
               </button>
@@ -189,17 +216,17 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
                       <div className="flex gap-2">
                         <button
                           onClick={() => handleEditLayout(layout)}
-                          className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center hover:bg-blue-700"
+                          className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center hover:bg-blue-700 transition-colors"
                           title="Edit"
                         >
                           ✏️
                         </button>
                         <button
                           onClick={() => handleDeleteLayout(layout.id)}
-                          className="w-8 h-8 bg-red-600 rounded flex items-center justify-center hover:bg-red-700"
+                          className="w-8 h-8 bg-red-600 rounded flex items-center justify-center hover:bg-red-700 transition-colors"
                           title="Delete"
                         >
-                          🗑️
+                          ��️
                         </button>
                       </div>
                     </div>
@@ -209,7 +236,7 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
                     </div>
                     <button
                       onClick={() => handleEditLayout(layout)}
-                      className="w-full mt-3 py-2 bg-purple-600/20 text-purple-400 rounded hover:bg-purple-600/30"
+                      className="w-full mt-3 py-2 bg-purple-600/20 text-purple-400 rounded hover:bg-purple-600/30 transition-colors"
                     >
                       Open Designer
                     </button>

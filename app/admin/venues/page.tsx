@@ -1,5 +1,5 @@
 'use client'
-import {useState, useEffect} from 'react'
+import {useState, useEffect, useCallback} from 'react'
 import {useRouter} from 'next/navigation'
 import {AdminService} from '@/lib/admin/adminService'
 import {StorageService} from '@/lib/storage/storageService'
@@ -31,7 +31,7 @@ export default function VenuesManagement() {
     latitude: 32.7767,
     longitude: -96.7970,
     capacity: 1000,
-    type: 'theater', // theater, arena, stadium, club
+    type: 'theater',
     amenities: [] as string[],
     parkingCapacity: 500,
     images: [] as string[],
@@ -57,7 +57,6 @@ export default function VenuesManagement() {
   const loadVenues = async () => {
     try {
       const venuesData = await AdminService.getVenues()
-      // Load layouts for each venue
       const venuesWithLayouts = await Promise.all(
         venuesData.map(async (venue) => {
           const layouts = await AdminService.getLayoutsByVenueId(venue.id)
@@ -217,7 +216,6 @@ export default function VenuesManagement() {
         venueId = await AdminService.createVenue(venueData)
       }
       
-      // If there are layouts to create
       if (formData.layouts.length > 0 && !editingVenue) {
         for (const layout of formData.layouts) {
           await AdminService.createLayout({
@@ -288,10 +286,16 @@ export default function VenuesManagement() {
     }
   }
 
-  const openLayoutBuilder = (venue: any) => {
+  const openLayoutBuilder = useCallback((venue: any) => {
     setSelectedVenue(venue)
     setShowLayoutBuilder(true)
-  }
+  }, [])
+
+  const closeLayoutBuilder = useCallback(() => {
+    setShowLayoutBuilder(false)
+    setSelectedVenue(null)
+    loadVenues()
+  }, [])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
@@ -374,7 +378,7 @@ export default function VenuesManagement() {
                     </span>
                     <button 
                       onClick={() => openLayoutBuilder(venue)}
-                      className="px-3 py-1 bg-purple-600/20 text-purple-400 rounded text-sm"
+                      className="px-3 py-1 bg-purple-600/20 text-purple-400 rounded text-sm hover:bg-purple-600/30 transition-colors"
                     >
                       Manage Layouts
                     </button>
@@ -765,15 +769,12 @@ export default function VenuesManagement() {
           </div>
         )}
 
-        {/* Layout Builder Modal */}
+        {/* Layout Builder Modal - Render only when both conditions are true */}
         {showLayoutBuilder && selectedVenue && (
           <EnhancedLayoutBuilder
+            key={selectedVenue.id} // Force remount when venue changes
             venue={selectedVenue}
-            onClose={() => {
-              setShowLayoutBuilder(false)
-              setSelectedVenue(null)
-              loadVenues()
-            }}
+            onClose={closeLayoutBuilder}
           />
         )}
       </div>
