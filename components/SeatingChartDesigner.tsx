@@ -9,6 +9,7 @@ interface SeatingChartDesignerProps {
   selectedEventId?: string
   pricingTiers?: any[]
   title?: string
+  onClose?: () => void
 }
 
 export default function SeatingChartDesigner({ 
@@ -17,7 +18,8 @@ export default function SeatingChartDesigner({
   mode = 'edit',
   selectedEventId,
   pricingTiers = [],
-  title = 'Seating Layout'
+  title = 'Seating Layout',
+  onClose
 }: SeatingChartDesignerProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -113,6 +115,11 @@ export default function SeatingChartDesigner({
       setShowAIPanel(true)
     }
     reader.readAsDataURL(file)
+  }
+
+  const clearBackgroundImage = () => {
+    setBackgroundImage(null)
+    setShowAIPanel(false)
   }
 
   const analyzeImage = async () => {
@@ -328,6 +335,17 @@ export default function SeatingChartDesigner({
             y: (newRowIndex) * 25
           }
           
+          // If section is curved, add curve to new row
+          if (section.curved && updatedRows[afterRowIndex]?.curve) {
+            const baseRadius = 120
+            const radiusIncrement = 30
+            newRow.curve = {
+              radius: baseRadius + (newRowIndex * radiusIncrement),
+              startAngle: updatedRows[afterRowIndex].curve.startAngle || -35,
+              endAngle: updatedRows[afterRowIndex].curve.endAngle || 35
+            }
+          }
+          
           // Create seats for the new row
           const seatsPerRow = section.rows[afterRowIndex]?.seats.length || 20
           for (let s = 0; s < seatsPerRow; s++) {
@@ -345,10 +363,16 @@ export default function SeatingChartDesigner({
           
           updatedRows.splice(newRowIndex, 0, newRow)
           
-          // Update row labels and positions for rows after the new one
+          // Update row labels, positions, and curves for rows after the new one
           for (let i = newRowIndex + 1; i < updatedRows.length; i++) {
             updatedRows[i].label = String.fromCharCode(65 + i)
             updatedRows[i].y = i * 25
+            
+            // Update curve radius if section is curved
+            if (section.curved && updatedRows[i].curve) {
+              updatedRows[i].curve.radius = baseRadius + (i * radiusIncrement)
+            }
+            
             updatedRows[i].seats.forEach(seat => {
               seat.row = updatedRows[i].label
               seat.y = updatedRows[i].y
@@ -370,10 +394,19 @@ export default function SeatingChartDesigner({
         if (section.id === sectionId && section.rows.length > 1) {
           const updatedRows = section.rows.filter((_, i) => i !== rowIndex)
           
-          // Update row labels and positions
+          // Update row labels, positions, and curves
+          const baseRadius = 120
+          const radiusIncrement = 30
+          
           updatedRows.forEach((row, i) => {
             row.label = String.fromCharCode(65 + i)
             row.y = i * 25
+            
+            // Update curve radius if section is curved
+            if (section.curved && row.curve) {
+              row.curve.radius = baseRadius + (i * radiusIncrement)
+            }
+            
             row.seats.forEach(seat => {
               seat.row = row.label
               seat.y = row.y
@@ -850,7 +883,9 @@ export default function SeatingChartDesigner({
       {mode === 'edit' && (
         <div className="absolute top-0 left-0 right-0 z-30 bg-black/90 backdrop-blur border-b border-white/10">
           <div className="flex items-center justify-between px-4 py-2">
-            <h2 className="text-lg font-bold">{title}</h2>
+            <div className="flex items-center gap-4">
+              <h2 className="text-lg font-bold">{title}</h2>
+            </div>
             
             <div className="flex items-center gap-2">
               <button
@@ -920,94 +955,117 @@ export default function SeatingChartDesigner({
               >
                 Clear
               </button>
+              <div className="w-px h-6 bg-white/20 mx-2" />
               <button
                 onClick={() => onSave(layout)}
-                className="px-4 py-1 bg-purple-600 hover:bg-purple-700 rounded text-sm font-medium ml-2"
+                className="px-4 py-1 bg-green-600 hover:bg-green-700 rounded text-sm font-medium"
               >
                 ✓ Save
               </button>
+              {onClose && (
+                <button
+                  onClick={onClose}
+                  className="px-4 py-1 bg-gray-600 hover:bg-gray-700 rounded text-sm font-medium"
+                >
+                  Cancel
+                </button>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* AI Panel - Repositioned */}
+      {/* AI Panel - Fixed positioning and sizing */}
       {showAIPanel && mode === 'edit' && (
-        <div className="absolute top-16 right-4 z-20 bg-black/90 backdrop-blur rounded-lg p-3 w-72">
-          <div className="flex justify-between items-center mb-2">
-            <h3 className="font-semibold text-sm">AI Assistant</h3>
+        <div className="absolute top-20 right-4 z-20 bg-black/95 backdrop-blur rounded-lg p-4 w-80 max-h-[calc(100vh-200px)] overflow-y-auto shadow-xl">
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="font-semibold">AI Assistant</h3>
             <button
-              onClick={() => {
-                setShowAIPanel(false)
-                setBackgroundImage(null)
-              }}
-              className="text-gray-400 hover:text-white text-lg"
+              onClick={() => setShowAIPanel(false)}
+              className="text-gray-400 hover:text-white text-xl w-8 h-8 flex items-center justify-center rounded hover:bg-white/10"
             >
               ×
             </button>
           </div>
           
           {backgroundImage && (
-            <div className="mb-3">
-              <img src={backgroundImage} alt="Reference" className="w-full h-32 object-contain rounded mb-2" />
-              <div>
-                <label className="text-xs text-gray-400">Opacity: {Math.round(imageOpacity * 100)}%</label>
+            <div className="mb-4">
+              <div className="relative">
+                <img 
+                  src={backgroundImage} 
+                  alt="Reference" 
+                  className="w-full h-40 object-contain rounded bg-black/50 border border-white/10" 
+                />
+                <button
+                  onClick={clearBackgroundImage}
+                  className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center"
+                  title="Remove image"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="mt-3">
+                <label className="text-xs text-gray-400 block mb-1">
+                  Background Opacity: {Math.round(imageOpacity * 100)}%
+                </label>
                 <input
                   type="range"
                   min="0"
                   max="100"
                   value={imageOpacity * 100}
                   onChange={(e) => setImageOpacity(parseInt(e.target.value) / 100)}
-                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-600"
                 />
               </div>
             </div>
           )}
 
-          <div className="space-y-2">
+          <div className="space-y-3">
             <button
               onClick={analyzeImage}
               disabled={aiProcessing || !backgroundImage}
-              className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded text-sm font-medium"
+              className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm font-medium transition-colors"
             >
               {aiProcessing ? '🔄 Analyzing...' : '✨ AI Detect Sections'}
             </button>
             
-            <div className="text-xs text-gray-400 mb-2">Or generate from template:</div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => generateFromTemplate('theater')}
-                disabled={aiProcessing}
-                className="px-2 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm"
-              >
-                🎭 Theater
-              </button>
-              <button
-                onClick={() => generateFromTemplate('arena')}
-                disabled={aiProcessing}
-                className="px-2 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm"
-              >
-                🏟️ Arena
-              </button>
+            <div className="pt-2 border-t border-white/10">
+              <p className="text-xs text-gray-400 mb-2">Or generate from template:</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => generateFromTemplate('theater')}
+                  disabled={aiProcessing}
+                  className="px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-sm transition-colors"
+                >
+                  🎭 Theater
+                </button>
+                <button
+                  onClick={() => generateFromTemplate('arena')}
+                  disabled={aiProcessing}
+                  className="px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-sm transition-colors"
+                >
+                  🏟️ Arena
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Pricing and Color controls */}
+      {/* Pricing and Color controls - Repositioned */}
       {mode === 'edit' && state.selectedSection && (
-        <div className="absolute top-16 left-4 z-20 bg-black/90 backdrop-blur rounded-lg p-3 w-64">
-          <h3 className="text-sm font-semibold mb-2">Section Settings</h3>
+        <div className="absolute top-20 left-4 z-20 bg-black/95 backdrop-blur rounded-lg p-4 w-64 shadow-xl">
+          <h3 className="text-sm font-semibold mb-3">Section Settings</h3>
           
           {/* Pricing controls */}
-          <div className="mb-3">
-            <div className="text-xs text-gray-400 mb-1">Pricing Tier:</div>
+          <div className="mb-4">
+            <div className="text-xs text-gray-400 mb-2">Pricing Tier:</div>
             <div className="grid grid-cols-2 gap-1">
               {['vip', 'premium', 'standard', 'economy'].map(tier => (
                 <div key={tier} className="flex items-center gap-1">
                   <button
                     onClick={() => changePricing(tier as any)}
-                    className={`flex-1 px-2 py-1 rounded text-xs ${
+                    className={`flex-1 px-2 py-1.5 rounded text-xs transition-colors ${
                       layout.sections.find(s => s.id === state.selectedSection)?.pricing === tier
                         ? 'bg-purple-600'
                         : 'bg-gray-700 hover:bg-gray-600'
@@ -1042,16 +1100,16 @@ export default function SeatingChartDesigner({
 
           {/* Color picker */}
           <div>
-            <div className="text-xs text-gray-400 mb-1">Section Color:</div>
+            <div className="text-xs text-gray-400 mb-2">Section Color:</div>
             <button
               onClick={() => setShowColorPicker(!showColorPicker)}
-              className="w-full h-8 rounded border border-white/20"
+              className="w-full h-8 rounded border border-white/20 hover:border-white/40 transition-colors"
               style={{ 
                 backgroundColor: layout.sections.find(s => s.id === state.selectedSection)?.color || '#4a5568' 
               }}
             />
             {showColorPicker && (
-              <div className="absolute left-0 right-0 mt-2 p-2 bg-black/95 rounded-lg max-h-48 overflow-y-auto">
+              <div className="absolute left-4 right-4 mt-2 p-2 bg-black/95 rounded-lg max-h-48 overflow-y-auto border border-white/10">
                 <div className="grid grid-cols-8 gap-1">
                   {colorPalette.map(color => (
                     <button
@@ -1068,31 +1126,31 @@ export default function SeatingChartDesigner({
         </div>
       )}
 
-      {/* Zoom controls */}
-      <div className="absolute bottom-4 right-4 z-20 bg-black/80 backdrop-blur rounded-lg p-1 flex items-center gap-2">
+      {/* Zoom controls - Better positioning */}
+      <div className="absolute top-20 right-4 z-10 bg-black/80 backdrop-blur rounded-lg p-1 flex flex-col items-center shadow-lg">
         <button
           onClick={() => setState(prev => ({ ...prev, zoom: Math.max(0.3, prev.zoom * 0.8) }))}
-          className="w-8 h-8 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-sm font-bold"
+          className="w-8 h-8 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-sm font-bold transition-colors"
         >
           −
         </button>
-        <div className="text-sm px-2">{Math.round(state.zoom * 100)}%</div>
+        <div className="text-xs px-2 py-1">{Math.round(state.zoom * 100)}%</div>
         <button
           onClick={() => setState(prev => ({ ...prev, zoom: Math.min(2, prev.zoom * 1.2) }))}
-          className="w-8 h-8 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-sm font-bold"
+          className="w-8 h-8 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-sm font-bold transition-colors"
         >
           +
         </button>
         <button
           onClick={() => setState(prev => ({ ...prev, zoom: 0.8, pan: { x: 0, y: 0 } }))}
-          className="w-8 h-8 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-sm"
+          className="w-8 h-8 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-xs mt-1 transition-colors"
           title="Reset view"
         >
           ⟲
         </button>
       </div>
 
-      {/* SVG Canvas */}
+      {/* SVG Canvas - Adjusted for header */}
       <svg
         ref={svgRef}
         className="w-full h-full"
@@ -1104,7 +1162,8 @@ export default function SeatingChartDesigner({
         onMouseLeave={handleMouseUp}
         style={{ 
           cursor: isPanning ? 'grabbing' : mode === 'edit' ? 'default' : 'grab',
-          paddingTop: mode === 'edit' ? '48px' : '0'
+          marginTop: mode === 'edit' ? '48px' : '0',
+          height: mode === 'edit' ? 'calc(100% - 48px)' : '100%'
         }}
       >
         <g transform={`translate(${state.pan.x}, ${state.pan.y}) scale(${state.zoom})`}>
@@ -1122,12 +1181,13 @@ export default function SeatingChartDesigner({
           {backgroundImage && mode === 'edit' && (
             <image
               href={backgroundImage}
-              x={0}
-              y={0}
-              width={viewBox.width}
-              height={viewBox.height}
+              x={200}
+              y={100}
+              width={1000}
+              height={600}
               opacity={imageOpacity}
               preserveAspectRatio="xMidYMid meet"
+              pointerEvents="none"
             />
           )}
 
