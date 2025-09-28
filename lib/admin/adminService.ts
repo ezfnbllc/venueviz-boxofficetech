@@ -44,7 +44,33 @@ export class AdminService {
     await deleteDoc(doc(db, 'venues', id))
   }
 
-  // Layout Methods with Price Categories and New Features
+  // Helper function to clean undefined values from objects
+  static cleanUndefinedValues(obj: any): any {
+    if (obj === null || obj === undefined) {
+      return null
+    }
+    
+    if (Array.isArray(obj)) {
+      return obj.map(item => this.cleanUndefinedValues(item))
+    }
+    
+    if (typeof obj === 'object') {
+      const cleaned: any = {}
+      for (const key in obj) {
+        if (obj.hasOwnProperty(key)) {
+          const value = obj[key]
+          if (value !== undefined) {
+            cleaned[key] = this.cleanUndefinedValues(value)
+          }
+        }
+      }
+      return cleaned
+    }
+    
+    return obj
+  }
+
+  // Layout Methods with detailed logging
   static async getLayoutsByVenueId(venueId: string) {
     const q = query(collection(db, 'layouts'), where('venueId', '==', venueId))
     const querySnapshot = await getDocs(q)
@@ -55,31 +81,210 @@ export class AdminService {
   }
 
   static async createLayout(data: any): Promise<string> {
+    console.log('=== CREATE LAYOUT DEBUG ===')
+    console.log('Raw data received:', data)
+    
+    // Clean sections data
+    const cleanedSections = (data.sections || []).map((section: any) => {
+      const cleanedSection = {
+        id: section.id || `section-${Date.now()}-${Math.random()}`,
+        name: section.name || 'Unnamed Section',
+        x: section.x || 0,
+        y: section.y || 0,
+        rows: section.rows || 0,
+        seatsPerRow: section.seatsPerRow || 0,
+        seats: (section.seats || []).map((seat: any) => ({
+          id: seat.id || `seat-${Date.now()}-${Math.random()}`,
+          row: seat.row || 'A',
+          number: seat.number || 1,
+          x: seat.x || 0,
+          y: seat.y || 0,
+          status: seat.status || 'available',
+          price: seat.price || 0,
+          category: seat.category || 'standard',
+          isAccessible: seat.isAccessible || false,
+          angle: seat.angle || 0
+        })),
+        pricing: section.pricing || 'standard',
+        rotation: section.rotation || 0,
+        rowPricing: section.rowPricing || {},
+        seatsByRow: section.seatsByRow || {},
+        curveRadius: section.curveRadius || 0,
+        curveAngle: section.curveAngle || 0,
+        curveRotation: section.curveRotation || 0,
+        sectionType: section.sectionType || 'standard',
+        rowAlignment: section.rowAlignment || 'center'
+      }
+      
+      console.log('Cleaned section:', cleanedSection)
+      
+      // Check for undefined values in section
+      for (const [key, value] of Object.entries(cleanedSection)) {
+        if (value === undefined) {
+          console.error(`UNDEFINED found in section.${key}`)
+        }
+      }
+      
+      return cleanedSection
+    })
+    
+    // Clean price categories
+    const cleanedPriceCategories = (data.priceCategories || []).map((cat: any) => ({
+      id: cat.id || `cat-${Date.now()}`,
+      name: cat.name || 'Unnamed',
+      color: cat.color || '#000000',
+      price: cat.price || 0
+    }))
+    
     const layoutData = {
-      venueId: data.venueId,
-      name: data.name,
-      type: data.type,
-      sections: data.sections || [],
+      venueId: data.venueId || '',
+      name: data.name || 'Unnamed Layout',
+      type: data.type || 'seating_chart',
+      sections: cleanedSections,
       gaLevels: data.gaLevels || [],
       totalCapacity: data.totalCapacity || 0,
-      configuration: data.configuration || {},
-      stage: data.stage,
+      configuration: data.configuration || { version: '2.0', format: 'svg' },
+      stage: {
+        x: data.stage?.x || 400,
+        y: data.stage?.y || 50,
+        width: data.stage?.width || 400,
+        height: data.stage?.height || 60,
+        label: data.stage?.label || 'STAGE',
+        type: 'stage'
+      },
       aisles: data.aisles || [],
-      viewBox: data.viewBox,
-      priceCategories: data.priceCategories || [],
+      viewBox: {
+        x: data.viewBox?.x || 0,
+        y: data.viewBox?.y || 0,
+        width: data.viewBox?.width || 1200,
+        height: data.viewBox?.height || 800
+      },
+      priceCategories: cleanedPriceCategories,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now()
     }
-    const docRef = await addDoc(collection(db, 'layouts'), layoutData)
-    return docRef.id
+    
+    console.log('Final layout data to save:', layoutData)
+    
+    // Deep check for undefined values
+    const checkForUndefined = (obj: any, path: string = '') => {
+      if (obj === undefined) {
+        console.error(`UNDEFINED found at path: ${path}`)
+        return true
+      }
+      
+      if (obj && typeof obj === 'object') {
+        for (const [key, value] of Object.entries(obj)) {
+          if (checkForUndefined(value, path ? `${path}.${key}` : key)) {
+            return true
+          }
+        }
+      }
+      
+      return false
+    }
+    
+    if (checkForUndefined(layoutData)) {
+      console.error('Found undefined values in layout data!')
+    }
+    
+    // Clean the entire object to remove any undefined values
+    const finalCleanedData = this.cleanUndefinedValues(layoutData)
+    
+    console.log('Final cleaned data:', finalCleanedData)
+    
+    try {
+      const docRef = await addDoc(collection(db, 'layouts'), finalCleanedData)
+      console.log('Layout saved successfully with ID:', docRef.id)
+      return docRef.id
+    } catch (error) {
+      console.error('Firestore error details:', error)
+      throw error
+    }
   }
 
   static async updateLayout(id: string, data: any) {
-    const updateData: any = {
-      ...data,
+    console.log('=== UPDATE LAYOUT DEBUG ===')
+    console.log('Layout ID:', id)
+    console.log('Raw data received:', data)
+    
+    // Apply same cleaning as create
+    const cleanedSections = (data.sections || []).map((section: any) => ({
+      id: section.id || `section-${Date.now()}-${Math.random()}`,
+      name: section.name || 'Unnamed Section',
+      x: section.x || 0,
+      y: section.y || 0,
+      rows: section.rows || 0,
+      seatsPerRow: section.seatsPerRow || 0,
+      seats: (section.seats || []).map((seat: any) => ({
+        id: seat.id || `seat-${Date.now()}-${Math.random()}`,
+        row: seat.row || 'A',
+        number: seat.number || 1,
+        x: seat.x || 0,
+        y: seat.y || 0,
+        status: seat.status || 'available',
+        price: seat.price || 0,
+        category: seat.category || 'standard',
+        isAccessible: seat.isAccessible === true,
+        angle: seat.angle || 0
+      })),
+      pricing: section.pricing || 'standard',
+      rotation: section.rotation || 0,
+      rowPricing: section.rowPricing || {},
+      seatsByRow: section.seatsByRow || {},
+      curveRadius: section.curveRadius || 0,
+      curveAngle: section.curveAngle || 0,
+      curveRotation: section.curveRotation || 0,
+      sectionType: section.sectionType || 'standard',
+      rowAlignment: section.rowAlignment || 'center'
+    }))
+    
+    const cleanedPriceCategories = (data.priceCategories || []).map((cat: any) => ({
+      id: cat.id || `cat-${Date.now()}`,
+      name: cat.name || 'Unnamed',
+      color: cat.color || '#000000',
+      price: cat.price || 0
+    }))
+    
+    const updateData = {
+      venueId: data.venueId || '',
+      name: data.name || 'Unnamed Layout',
+      type: data.type || 'seating_chart',
+      sections: cleanedSections,
+      gaLevels: data.gaLevels || [],
+      totalCapacity: data.totalCapacity || 0,
+      configuration: data.configuration || { version: '2.0', format: 'svg' },
+      stage: {
+        x: data.stage?.x || 400,
+        y: data.stage?.y || 50,
+        width: data.stage?.width || 400,
+        height: data.stage?.height || 60,
+        label: data.stage?.label || 'STAGE',
+        type: 'stage'
+      },
+      aisles: data.aisles || [],
+      viewBox: {
+        x: data.viewBox?.x || 0,
+        y: data.viewBox?.y || 0,
+        width: data.viewBox?.width || 1200,
+        height: data.viewBox?.height || 800
+      },
+      priceCategories: cleanedPriceCategories,
       updatedAt: Timestamp.now()
     }
-    await updateDoc(doc(db, 'layouts', id), updateData)
+    
+    console.log('Final update data:', updateData)
+    
+    // Clean the entire object
+    const finalCleanedData = this.cleanUndefinedValues(updateData)
+    
+    try {
+      await updateDoc(doc(db, 'layouts', id), finalCleanedData)
+      console.log('Layout updated successfully')
+    } catch (error) {
+      console.error('Firestore update error:', error)
+      throw error
+    }
   }
 
   static async deleteLayout(id: string) {
@@ -254,7 +459,6 @@ export class AdminService {
 
   // Report Methods
   static async generateReport(type: string, filters: any) {
-    // This would generate various reports based on type
     const reportData = {
       name: `${type}_report_${Date.now()}`,
       type,
