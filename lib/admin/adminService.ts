@@ -70,7 +70,7 @@ export class AdminService {
     return obj
   }
 
-  // Layout Methods with detailed logging
+  // Layout Methods
   static async getLayoutsByVenueId(venueId: string) {
     const q = query(collection(db, 'layouts'), where('venueId', '==', venueId))
     const querySnapshot = await getDocs(q)
@@ -81,52 +81,36 @@ export class AdminService {
   }
 
   static async createLayout(data: any): Promise<string> {
-    console.log('=== CREATE LAYOUT DEBUG ===')
-    console.log('Raw data received:', data)
-    
     // Clean sections data
-    const cleanedSections = (data.sections || []).map((section: any) => {
-      const cleanedSection = {
-        id: section.id || `section-${Date.now()}-${Math.random()}`,
-        name: section.name || 'Unnamed Section',
-        x: section.x || 0,
-        y: section.y || 0,
-        rows: section.rows || 0,
-        seatsPerRow: section.seatsPerRow || 0,
-        seats: (section.seats || []).map((seat: any) => ({
-          id: seat.id || `seat-${Date.now()}-${Math.random()}`,
-          row: seat.row || 'A',
-          number: seat.number || 1,
-          x: seat.x || 0,
-          y: seat.y || 0,
-          status: seat.status || 'available',
-          price: seat.price || 0,
-          category: seat.category || 'standard',
-          isAccessible: seat.isAccessible || false,
-          angle: seat.angle || 0
-        })),
-        pricing: section.pricing || 'standard',
-        rotation: section.rotation || 0,
-        rowPricing: section.rowPricing || {},
-        seatsByRow: section.seatsByRow || {},
-        curveRadius: section.curveRadius || 0,
-        curveAngle: section.curveAngle || 0,
-        curveRotation: section.curveRotation || 0,
-        sectionType: section.sectionType || 'standard',
-        rowAlignment: section.rowAlignment || 'center'
-      }
-      
-      console.log('Cleaned section:', cleanedSection)
-      
-      // Check for undefined values in section
-      for (const [key, value] of Object.entries(cleanedSection)) {
-        if (value === undefined) {
-          console.error(`UNDEFINED found in section.${key}`)
-        }
-      }
-      
-      return cleanedSection
-    })
+    const cleanedSections = (data.sections || []).map((section: any) => ({
+      id: section.id || `section-${Date.now()}-${Math.random()}`,
+      name: section.name || 'Unnamed Section',
+      x: section.x || 0,
+      y: section.y || 0,
+      rows: section.rows || 0,
+      seatsPerRow: section.seatsPerRow || 0,
+      seats: (section.seats || []).map((seat: any) => ({
+        id: seat.id || `seat-${Date.now()}-${Math.random()}`,
+        row: seat.row || 'A',
+        number: seat.number || 1,
+        x: seat.x || 0,
+        y: seat.y || 0,
+        status: seat.status || 'available',
+        price: seat.price || 0,
+        category: seat.category || 'standard',
+        isAccessible: seat.isAccessible || false,
+        angle: seat.angle || 0
+      })),
+      pricing: section.pricing || 'standard',
+      rotation: section.rotation || 0,
+      rowPricing: section.rowPricing || {},
+      seatsByRow: section.seatsByRow || {},
+      curveRadius: section.curveRadius || 0,
+      curveAngle: section.curveAngle || 0,
+      curveRotation: section.curveRotation || 0,
+      sectionType: section.sectionType || 'standard',
+      rowAlignment: section.rowAlignment || 'center'
+    }))
     
     // Clean price categories
     const cleanedPriceCategories = (data.priceCategories || []).map((cat: any) => ({
@@ -164,50 +148,14 @@ export class AdminService {
       updatedAt: Timestamp.now()
     }
     
-    console.log('Final layout data to save:', layoutData)
-    
-    // Deep check for undefined values
-    const checkForUndefined = (obj: any, path: string = '') => {
-      if (obj === undefined) {
-        console.error(`UNDEFINED found at path: ${path}`)
-        return true
-      }
-      
-      if (obj && typeof obj === 'object') {
-        for (const [key, value] of Object.entries(obj)) {
-          if (checkForUndefined(value, path ? `${path}.${key}` : key)) {
-            return true
-          }
-        }
-      }
-      
-      return false
-    }
-    
-    if (checkForUndefined(layoutData)) {
-      console.error('Found undefined values in layout data!')
-    }
-    
     // Clean the entire object to remove any undefined values
     const finalCleanedData = this.cleanUndefinedValues(layoutData)
     
-    console.log('Final cleaned data:', finalCleanedData)
-    
-    try {
-      const docRef = await addDoc(collection(db, 'layouts'), finalCleanedData)
-      console.log('Layout saved successfully with ID:', docRef.id)
-      return docRef.id
-    } catch (error) {
-      console.error('Firestore error details:', error)
-      throw error
-    }
+    const docRef = await addDoc(collection(db, 'layouts'), finalCleanedData)
+    return docRef.id
   }
 
   static async updateLayout(id: string, data: any) {
-    console.log('=== UPDATE LAYOUT DEBUG ===')
-    console.log('Layout ID:', id)
-    console.log('Raw data received:', data)
-    
     // Apply same cleaning as create
     const cleanedSections = (data.sections || []).map((section: any) => ({
       id: section.id || `section-${Date.now()}-${Math.random()}`,
@@ -273,18 +221,10 @@ export class AdminService {
       updatedAt: Timestamp.now()
     }
     
-    console.log('Final update data:', updateData)
-    
     // Clean the entire object
     const finalCleanedData = this.cleanUndefinedValues(updateData)
     
-    try {
-      await updateDoc(doc(db, 'layouts', id), finalCleanedData)
-      console.log('Layout updated successfully')
-    } catch (error) {
-      console.error('Firestore update error:', error)
-      throw error
-    }
+    await updateDoc(doc(db, 'layouts', id), finalCleanedData)
   }
 
   static async deleteLayout(id: string) {
@@ -336,6 +276,7 @@ export class AdminService {
     await deleteDoc(doc(db, 'events', id))
   }
 
+  // Other methods...
   static async getEvent(id: string) {
     const docSnap = await getDoc(doc(db, 'events', id))
     if (docSnap.exists()) {
@@ -344,7 +285,6 @@ export class AdminService {
     return null
   }
 
-  // Order Methods
   static async getOrders() {
     const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'))
     const querySnapshot = await getDocs(q)
@@ -382,7 +322,6 @@ export class AdminService {
     })
   }
 
-  // Ticket Methods
   static async getTicketsByEventId(eventId: string) {
     const q = query(collection(db, 'tickets'), where('eventId', '==', eventId))
     const querySnapshot = await getDocs(q)
@@ -418,7 +357,6 @@ export class AdminService {
     })
   }
 
-  // Customer Methods
   static async getCustomers() {
     const querySnapshot = await getDocs(collection(db, 'customers'))
     return querySnapshot.docs.map(doc => ({
@@ -452,39 +390,6 @@ export class AdminService {
 
   static async updateCustomer(id: string, data: any) {
     await updateDoc(doc(db, 'customers', id), {
-      ...data,
-      updatedAt: Timestamp.now()
-    })
-  }
-
-  // Report Methods
-  static async generateReport(type: string, filters: any) {
-    const reportData = {
-      name: `${type}_report_${Date.now()}`,
-      type,
-      filters,
-      data: {
-        summary: {},
-        breakdown: {},
-        chartData: {}
-      },
-      createdAt: Timestamp.now()
-    }
-    const docRef = await addDoc(collection(db, 'reports'), reportData)
-    return docRef.id
-  }
-
-  // Settings Methods
-  static async getSettings() {
-    const docSnap = await getDoc(doc(db, 'settings', 'global'))
-    if (docSnap.exists()) {
-      return docSnap.data()
-    }
-    return null
-  }
-
-  static async updateSettings(data: any) {
-    await updateDoc(doc(db, 'settings', 'global'), {
       ...data,
       updatedAt: Timestamp.now()
     })

@@ -21,6 +21,7 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
   const [gaLevels, setGALevels] = useState<any[]>([
     { id: 'ga-1', name: 'General Admission', capacity: 500, type: 'standing' }
   ])
+  const [editingGALayout, setEditingGALayout] = useState<any>(null)
 
   useEffect(() => {
     loadLayouts()
@@ -40,6 +41,15 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
     setLayoutName('')
     setLayoutType('seating_chart')
     setGALevels([{ id: 'ga-1', name: 'General Admission', capacity: 500, type: 'standing' }])
+    setEditingGALayout(null)
+    setShowGAWizard(true)
+  }
+
+  const handleEditGALayout = (layout: any) => {
+    setLayoutName(layout.name)
+    setLayoutType('general_admission')
+    setGALevels(layout.gaLevels || [])
+    setEditingGALayout(layout)
     setShowGAWizard(true)
   }
 
@@ -88,7 +98,7 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
 
   const handleEditLayout = (layout: any) => {
     if (layout.type === 'general_admission') {
-      alert('GA layouts can only be edited through the wizard')
+      handleEditGALayout(layout)
       return
     }
     
@@ -128,14 +138,26 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
   const handleSaveLayout = async (layout: SeatingLayout) => {
     try {
       const layoutData = {
-        name: layout.name,
+        name: layout.name || 'Unnamed Layout',
         type: 'seating_chart',
         venueId: venue.id,
-        sections: layout.sections,
-        stage: layout.stage,
-        aisles: layout.aisles,
-        totalCapacity: layout.capacity,
-        viewBox: layout.viewBox,
+        sections: layout.sections || [],
+        stage: layout.stage || {
+          x: 400,
+          y: 50,
+          width: 400,
+          height: 60,
+          label: 'STAGE',
+          type: 'stage'
+        },
+        aisles: layout.aisles || [],
+        totalCapacity: layout.capacity || 0,
+        viewBox: layout.viewBox || {
+          x: 0,
+          y: 0,
+          width: 1200,
+          height: 800
+        },
         priceCategories: layout.priceCategories || [],
         configuration: {
           version: '2.0',
@@ -177,10 +199,17 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
         }
       }
 
-      await AdminService.createLayout(layoutData)
+      if (editingGALayout) {
+        await AdminService.updateLayout(editingGALayout.id, layoutData)
+        alert('GA Layout updated successfully!')
+      } else {
+        await AdminService.createLayout(layoutData)
+        alert('GA Layout created successfully!')
+      }
+
       setShowGAWizard(false)
+      setEditingGALayout(null)
       await loadLayouts()
-      alert('GA Layout saved successfully!')
     } catch (error) {
       console.error('Error saving GA layout:', error)
       alert('Error saving layout')
@@ -287,15 +316,13 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
                         </p>
                       </div>
                       <div className="flex gap-2">
-                        {layout.type !== 'general_admission' && (
-                          <button
-                            onClick={() => handleEditLayout(layout)}
-                            className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center hover:bg-blue-700"
-                            title="Edit"
-                          >
-                            ✏️
-                          </button>
-                        )}
+                        <button
+                          onClick={() => handleEditLayout(layout)}
+                          className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center hover:bg-blue-700"
+                          title="Edit"
+                        >
+                          ✏️
+                        </button>
                         <button
                           onClick={() => handleDeleteLayout(layout.id)}
                           className="w-8 h-8 bg-red-600 rounded flex items-center justify-center hover:bg-red-700"
@@ -308,19 +335,26 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
                     <div className="text-sm">
                       <p>Capacity: {layout.totalCapacity || 0}</p>
                       {layout.type === 'general_admission' ? (
-                        <p>Levels: {layout.gaLevels?.length || 0}</p>
+                        <div>
+                          <p>Levels: {layout.gaLevels?.length || 0}</p>
+                          {layout.gaLevels && (
+                            <div className="mt-1 text-xs text-gray-500">
+                              {layout.gaLevels.map((level: any) => (
+                                <div key={level.id}>• {level.name}: {level.capacity}</div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       ) : (
                         <p>Sections: {layout.sections?.length || 0}</p>
                       )}
                     </div>
-                    {layout.type !== 'general_admission' && (
-                      <button
-                        onClick={() => handleEditLayout(layout)}
-                        className="w-full mt-3 py-2 bg-purple-600/20 text-purple-400 rounded hover:bg-purple-600/30"
-                      >
-                        Open Designer
-                      </button>
-                    )}
+                    <button
+                      onClick={() => handleEditLayout(layout)}
+                      className="w-full mt-3 py-2 bg-purple-600/20 text-purple-400 rounded hover:bg-purple-600/30"
+                    >
+                      {layout.type === 'general_admission' ? 'Edit GA Layout' : 'Open Designer'}
+                    </button>
                   </div>
                 ))}
               </div>
@@ -329,11 +363,13 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
         </div>
       </div>
 
-      {/* GA Layout Creation Wizard */}
+      {/* GA Layout Creation/Edit Wizard */}
       {showGAWizard && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[60]">
           <div className="bg-gray-900 rounded-xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
-            <h2 className="text-2xl font-bold mb-6">Create New Layout</h2>
+            <h2 className="text-2xl font-bold mb-6">
+              {editingGALayout ? 'Edit GA Layout' : 'Create New Layout'}
+            </h2>
             
             <div className="space-y-4">
               <div>
@@ -347,37 +383,39 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
                 />
               </div>
 
-              <div>
-                <label className="block text-sm mb-2">Layout Type</label>
-                <div className="grid grid-cols-2 gap-4">
-                  <button
-                    onClick={() => setLayoutType('seating_chart')}
-                    className={`p-4 rounded-lg border-2 transition-all ${
-                      layoutType === 'seating_chart'
-                        ? 'border-purple-600 bg-purple-600/20'
-                        : 'border-white/10 hover:border-white/20'
-                    }`}
-                  >
-                    <div className="text-2xl mb-2">🪑</div>
-                    <div className="font-semibold">Seating Chart</div>
-                    <div className="text-xs text-gray-400">Design with canvas</div>
-                  </button>
-                  <button
-                    onClick={() => setLayoutType('general_admission')}
-                    className={`p-4 rounded-lg border-2 transition-all ${
-                      layoutType === 'general_admission'
-                        ? 'border-purple-600 bg-purple-600/20'
-                        : 'border-white/10 hover:border-white/20'
-                    }`}
-                  >
-                    <div className="text-2xl mb-2">🎫</div>
-                    <div className="font-semibold">General Admission</div>
-                    <div className="text-xs text-gray-400">Configure levels</div>
-                  </button>
+              {!editingGALayout && (
+                <div>
+                  <label className="block text-sm mb-2">Layout Type</label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <button
+                      onClick={() => setLayoutType('seating_chart')}
+                      className={`p-4 rounded-lg border-2 transition-all ${
+                        layoutType === 'seating_chart'
+                          ? 'border-purple-600 bg-purple-600/20'
+                          : 'border-white/10 hover:border-white/20'
+                      }`}
+                    >
+                      <div className="text-2xl mb-2">🪑</div>
+                      <div className="font-semibold">Seating Chart</div>
+                      <div className="text-xs text-gray-400">Design with canvas</div>
+                    </button>
+                    <button
+                      onClick={() => setLayoutType('general_admission')}
+                      className={`p-4 rounded-lg border-2 transition-all ${
+                        layoutType === 'general_admission'
+                          ? 'border-purple-600 bg-purple-600/20'
+                          : 'border-white/10 hover:border-white/20'
+                      }`}
+                    >
+                      <div className="text-2xl mb-2">🎫</div>
+                      <div className="font-semibold">General Admission</div>
+                      <div className="text-xs text-gray-400">Configure levels</div>
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {layoutType === 'general_admission' && (
+              {(layoutType === 'general_admission' || editingGALayout) && (
                 <div>
                   <div className="flex justify-between items-center mb-3">
                     <label className="text-sm font-semibold">GA Levels</label>
@@ -440,7 +478,10 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
 
             <div className="flex justify-end gap-3 mt-6">
               <button
-                onClick={() => setShowGAWizard(false)}
+                onClick={() => {
+                  setShowGAWizard(false)
+                  setEditingGALayout(null)
+                }}
                 className="px-6 py-2 bg-gray-700 rounded-lg hover:bg-gray-600"
               >
                 Cancel
@@ -449,7 +490,9 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
                 onClick={proceedWithLayoutCreation}
                 className="px-6 py-2 bg-purple-600 rounded-lg hover:bg-purple-700"
               >
-                {layoutType === 'general_admission' ? 'Create GA Layout' : 'Open Designer'}
+                {editingGALayout ? 'Update GA Layout' : (
+                  layoutType === 'general_admission' ? 'Create GA Layout' : 'Open Designer'
+                )}
               </button>
             </div>
           </div>
