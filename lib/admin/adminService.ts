@@ -16,11 +16,16 @@ import {
 export class AdminService {
   // Venue Methods
   static async getVenues() {
-    const querySnapshot = await getDocs(collection(db, 'venues'))
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }))
+    try {
+      const querySnapshot = await getDocs(collection(db, 'venues'))
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+    } catch (error) {
+      console.error('Error fetching venues:', error)
+      return []
+    }
   }
 
   static async createVenue(data: any) {
@@ -72,12 +77,31 @@ export class AdminService {
 
   // Layout Methods
   static async getLayoutsByVenueId(venueId: string) {
-    const q = query(collection(db, 'layouts'), where('venueId', '==', venueId))
-    const querySnapshot = await getDocs(q)
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }))
+    try {
+      const q = query(collection(db, 'layouts'), where('venueId', '==', venueId))
+      const querySnapshot = await getDocs(q)
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+    } catch (error) {
+      console.error('Error fetching layouts by venue:', error)
+      return []
+    }
+  }
+
+  // NEW: Get all layouts
+  static async getLayouts() {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'layouts'))
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+    } catch (error) {
+      console.error('Error fetching layouts:', error)
+      return []
+    }
   }
 
   static async createLayout(data: any): Promise<string> {
@@ -241,12 +265,27 @@ export class AdminService {
 
   // Event Methods
   static async getEvents() {
-    const q = query(collection(db, 'events'), orderBy('schedule.date', 'desc'))
-    const querySnapshot = await getDocs(q)
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }))
+    try {
+      const q = query(collection(db, 'events'), orderBy('schedule.date', 'desc'))
+      const querySnapshot = await getDocs(q)
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+    } catch (error) {
+      console.error('Error fetching events:', error)
+      // If orderBy fails (no index), try without ordering
+      try {
+        const querySnapshot = await getDocs(collection(db, 'events'))
+        return querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }))
+      } catch (fallbackError) {
+        console.error('Fallback error fetching events:', fallbackError)
+        return []
+      }
+    }
   }
 
   static async createEvent(data: any) {
@@ -276,7 +315,6 @@ export class AdminService {
     await deleteDoc(doc(db, 'events', id))
   }
 
-  // Other methods...
   static async getEvent(id: string) {
     const docSnap = await getDoc(doc(db, 'events', id))
     if (docSnap.exists()) {
@@ -285,22 +323,75 @@ export class AdminService {
     return null
   }
 
+  // Order Methods
   static async getOrders() {
-    const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'))
-    const querySnapshot = await getDocs(q)
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }))
+    try {
+      const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'))
+      const querySnapshot = await getDocs(q)
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+    } catch (error) {
+      console.error('Error fetching orders:', error)
+      // If orderBy fails, try without ordering
+      try {
+        const querySnapshot = await getDocs(collection(db, 'orders'))
+        return querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }))
+      } catch (fallbackError) {
+        console.error('Fallback error fetching orders:', fallbackError)
+        return []
+      }
+    }
   }
 
   static async getOrdersByEventId(eventId: string) {
-    const q = query(collection(db, 'orders'), where('eventId', '==', eventId))
-    const querySnapshot = await getDocs(q)
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }))
+    try {
+      const q = query(collection(db, 'orders'), where('eventId', '==', eventId))
+      const querySnapshot = await getDocs(q)
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+    } catch (error) {
+      console.error('Error fetching orders by event:', error)
+      return []
+    }
+  }
+
+  // NEW: Get order statistics
+  static async getOrderStats() {
+    try {
+      const orders = await this.getOrders()
+      
+      const totalRevenue = orders.reduce((sum, order) => {
+        return sum + (order.pricing?.total || 0)
+      }, 0)
+      
+      const totalOrders = orders.length
+      const completedOrders = orders.filter(o => o.status === 'confirmed').length
+      const pendingOrders = orders.filter(o => o.status === 'pending').length
+      
+      return {
+        totalRevenue,
+        totalOrders,
+        completedOrders,
+        pendingOrders,
+        averageOrderValue: totalOrders > 0 ? totalRevenue / totalOrders : 0
+      }
+    } catch (error) {
+      console.error('Error calculating order stats:', error)
+      return {
+        totalRevenue: 0,
+        totalOrders: 0,
+        completedOrders: 0,
+        pendingOrders: 0,
+        averageOrderValue: 0
+      }
+    }
   }
 
   static async createOrder(data: any) {
@@ -322,13 +413,19 @@ export class AdminService {
     })
   }
 
+  // Ticket Methods
   static async getTicketsByEventId(eventId: string) {
-    const q = query(collection(db, 'tickets'), where('eventId', '==', eventId))
-    const querySnapshot = await getDocs(q)
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }))
+    try {
+      const q = query(collection(db, 'tickets'), where('eventId', '==', eventId))
+      const querySnapshot = await getDocs(q)
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+    } catch (error) {
+      console.error('Error fetching tickets:', error)
+      return []
+    }
   }
 
   static async createTicket(data: any) {
@@ -357,12 +454,18 @@ export class AdminService {
     })
   }
 
+  // Customer Methods
   static async getCustomers() {
-    const querySnapshot = await getDocs(collection(db, 'customers'))
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }))
+    try {
+      const querySnapshot = await getDocs(collection(db, 'customers'))
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+    } catch (error) {
+      console.error('Error fetching customers:', error)
+      return []
+    }
   }
 
   static async createCustomer(data: any) {
@@ -390,6 +493,93 @@ export class AdminService {
 
   static async updateCustomer(id: string, data: any) {
     await updateDoc(doc(db, 'customers', id), {
+      ...data,
+      updatedAt: Timestamp.now()
+    })
+  }
+
+  // Promotions Methods
+  static async getPromotions() {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'promotions'))
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+    } catch (error) {
+      console.error('Error fetching promotions:', error)
+      return []
+    }
+  }
+
+  static async createPromotion(data: any) {
+    const promotionData = {
+      ...data,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now()
+    }
+    const docRef = await addDoc(collection(db, 'promotions'), promotionData)
+    return docRef.id
+  }
+
+  static async updatePromotion(id: string, data: any) {
+    await updateDoc(doc(db, 'promotions', id), {
+      ...data,
+      updatedAt: Timestamp.now()
+    })
+  }
+
+  static async deletePromotion(id: string) {
+    await deleteDoc(doc(db, 'promotions', id))
+  }
+
+  // Report Methods
+  static async generateReport(type: string, filters: any) {
+    const reportData = {
+      name: `${type}_report_${Date.now()}`,
+      type,
+      filters,
+      data: {
+        summary: {},
+        breakdown: {},
+        chartData: {}
+      },
+      createdAt: Timestamp.now()
+    }
+    const docRef = await addDoc(collection(db, 'reports'), reportData)
+    return docRef.id
+  }
+
+  // Settings Methods
+  static async getSettings() {
+    try {
+      const docSnap = await getDoc(doc(db, 'settings', 'global'))
+      if (docSnap.exists()) {
+        return docSnap.data()
+      }
+      // Return default settings if none exist
+      return {
+        system: {
+          maintenanceMode: false,
+          maintenanceMessage: '',
+          version: '1.0.0'
+        },
+        features: {
+          dynamicPricing: true,
+          waitlist: true,
+          transferable: true,
+          refundable: true,
+          accessible: true
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching settings:', error)
+      return null
+    }
+  }
+
+  static async updateSettings(data: any) {
+    await updateDoc(doc(db, 'settings', 'global'), {
       ...data,
       updatedAt: Timestamp.now()
     })
