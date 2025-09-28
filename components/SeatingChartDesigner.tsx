@@ -555,27 +555,22 @@ export default function SeatingChartDesigner({
         
         {section.rows.map((row, rowIndex) => {
           const isRowHovered = hoveredRow === row.id
+          const lastSeat = row.seats[row.seats.length - 1]
+          const firstSeat = row.seats[0]
           
           return (
             <g key={row.id}>
               {mode === 'edit' && (
                 <>
+                  {/* Row label with delete on hover */}
                   <g 
-                    transform={`translate(${row.seats[0]?.x - 35 || -35}, ${row.y})`}
+                    transform={`translate(${firstSeat?.x - 40 || -40}, ${row.y})`}
                     onMouseEnter={() => setHoveredRow(row.id)}
                     onMouseLeave={() => setHoveredRow(null)}
                     className="cursor-pointer"
                   >
-                    <rect
-                      x={-10}
-                      y={-10}
-                      width={25}
-                      height={20}
-                      fill={isRowHovered ? 'rgba(255,255,255,0.1)' : 'transparent'}
-                      rx={2}
-                    />
                     <text
-                      x={2}
+                      x={0}
                       y={5}
                       fontSize={14}
                       fill="#fff"
@@ -592,22 +587,24 @@ export default function SeatingChartDesigner({
                           e.stopPropagation()
                           removeRowFromSection(section.id, rowIndex)
                         }}
+                        transform="translate(15, -5)"
                       >
                         <rect
-                          x={15}
-                          y={-8}
-                          width={20}
+                          x={0}
+                          y={0}
+                          width={16}
                           height={16}
                           fill="#ef4444"
                           rx={2}
                           className="hover:fill-red-600"
                         />
-                        <text x={25} y={3} fontSize={12} fill="#fff" textAnchor="middle" pointerEvents="none">×</text>
+                        <text x={8} y={11} fontSize={12} fill="#fff" textAnchor="middle" pointerEvents="none">×</text>
                       </g>
                     )}
                   </g>
                   
-                  <g transform={`translate(${(row.seats.length * 18) / 2 + 10}, ${row.y})`}>
+                  {/* Seat controls positioned properly after last seat */}
+                  <g transform={`translate(${lastSeat ? lastSeat.x + 25 : 200}, ${row.y})`}>
                     <rect
                       x={0}
                       y={-8}
@@ -641,7 +638,7 @@ export default function SeatingChartDesigner({
               
               {(!mode || mode === 'preview') && (
                 <text
-                  x={row.seats[0]?.x - 25 || -25}
+                  x={firstSeat?.x - 25 || -25}
                   y={row.y + 5}
                   fontSize={12}
                   fill="#fff"
@@ -660,8 +657,8 @@ export default function SeatingChartDesigner({
           )
         })}
         
-        {mode === 'edit' && section.rows.length > 0 && (
-          <g transform={`translate(0, ${section.rows[section.rows.length - 1].y + 35})`}>
+        {mode === 'edit' && (
+          <g transform={`translate(0, ${section.rows.length > 0 ? section.rows[section.rows.length - 1].y + 35 : 10})`}>
             <rect
               x={-30}
               y={-8}
@@ -944,37 +941,37 @@ export default function SeatingChartDesigner({
 
       {/* Main Content Area */}
       <div className="flex-1 relative overflow-hidden">
-        {/* AI Panel - Fixed positioning within viewport */}
+        {/* AI Panel - Fixed smaller size */}
         {showAIPanel && mode === 'edit' && (
-          <div className="absolute top-2 left-2 sm:left-auto sm:right-2 z-20 bg-black/95 backdrop-blur rounded-lg p-3 w-[calc(100%-1rem)] sm:w-72 md:w-80 h-auto max-h-[calc(100vh-120px)] overflow-y-auto shadow-xl">
-            <div className="flex justify-between items-center mb-3 sticky top-0 bg-black/95 pb-2">
-              <h3 className="font-semibold text-sm">AI Assistant</h3>
+          <div className="absolute top-2 right-2 z-30 bg-black/95 backdrop-blur rounded-lg p-2 w-60 max-h-80 overflow-y-auto shadow-xl">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="font-semibold text-xs">AI Assistant</h3>
               <button
                 onClick={() => setShowAIPanel(false)}
-                className="text-gray-400 hover:text-white text-xl w-6 h-6 flex items-center justify-center rounded hover:bg-white/10"
+                className="text-gray-400 hover:text-white text-lg w-5 h-5 flex items-center justify-center rounded hover:bg-white/10"
               >
                 ×
               </button>
             </div>
             
             {backgroundImage && (
-              <div className="mb-4">
+              <div className="mb-2">
                 <div className="relative">
                   <img 
                     src={backgroundImage} 
                     alt="Reference" 
-                    className="w-full h-24 sm:h-32 object-contain rounded bg-black/50 border border-white/10" 
+                    className="w-full h-20 object-contain rounded bg-black/50 border border-white/10" 
                   />
                   <button
                     onClick={clearBackgroundImage}
-                    className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center"
-                    title="Remove image"
+                    className="absolute top-0.5 right-0.5 bg-red-600 hover:bg-red-700 text-white rounded-full w-4 h-4 text-xs flex items-center justify-center"
+                    title="Remove"
                   >
                     ×
                   </button>
                 </div>
-                <div className="mt-2">
-                  <label className="text-xs text-gray-400 block mb-1">
+                <div className="mt-1">
+                  <label className="text-xs text-gray-400 block">
                     Opacity: {Math.round(imageOpacity * 100)}%
                   </label>
                   <input
@@ -989,29 +986,29 @@ export default function SeatingChartDesigner({
               </div>
             )}
 
-            <div className="space-y-2">
+            <div className="space-y-1">
               <button
                 onClick={analyzeImage}
                 disabled={aiProcessing || !backgroundImage}
-                className="w-full px-3 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed rounded text-xs font-medium transition-colors"
+                className="w-full px-2 py-1 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed rounded text-xs font-medium transition-colors"
               >
-                {aiProcessing ? '🔄 Analyzing...' : '✨ AI Detect Sections'}
+                {aiProcessing ? '🔄 Analyzing...' : '✨ AI Detect'}
               </button>
               
-              <div className="pt-2 border-t border-white/10">
-                <p className="text-xs text-gray-400 mb-2">Generate from template:</p>
+              <div className="pt-1 border-t border-white/10">
+                <p className="text-xs text-gray-400 mb-1">Templates:</p>
                 <div className="grid grid-cols-2 gap-1">
                   <button
                     onClick={() => generateFromTemplate('theater')}
                     disabled={aiProcessing}
-                    className="px-2 py-1.5 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-xs transition-colors"
+                    className="px-2 py-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-xs transition-colors"
                   >
                     🎭 Theater
                   </button>
                   <button
                     onClick={() => generateFromTemplate('arena')}
                     disabled={aiProcessing}
-                    className="px-2 py-1.5 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-xs transition-colors"
+                    className="px-2 py-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-xs transition-colors"
                   >
                     🏟️ Arena
                   </button>
@@ -1021,19 +1018,19 @@ export default function SeatingChartDesigner({
           </div>
         )}
 
-        {/* Section Settings Panel - Fixed positioning */}
+        {/* Section Settings Panel - Fixed at top-left when selected */}
         {mode === 'edit' && state.selectedSection && (
-          <div className="absolute bottom-20 left-2 z-20 bg-black/95 backdrop-blur rounded-lg p-3 w-56 shadow-xl">
+          <div className="absolute top-2 left-2 z-20 bg-black/95 backdrop-blur rounded-lg p-2 w-48 shadow-xl">
             <h3 className="text-xs font-semibold mb-2">Section Settings</h3>
             
-            <div className="mb-3">
-              <div className="text-xs text-gray-400 mb-1">Pricing Tier:</div>
+            <div className="mb-2">
+              <div className="text-xs text-gray-400 mb-1">Pricing:</div>
               <div className="grid grid-cols-2 gap-1">
                 {['vip', 'premium', 'standard', 'economy'].map(tier => (
                   <button
                     key={tier}
                     onClick={() => changePricing(tier as any)}
-                    className={`px-2 py-1 rounded text-xs transition-colors ${
+                    className={`px-1.5 py-0.5 rounded text-xs transition-colors ${
                       layout.sections.find(s => s.id === state.selectedSection)?.pricing === tier
                         ? 'bg-purple-600'
                         : 'bg-gray-700 hover:bg-gray-600'
@@ -1045,23 +1042,23 @@ export default function SeatingChartDesigner({
               </div>
             </div>
 
-            <div>
-              <div className="text-xs text-gray-400 mb-1">Section Color:</div>
+            <div className="relative">
+              <div className="text-xs text-gray-400 mb-1">Color:</div>
               <button
                 onClick={() => setShowColorPicker(!showColorPicker)}
-                className="w-full h-6 rounded border border-white/20 hover:border-white/40 transition-colors"
+                className="w-full h-5 rounded border border-white/20 hover:border-white/40 transition-colors"
                 style={{ 
                   backgroundColor: layout.sections.find(s => s.id === state.selectedSection)?.color || '#4a5568' 
                 }}
               />
               {showColorPicker && (
-                <div className="absolute bottom-full left-0 mb-2 p-2 bg-black/95 rounded-lg border border-white/10">
-                  <div className="grid grid-cols-6 gap-1">
-                    {colorPalette.slice(0, 24).map(color => (
+                <div className="absolute top-full left-0 mt-1 p-1.5 bg-black/95 rounded-lg border border-white/10 z-40">
+                  <div className="grid grid-cols-5 gap-0.5">
+                    {colorPalette.slice(0, 20).map(color => (
                       <button
                         key={color}
                         onClick={() => changeColor(color)}
-                        className="w-5 h-5 rounded hover:scale-110 transition-transform"
+                        className="w-4 h-4 rounded hover:scale-110 transition-transform"
                         style={{ backgroundColor: color }}
                       />
                     ))}
@@ -1072,7 +1069,7 @@ export default function SeatingChartDesigner({
           </div>
         )}
 
-        {/* Zoom controls - Responsive */}
+        {/* Zoom controls */}
         <div className="absolute bottom-4 right-4 z-10 bg-black/80 backdrop-blur rounded-lg p-1 flex flex-col items-center shadow-lg">
           <button
             onClick={() => setState(prev => ({ ...prev, zoom: Math.max(0.3, prev.zoom * 0.8) }))}
