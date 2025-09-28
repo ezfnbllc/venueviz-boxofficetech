@@ -72,7 +72,13 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
           y: 0,
           width: 1200,
           height: 800
-        }
+        },
+        priceCategories: [
+          { id: 'vip', name: 'VIP', color: '#9333ea', price: 250 },
+          { id: 'premium', name: 'Premium', color: '#3b82f6', price: 150 },
+          { id: 'standard', name: 'Standard', color: '#10b981', price: 100 },
+          { id: 'economy', name: 'Economy', color: '#f59e0b', price: 75 }
+        ]
       }
       setCurrentLayout(newLayout)
       setShowGAWizard(false)
@@ -106,7 +112,13 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
         y: 0,
         width: 1200,
         height: 800
-      }
+      },
+      priceCategories: layout.priceCategories || [
+        { id: 'vip', name: 'VIP', color: '#9333ea', price: 250 },
+        { id: 'premium', name: 'Premium', color: '#3b82f6', price: 150 },
+        { id: 'standard', name: 'Standard', color: '#10b981', price: 100 },
+        { id: 'economy', name: 'Economy', color: '#f59e0b', price: 75 }
+      ]
     }
     setCurrentLayout(seatingLayout)
     setSelectedLayout(layout)
@@ -124,6 +136,7 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
         aisles: layout.aisles,
         totalCapacity: layout.capacity,
         viewBox: layout.viewBox,
+        priceCategories: layout.priceCategories || [],
         configuration: {
           version: '2.0',
           format: 'svg'

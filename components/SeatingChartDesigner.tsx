@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { SeatingLayout, Section, Seat, Aisle } from '@/lib/seating/types'
+import { SeatingLayout, Section, Seat, Aisle, Stage } from '@/lib/seating/types'
 
 interface SeatingChartDesignerProps {
   layout: SeatingLayout
@@ -9,7 +9,6 @@ interface SeatingChartDesignerProps {
   title?: string
 }
 
-// Define price categories with colors
 const DEFAULT_PRICE_CATEGORIES = [
   { id: 'vip', name: 'VIP', color: '#9333ea', price: 250 },
   { id: 'premium', name: 'Premium', color: '#3b82f6', price: 150 },
@@ -25,11 +24,13 @@ export default function SeatingChartDesigner({
 }: SeatingChartDesignerProps) {
   const [currentLayout, setCurrentLayout] = useState<SeatingLayout>(layout)
   const [selectedSection, setSelectedSection] = useState<Section | null>(null)
+  const [selectedSeats, setSelectedSeats] = useState<Set<string>>(new Set())
   const [selectedTool, setSelectedTool] = useState<string>('select')
   const [isDragging, setIsDragging] = useState(false)
+  const [isResizingStage, setIsResizingStage] = useState(false)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
   const [zoom, setZoom] = useState(1)
-  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
+  const [editingStage, setEditingStage] = useState(false)
   const [priceCategories, setPriceCategories] = useState(
     layout.priceCategories || DEFAULT_PRICE_CATEGORIES
   )
@@ -37,17 +38,24 @@ export default function SeatingChartDesigner({
 
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
-      if (e.key === 'Delete' && selectedSection) {
-        deleteSection()
+      if (e.key === 'Delete') {
+        if (selectedSection) {
+          deleteSection()
+        } else if (selectedSeats.size > 0) {
+          deleteSelectedSeats()
+        }
       }
       if (e.ctrlKey && e.key === 's') {
         e.preventDefault()
         handleSave()
       }
+      if (e.key === 'a' && selectedSeats.size > 0) {
+        markSeatsAsAccessible()
+      }
     }
     window.addEventListener('keydown', handleKeyPress)
     return () => window.removeEventListener('keydown', handleKeyPress)
-  }, [selectedSection, currentLayout])
+  }, [selectedSection, selectedSeats, currentLayout])
 
   const getSvgPoint = (clientX: number, clientY: number) => {
     if (!svgRef.current) return { x: 0, y: 0 }
@@ -62,7 +70,15 @@ export default function SeatingChartDesigner({
     const point = getSvgPoint(e.clientX, e.clientY)
     
     if (selectedTool === 'section') {
-      const newSection = createSection(point.x, point.y)
+      const newSection = createSection(point.x, point.y, 'standard')
+      setCurrentLayout({
+        ...currentLayout,
+        sections: [...currentLayout.sections, newSection]
+      })
+      setSelectedSection(newSection)
+      setSelectedTool('select')
+    } else if (selectedTool === 'curved-section') {
+      const newSection = createSection(point.x, point.y, 'curved')
       setCurrentLayout({
         ...currentLayout,
         sections: [...currentLayout.sections, newSection]
@@ -70,18 +86,65 @@ export default function SeatingChartDesigner({
       setSelectedSection(newSection)
       setSelectedTool('select')
     } else if (selectedTool === 'select') {
-      const clickedSection = findSectionAtPoint(point.x, point.y)
-      setSelectedSection(clickedSection)
-      if (clickedSection) {
+      // Check if clicking on stage
+      if (isPointInStage(point)) {
+        setEditingStage(true)
         setIsDragging(true)
         setDragStart(point)
+        return
+      }
+      
+      // Check for section or seat selection
+      const clickedSeat = findSeatAtPoint(point.x, point.y)
+      if (clickedSeat && e.shiftKey) {
+        const newSelected = new Set(selectedSeats)
+        if (newSelected.has(clickedSeat.id)) {
+          newSelected.delete(clickedSeat.id)
+        } else {
+          newSelected.add(clickedSeat.id)
+        }
+        setSelectedSeats(newSelected)
+      } else {
+        const clickedSection = findSectionAtPoint(point.x, point.y)
+        setSelectedSection(clickedSection)
+        setSelectedSeats(new Set())
+        if (clickedSection) {
+          setIsDragging(true)
+          setDragStart(point)
+        }
       }
     }
   }
 
   const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (isDragging && selectedSection) {
-      const point = getSvgPoint(e.clientX, e.clientY)
+    const point = getSvgPoint(e.clientX, e.clientY)
+    
+    if (isDragging && editingStage) {
+      const dx = point.x - dragStart.x
+      const dy = point.y - dragStart.y
+      
+      setCurrentLayout({
+        ...currentLayout,
+        stage: {
+          ...currentLayout.stage,
+          x: currentLayout.stage.x + dx,
+          y: currentLayout.stage.y + dy
+        }
+      })
+      setDragStart(point)
+    } else if (isResizingStage) {
+      const newWidth = Math.max(100, point.x - currentLayout.stage.x)
+      const newHeight = Math.max(40, point.y - currentLayout.stage.y)
+      
+      setCurrentLayout({
+        ...currentLayout,
+        stage: {
+          ...currentLayout.stage,
+          width: newWidth,
+          height: newHeight
+        }
+      })
+    } else if (isDragging && selectedSection) {
       const dx = point.x - dragStart.x
       const dy = point.y - dragStart.y
       
@@ -108,53 +171,112 @@ export default function SeatingChartDesigner({
 
   const handleMouseUp = () => {
     setIsDragging(false)
+    setIsResizingStage(false)
+    setEditingStage(false)
   }
 
-  const createSection = (x: number, y: number): Section => {
+  const isPointInStage = (point: { x: number, y: number }) => {
+    const stage = currentLayout.stage
+    return point.x >= stage.x && point.x <= stage.x + stage.width &&
+           point.y >= stage.y && point.y <= stage.y + stage.height
+  }
+
+  const createSection = (x: number, y: number, type: 'standard' | 'curved'): Section => {
     const rows = 5
     const seatsPerRow = 10
     const seats: Seat[] = []
     
-    for (let row = 0; row < rows; row++) {
-      for (let col = 0; col < seatsPerRow; col++) {
-        seats.push({
-          id: `seat-${Date.now()}-${row}-${col}`,
-          row: String.fromCharCode(65 + row),
-          number: col + 1,
-          x: x + col * 25,
-          y: y + row * 25,
-          status: 'available',
-          price: 100,
-          category: 'standard'
-        })
+    if (type === 'curved') {
+      const centerX = x + 250
+      const centerY = y + 200
+      const startAngle = -30
+      const endAngle = 30
+      const baseRadius = 150
+      
+      for (let row = 0; row < rows; row++) {
+        const radius = baseRadius + row * 30
+        const angleStep = (endAngle - startAngle) / (seatsPerRow - 1)
+        
+        for (let col = 0; col < seatsPerRow; col++) {
+          const angle = (startAngle + angleStep * col) * Math.PI / 180
+          const seatX = centerX + radius * Math.sin(angle)
+          const seatY = centerY - radius * Math.cos(angle)
+          
+          seats.push({
+            id: `seat-${Date.now()}-${row}-${col}`,
+            row: String.fromCharCode(65 + row),
+            number: col + 1,
+            x: seatX,
+            y: seatY,
+            status: 'available',
+            price: 100,
+            category: 'standard',
+            angle: angle * 180 / Math.PI
+          })
+        }
       }
-    }
-    
-    return {
-      id: `section-${Date.now()}`,
-      name: `Section ${currentLayout.sections.length + 1}`,
-      x,
-      y,
-      rows,
-      seatsPerRow,
-      seats,
-      pricing: 'standard',
-      rotation: 0
+      
+      return {
+        id: `section-${Date.now()}`,
+        name: `Section ${currentLayout.sections.length + 1}`,
+        x,
+        y,
+        rows,
+        seatsPerRow,
+        seats,
+        pricing: 'standard',
+        sectionType: 'curved',
+        curveRadius: baseRadius,
+        curveAngle: endAngle - startAngle
+      }
+    } else {
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < seatsPerRow; col++) {
+          seats.push({
+            id: `seat-${Date.now()}-${row}-${col}`,
+            row: String.fromCharCode(65 + row),
+            number: col + 1,
+            x: x + col * 25,
+            y: y + row * 25,
+            status: 'available',
+            price: 100,
+            category: 'standard'
+          })
+        }
+      }
+      
+      return {
+        id: `section-${Date.now()}`,
+        name: `Section ${currentLayout.sections.length + 1}`,
+        x,
+        y,
+        rows,
+        seatsPerRow,
+        seats,
+        pricing: 'standard',
+        sectionType: 'standard',
+        rotation: 0
+      }
     }
   }
 
   const findSectionAtPoint = (x: number, y: number): Section | null => {
     for (const section of currentLayout.sections) {
-      const sectionBounds = {
-        left: section.x - 10,
-        right: section.x + section.seatsPerRow * 25 + 10,
-        top: section.y - 10,
-        bottom: section.y + section.rows * 25 + 10
+      for (const seat of section.seats) {
+        if (Math.abs(x - seat.x - 10) < 15 && Math.abs(y - seat.y - 10) < 15) {
+          return section
+        }
       }
-      
-      if (x >= sectionBounds.left && x <= sectionBounds.right &&
-          y >= sectionBounds.top && y <= sectionBounds.bottom) {
-        return section
+    }
+    return null
+  }
+
+  const findSeatAtPoint = (x: number, y: number): Seat | null => {
+    for (const section of currentLayout.sections) {
+      for (const seat of section.seats) {
+        if (Math.abs(x - seat.x - 10) < 10 && Math.abs(y - seat.y - 10) < 10) {
+          return seat
+        }
       }
     }
     return null
@@ -167,7 +289,7 @@ export default function SeatingChartDesigner({
       if (section.id === selectedSection.id) {
         const updatedSection = { ...section, ...updates }
         
-        // Update row-level pricing if specified
+        // Handle row-level pricing
         if (updates.rowPricing) {
           updatedSection.seats = section.seats.map(seat => {
             const rowPricing = updates.rowPricing?.[seat.row]
@@ -193,6 +315,109 @@ export default function SeatingChartDesigner({
     
     setCurrentLayout({ ...currentLayout, sections: updatedSections })
     setSelectedSection(updatedSections.find(s => s.id === selectedSection.id) || null)
+  }
+
+  const updateRowSeats = (row: string, newCount: number) => {
+    if (!selectedSection) return
+    
+    const updatedSections = currentLayout.sections.map(section => {
+      if (section.id === selectedSection.id) {
+        const currentRowSeats = section.seats.filter(s => s.row === row)
+        const otherSeats = section.seats.filter(s => s.row !== row)
+        
+        let newRowSeats: Seat[] = []
+        const rowIndex = row.charCodeAt(0) - 65
+        
+        if (section.sectionType === 'curved' && section.curveRadius && section.curveAngle) {
+          const centerX = section.x + 250
+          const centerY = section.y + 200
+          const radius = section.curveRadius + rowIndex * 30
+          const startAngle = -section.curveAngle / 2
+          const endAngle = section.curveAngle / 2
+          const angleStep = newCount > 1 ? (endAngle - startAngle) / (newCount - 1) : 0
+          
+          for (let i = 0; i < newCount; i++) {
+            const angle = (startAngle + angleStep * i) * Math.PI / 180
+            const seatX = centerX + radius * Math.sin(angle)
+            const seatY = centerY - radius * Math.cos(angle)
+            
+            const existingSeat = currentRowSeats[i]
+            newRowSeats.push({
+              id: existingSeat?.id || `seat-${section.id}-${rowIndex}-${i}`,
+              row: row,
+              number: i + 1,
+              x: seatX,
+              y: seatY,
+              status: existingSeat?.status || 'available',
+              price: existingSeat?.price || 100,
+              category: existingSeat?.category || section.pricing,
+              angle: angle * 180 / Math.PI,
+              isAccessible: existingSeat?.isAccessible
+            })
+          }
+        } else {
+          for (let i = 0; i < newCount; i++) {
+            const existingSeat = currentRowSeats[i]
+            newRowSeats.push({
+              id: existingSeat?.id || `seat-${section.id}-${rowIndex}-${i}`,
+              row: row,
+              number: i + 1,
+              x: section.x + i * 25,
+              y: section.y + rowIndex * 25,
+              status: existingSeat?.status || 'available',
+              price: existingSeat?.price || 100,
+              category: existingSeat?.category || section.pricing,
+              isAccessible: existingSeat?.isAccessible
+            })
+          }
+        }
+        
+        const seatsByRow = { ...section.seatsByRow, [row]: newCount }
+        
+        return {
+          ...section,
+          seats: [...otherSeats, ...newRowSeats].sort((a, b) => {
+            if (a.row === b.row) return a.number - b.number
+            return a.row.localeCompare(b.row)
+          }),
+          seatsByRow
+        }
+      }
+      return section
+    })
+    
+    setCurrentLayout({ ...currentLayout, sections: updatedSections })
+    setSelectedSection(updatedSections.find(s => s.id === selectedSection.id) || null)
+  }
+
+  const markSeatsAsAccessible = () => {
+    if (selectedSeats.size === 0) return
+    
+    const updatedSections = currentLayout.sections.map(section => {
+      const updatedSeats = section.seats.map(seat => {
+        if (selectedSeats.has(seat.id)) {
+          return {
+            ...seat,
+            isAccessible: !seat.isAccessible,
+            status: seat.isAccessible ? 'available' : 'accessible'
+          }
+        }
+        return seat
+      })
+      return { ...section, seats: updatedSeats }
+    })
+    
+    setCurrentLayout({ ...currentLayout, sections: updatedSections })
+  }
+
+  const deleteSelectedSeats = () => {
+    const updatedSections = currentLayout.sections.map(section => ({
+      ...section,
+      seats: section.seats.filter(seat => !selectedSeats.has(seat.id))
+    }))
+    
+    setCurrentLayout({ ...currentLayout, sections: updatedSections })
+    setSelectedSeats(new Set())
   }
 
   const deleteSection = () => {
@@ -249,6 +474,13 @@ export default function SeatingChartDesigner({
     return category?.color || '#6b7280'
   }
 
+  const updateStage = (updates: Partial<Stage>) => {
+    setCurrentLayout({
+      ...currentLayout,
+      stage: { ...currentLayout.stage, ...updates }
+    })
+  }
+
   return (
     <div className="flex h-full bg-gray-900">
       {/* Left Sidebar - Tools & Settings */}
@@ -280,6 +512,51 @@ export default function SeatingChartDesigner({
               >
                 📦 Section
               </button>
+              <button
+                onClick={() => setSelectedTool('curved-section')}
+                className={`p-3 rounded-lg transition-all ${
+                  selectedTool === 'curved-section' 
+                    ? 'bg-purple-600' 
+                    : 'bg-white/10 hover:bg-white/20'
+                }`}
+              >
+                🌙 Curved
+              </button>
+            </div>
+          </div>
+
+          {/* Stage Settings */}
+          <div className="mb-6">
+            <h4 className="text-sm font-semibold mb-2 text-gray-400">Stage Settings</h4>
+            <div className="space-y-2">
+              <input
+                type="text"
+                value={currentLayout.stage.label}
+                onChange={(e) => updateStage({ label: e.target.value })}
+                className="w-full px-3 py-2 bg-white/10 rounded-lg"
+                placeholder="Stage name"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Width</label>
+                  <input
+                    type="number"
+                    value={currentLayout.stage.width}
+                    onChange={(e) => updateStage({ width: parseInt(e.target.value) || 100 })}
+                    className="w-full px-2 py-1 bg-white/10 rounded"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Height</label>
+                  <input
+                    type="number"
+                    value={currentLayout.stage.height}
+                    onChange={(e) => updateStage({ height: parseInt(e.target.value) || 60 })}
+                    className="w-full px-2 py-1 bg-white/10 rounded"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-gray-400">Click and drag stage to move</p>
             </div>
           </div>
 
@@ -361,28 +638,44 @@ export default function SeatingChartDesigner({
                   </select>
                 </div>
 
+                {/* Row Management */}
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Row-Level Pricing (Optional)</label>
+                  <label className="block text-xs text-gray-400 mb-1">Seats per Row</label>
                   <div className="space-y-1 max-h-40 overflow-y-auto">
                     {Array.from({ length: selectedSection.rows }, (_, i) => {
                       const rowLetter = String.fromCharCode(65 + i)
                       const rowSeats = selectedSection.seats.filter(s => s.row === rowLetter)
-                      const currentCategory = rowSeats[0]?.category || selectedSection.pricing
+                      const seatCount = rowSeats.length
                       
                       return (
                         <div key={rowLetter} className="flex items-center gap-2">
                           <span className="text-sm w-12">Row {rowLetter}:</span>
+                          <div className="flex items-center gap-1 flex-1">
+                            <button
+                              onClick={() => updateRowSeats(rowLetter, Math.max(0, seatCount - 1))}
+                              className="px-2 py-1 bg-red-600/20 text-red-400 rounded text-sm"
+                            >
+                              -
+                            </button>
+                            <span className="px-2 text-center w-12">{seatCount}</span>
+                            <button
+                              onClick={() => updateRowSeats(rowLetter, seatCount + 1)}
+                              className="px-2 py-1 bg-green-600/20 text-green-400 rounded text-sm"
+                            >
+                              +
+                            </button>
+                          </div>
                           <select
-                            value={currentCategory}
+                            value={rowSeats[0]?.category || selectedSection.pricing}
                             onChange={(e) => {
                               const rowPricing = { [rowLetter]: e.target.value }
                               updateSection({ rowPricing })
                             }}
-                            className="flex-1 px-2 py-1 bg-white/10 rounded text-sm"
+                            className="w-24 px-1 py-1 bg-white/10 rounded text-xs"
                           >
                             {priceCategories.map(cat => (
                               <option key={cat.id} value={cat.id}>
-                                {cat.name} - ${cat.price}
+                                {cat.name}
                               </option>
                             ))}
                           </select>
@@ -392,78 +685,86 @@ export default function SeatingChartDesigner({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
+                {/* Curve Settings for Curved Sections */}
+                {selectedSection.sectionType === 'curved' && (
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1">Rows</label>
+                    <label className="block text-xs text-gray-400 mb-1">Curve Angle</label>
                     <input
-                      type="number"
-                      value={selectedSection.rows}
+                      type="range"
+                      value={selectedSection.curveAngle || 60}
                       onChange={(e) => {
-                        const rows = parseInt(e.target.value) || 1
-                        const seats = []
-                        for (let row = 0; row < rows; row++) {
-                          for (let col = 0; col < selectedSection.seatsPerRow; col++) {
-                            seats.push({
-                              id: `seat-${selectedSection.id}-${row}-${col}`,
-                              row: String.fromCharCode(65 + row),
+                        const angle = parseInt(e.target.value)
+                        updateSection({ curveAngle: angle })
+                        // Rebuild curved seats
+                        const updatedSection = { ...selectedSection, curveAngle: angle }
+                        const newSeats = []
+                        const centerX = updatedSection.x + 250
+                        const centerY = updatedSection.y + 200
+                        const startAngle = -angle / 2
+                        const endAngle = angle / 2
+                        
+                        for (let row = 0; row < updatedSection.rows; row++) {
+                          const rowLetter = String.fromCharCode(65 + row)
+                          const seatCount = updatedSection.seats.filter(s => s.row === rowLetter).length
+                          const radius = (updatedSection.curveRadius || 150) + row * 30
+                          const angleStep = seatCount > 1 ? (endAngle - startAngle) / (seatCount - 1) : 0
+                          
+                          for (let col = 0; col < seatCount; col++) {
+                            const seatAngle = (startAngle + angleStep * col) * Math.PI / 180
+                            const seatX = centerX + radius * Math.sin(seatAngle)
+                            const seatY = centerY - radius * Math.cos(seatAngle)
+                            const existingSeat = updatedSection.seats.find(
+                              s => s.row === rowLetter && s.number === col + 1
+                            )
+                            
+                            newSeats.push({
+                              id: existingSeat?.id || `seat-${updatedSection.id}-${row}-${col}`,
+                              row: rowLetter,
                               number: col + 1,
-                              x: selectedSection.x + col * 25,
-                              y: selectedSection.y + row * 25,
-                              status: 'available' as const,
-                              price: 100,
-                              category: selectedSection.pricing
+                              x: seatX,
+                              y: seatY,
+                              status: existingSeat?.status || 'available',
+                              price: existingSeat?.price || 100,
+                              category: existingSeat?.category || updatedSection.pricing,
+                              angle: seatAngle * 180 / Math.PI,
+                              isAccessible: existingSeat?.isAccessible
                             })
                           }
                         }
-                        updateSection({ rows, seats })
+                        updateSection({ seats: newSeats })
                       }}
-                      className="w-full px-2 py-1 bg-white/10 rounded"
-                      min="1"
-                      max="26"
+                      className="w-full"
+                      min="20"
+                      max="180"
                     />
+                    <span className="text-xs text-gray-400">{selectedSection.curveAngle || 60}°</span>
                   </div>
-                  <div>
-                    <label className="block text-xs text-gray-400 mb-1">Seats/Row</label>
-                    <input
-                      type="number"
-                      value={selectedSection.seatsPerRow}
-                      onChange={(e) => {
-                        const seatsPerRow = parseInt(e.target.value) || 1
-                        const seats = []
-                        for (let row = 0; row < selectedSection.rows; row++) {
-                          for (let col = 0; col < seatsPerRow; col++) {
-                            seats.push({
-                              id: `seat-${selectedSection.id}-${row}-${col}`,
-                              row: String.fromCharCode(65 + row),
-                              number: col + 1,
-                              x: selectedSection.x + col * 25,
-                              y: selectedSection.y + row * 25,
-                              status: 'available' as const,
-                              price: 100,
-                              category: selectedSection.pricing
-                            })
-                          }
-                        }
-                        updateSection({ seatsPerRow, seats })
-                      }}
-                      className="w-full px-2 py-1 bg-white/10 rounded"
-                      min="1"
-                    />
-                  </div>
-                </div>
+                )}
 
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1">Rotation</label>
-                  <input
-                    type="range"
-                    value={selectedSection.rotation || 0}
-                    onChange={(e) => updateSection({ rotation: parseInt(e.target.value) })}
-                    className="w-full"
-                    min="-180"
-                    max="180"
-                  />
-                  <span className="text-xs text-gray-400">{selectedSection.rotation || 0}°</span>
-                </div>
+                {/* Standard Rotation for Regular Sections */}
+                {selectedSection.sectionType === 'standard' && (
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Rotation</label>
+                    <input
+                      type="range"
+                      value={selectedSection.rotation || 0}
+                      onChange={(e) => updateSection({ rotation: parseInt(e.target.value) })}
+                      className="w-full"
+                      min="-180"
+                      max="180"
+                    />
+                    <span className="text-xs text-gray-400">{selectedSection.rotation || 0}°</span>
+                  </div>
+                )}
+
+                {selectedSeats.size > 0 && (
+                  <button
+                    onClick={markSeatsAsAccessible}
+                    className="w-full px-3 py-2 bg-blue-600/20 text-blue-400 rounded-lg hover:bg-blue-600/30"
+                  >
+                    Toggle Accessible ({selectedSeats.size} seats)
+                  </button>
+                )}
 
                 <button
                   onClick={deleteSection}
@@ -474,6 +775,15 @@ export default function SeatingChartDesigner({
               </div>
             </div>
           )}
+
+          {/* Instructions */}
+          <div className="text-xs text-gray-400">
+            <p>• Click to select sections</p>
+            <p>• Shift+Click to select seats</p>
+            <p>• Press 'A' to mark accessible</p>
+            <p>• Press Delete to remove</p>
+            <p>• Drag stage to reposition</p>
+          </div>
         </div>
       </div>
 
@@ -507,6 +817,7 @@ export default function SeatingChartDesigner({
               
               <div className="text-sm text-gray-400">
                 Capacity: {calculateTotalCapacity(currentLayout.sections)}
+                {selectedSeats.size > 0 && ` | Selected: ${selectedSeats.size}`}
               </div>
             </div>
             
@@ -550,8 +861,9 @@ export default function SeatingChartDesigner({
                     width={currentLayout.stage.width}
                     height={currentLayout.stage.height}
                     fill="#1f2937"
-                    stroke="#4b5563"
+                    stroke={editingStage ? "#9333ea" : "#4b5563"}
                     strokeWidth="2"
+                    style={{ cursor: 'move' }}
                   />
                   <text
                     x={currentLayout.stage.x + currentLayout.stage.width / 2}
@@ -561,9 +873,23 @@ export default function SeatingChartDesigner({
                     fill="white"
                     fontSize="20"
                     fontWeight="bold"
+                    style={{ pointerEvents: 'none' }}
                   >
                     {currentLayout.stage.label}
                   </text>
+                  {/* Resize handle */}
+                  <rect
+                    x={currentLayout.stage.x + currentLayout.stage.width - 10}
+                    y={currentLayout.stage.y + currentLayout.stage.height - 10}
+                    width="10"
+                    height="10"
+                    fill="#9333ea"
+                    style={{ cursor: 'nwse-resize' }}
+                    onMouseDown={(e) => {
+                      e.stopPropagation()
+                      setIsResizingStage(true)
+                    }}
+                  />
                 </g>
               )}
               
@@ -571,25 +897,30 @@ export default function SeatingChartDesigner({
               {currentLayout.sections.map(section => (
                 <g
                   key={section.id}
-                  transform={section.rotation ? `rotate(${section.rotation} ${section.x + (section.seatsPerRow * 25) / 2} ${section.y + (section.rows * 25) / 2})` : undefined}
+                  transform={section.sectionType === 'standard' && section.rotation 
+                    ? `rotate(${section.rotation} ${section.x + (section.seatsPerRow * 25) / 2} ${section.y + (section.rows * 25) / 2})` 
+                    : undefined}
                 >
                   {/* Section outline */}
                   {selectedSection?.id === section.id && (
                     <rect
                       x={section.x - 5}
                       y={section.y - 5}
-                      width={section.seatsPerRow * 25 + 10}
-                      height={section.rows * 25 + 10}
+                      width={section.sectionType === 'curved' ? 500 : section.seatsPerRow * 25 + 10}
+                      height={section.sectionType === 'curved' ? 300 : section.rows * 25 + 10}
                       fill="none"
                       stroke="#9333ea"
                       strokeWidth="2"
                       strokeDasharray="5,5"
+                      opacity="0.5"
                     />
                   )}
                   
                   {/* Section label */}
                   <text
-                    x={section.x + (section.seatsPerRow * 25) / 2}
+                    x={section.sectionType === 'curved' 
+                      ? section.x + 250 
+                      : section.x + (section.seatsPerRow * 25) / 2}
                     y={section.y - 10}
                     textAnchor="middle"
                     fill="white"
@@ -601,18 +932,33 @@ export default function SeatingChartDesigner({
                   
                   {/* Seats */}
                   {section.seats.map(seat => (
-                    <rect
-                      key={seat.id}
-                      x={seat.x}
-                      y={seat.y}
-                      width="20"
-                      height="20"
-                      rx="4"
-                      fill={getPriceCategoryColor(seat.category || section.pricing)}
-                      stroke="white"
-                      strokeWidth="1"
-                      strokeOpacity="0.3"
-                    />
+                    <g key={seat.id} transform={seat.angle ? `rotate(${seat.angle} ${seat.x + 10} ${seat.y + 10})` : undefined}>
+                      <rect
+                        x={seat.x}
+                        y={seat.y}
+                        width="20"
+                        height="20"
+                        rx="4"
+                        fill={seat.isAccessible ? '#2563eb' : getPriceCategoryColor(seat.category || section.pricing)}
+                        stroke={selectedSeats.has(seat.id) ? '#fff' : 'white'}
+                        strokeWidth={selectedSeats.has(seat.id) ? '2' : '1'}
+                        strokeOpacity={selectedSeats.has(seat.id) ? '1' : '0.3'}
+                        opacity={seat.status === 'disabled' ? 0.3 : 1}
+                      />
+                      {seat.isAccessible && (
+                        <text
+                          x={seat.x + 10}
+                          y={seat.y + 14}
+                          textAnchor="middle"
+                          fill="white"
+                          fontSize="12"
+                          fontWeight="bold"
+                          style={{ pointerEvents: 'none' }}
+                        >
+                          ♿
+                        </text>
+                      )}
+                    </g>
                   ))}
                 </g>
               ))}
