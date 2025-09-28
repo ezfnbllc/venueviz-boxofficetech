@@ -956,16 +956,16 @@ export default function SeatingChartDesigner({
 
       {/* Main Content Area */}
       <div className="flex-1 relative overflow-hidden">
-        {/* AI Panel - Responsive positioning */}
+        {/* AI Panel - Fixed positioning within viewport */}
         {showAIPanel && mode === 'edit' && (
-          <div className="absolute top-2 right-2 z-20 bg-black/95 backdrop-blur rounded-lg p-3 sm:p-4 
-                          w-[calc(100%-1rem)] sm:w-80 max-w-sm
-                          max-h-[50vh] sm:max-h-[60vh] overflow-y-auto shadow-xl">
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="font-semibold text-sm sm:text-base">AI Assistant</h3>
+          <div className="absolute top-2 left-2 sm:left-auto sm:right-2 z-20 bg-black/95 backdrop-blur rounded-lg p-3
+                          w-[calc(100%-1rem)] sm:w-72 md:w-80
+                          h-auto max-h-[calc(100vh-120px)] overflow-y-auto shadow-xl">
+            <div className="flex justify-between items-center mb-3 sticky top-0 bg-black/95 pb-2">
+              <h3 className="font-semibold text-sm">AI Assistant</h3>
               <button
                 onClick={() => setShowAIPanel(false)}
-                className="text-gray-400 hover:text-white text-xl w-8 h-8 flex items-center justify-center rounded hover:bg-white/10"
+                className="text-gray-400 hover:text-white text-xl w-6 h-6 flex items-center justify-center rounded hover:bg-white/10"
               >
                 ×
               </button>
@@ -977,19 +977,19 @@ export default function SeatingChartDesigner({
                   <img 
                     src={backgroundImage} 
                     alt="Reference" 
-                    className="w-full h-32 sm:h-40 object-contain rounded bg-black/50 border border-white/10" 
+                    className="w-full h-24 sm:h-32 object-contain rounded bg-black/50 border border-white/10" 
                   />
                   <button
                     onClick={clearBackgroundImage}
-                    className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center"
+                    className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center"
                     title="Remove image"
                   >
                     ×
                   </button>
                 </div>
-                <div className="mt-3">
+                <div className="mt-2">
                   <label className="text-xs text-gray-400 block mb-1">
-                    Background Opacity: {Math.round(imageOpacity * 100)}%
+                    Opacity: {Math.round(imageOpacity * 100)}%
                   </label>
                   <input
                     type="range"
@@ -997,35 +997,35 @@ export default function SeatingChartDesigner({
                     max="100"
                     value={imageOpacity * 100}
                     onChange={(e) => setImageOpacity(parseInt(e.target.value) / 100)}
-                    className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-600"
+                    className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-600"
                   />
                 </div>
               </div>
             )}
 
-            <div className="space-y-3">
+            <div className="space-y-2">
               <button
                 onClick={analyzeImage}
                 disabled={aiProcessing || !backgroundImage}
-                className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed rounded text-xs sm:text-sm font-medium transition-colors"
+                className="w-full px-3 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed rounded text-xs font-medium transition-colors"
               >
                 {aiProcessing ? '🔄 Analyzing...' : '✨ AI Detect Sections'}
               </button>
               
               <div className="pt-2 border-t border-white/10">
-                <p className="text-xs text-gray-400 mb-2">Or generate from template:</p>
-                <div className="grid grid-cols-2 gap-2">
+                <p className="text-xs text-gray-400 mb-2">Generate from template:</p>
+                <div className="grid grid-cols-2 gap-1">
                   <button
                     onClick={() => generateFromTemplate('theater')}
                     disabled={aiProcessing}
-                    className="px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-xs sm:text-sm transition-colors"
+                    className="px-2 py-1.5 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-xs transition-colors"
                   >
                     🎭 Theater
                   </button>
                   <button
                     onClick={() => generateFromTemplate('arena')}
                     disabled={aiProcessing}
-                    className="px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-xs sm:text-sm transition-colors"
+                    className="px-2 py-1.5 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-xs transition-colors"
                   >
                     🏟️ Arena
                   </button>
@@ -1035,20 +1035,20 @@ export default function SeatingChartDesigner({
           </div>
         )}
 
-        {/* Section Settings Panel - Responsive */}
+        {/* Section Settings Panel - Fixed positioning */}
         {mode === 'edit' && state.selectedSection && (
-          <div className="absolute top-2 left-2 z-20 bg-black/95 backdrop-blur rounded-lg p-3 sm:p-4 
-                          w-[calc(100%-1rem)] sm:w-64 max-w-xs shadow-xl">
-            <h3 className="text-xs sm:text-sm font-semibold mb-3">Section Settings</h3>
+          <div className="absolute bottom-20 left-2 z-20 bg-black/95 backdrop-blur rounded-lg p-3
+                          w-56 shadow-xl">
+            <h3 className="text-xs font-semibold mb-2">Section Settings</h3>
             
-            <div className="mb-4">
-              <div className="text-xs text-gray-400 mb-2">Pricing Tier:</div>
+            <div className="mb-3">
+              <div className="text-xs text-gray-400 mb-1">Pricing Tier:</div>
               <div className="grid grid-cols-2 gap-1">
                 {['vip', 'premium', 'standard', 'economy'].map(tier => (
                   <button
                     key={tier}
                     onClick={() => changePricing(tier as any)}
-                    className={`px-2 py-1.5 rounded text-xs transition-colors ${
+                    className={`px-2 py-1 rounded text-xs transition-colors ${
                       layout.sections.find(s => s.id === state.selectedSection)?.pricing === tier
                         ? 'bg-purple-600'
                         : 'bg-gray-700 hover:bg-gray-600'
@@ -1061,22 +1061,22 @@ export default function SeatingChartDesigner({
             </div>
 
             <div>
-              <div className="text-xs text-gray-400 mb-2">Section Color:</div>
+              <div className="text-xs text-gray-400 mb-1">Section Color:</div>
               <button
                 onClick={() => setShowColorPicker(!showColorPicker)}
-                className="w-full h-8 rounded border border-white/20 hover:border-white/40 transition-colors"
+                className="w-full h-6 rounded border border-white/20 hover:border-white/40 transition-colors"
                 style={{ 
                   backgroundColor: layout.sections.find(s => s.id === state.selectedSection)?.color || '#4a5568' 
                 }}
               />
               {showColorPicker && (
-                <div className="absolute left-3 right-3 mt-2 p-2 bg-black/95 rounded-lg max-h-32 sm:max-h-48 overflow-y-auto border border-white/10">
-                  <div className="grid grid-cols-5 sm:grid-cols-8 gap-1">
-                    {colorPalette.map(color => (
+                <div className="absolute bottom-full left-0 mb-2 p-2 bg-black/95 rounded-lg border border-white/10">
+                  <div className="grid grid-cols-6 gap-1">
+                    {colorPalette.slice(0, 24).map(color => (
                       <button
                         key={color}
                         onClick={() => changeColor(color)}
-                        className="w-6 h-6 rounded hover:scale-110 transition-transform"
+                        className="w-5 h-5 rounded hover:scale-110 transition-transform"
                         style={{ backgroundColor: color }}
                       />
                     ))}
@@ -1087,7 +1087,7 @@ export default function SeatingChartDesigner({
           </div>
         )}
 
-        {/* Zoom controls - Responsive */}
+        {/* Zoom controls - Responsive */
         <div className="absolute bottom-4 right-4 z-10 bg-black/80 backdrop-blur rounded-lg p-1 flex flex-col items-center shadow-lg">
           <button
             onClick={() => setState(prev => ({ ...prev, zoom: Math.max(0.3, prev.zoom * 0.8) }))}
