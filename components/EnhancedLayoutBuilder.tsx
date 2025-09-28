@@ -22,6 +22,7 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
     { id: 'ga-1', name: 'General Admission', capacity: 500, type: 'standing' }
   ])
   const [editingGALayout, setEditingGALayout] = useState<any>(null)
+  const [copyingLayout, setCopyingLayout] = useState(false)
 
   useEffect(() => {
     loadLayouts()
@@ -42,6 +43,7 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
     setLayoutType('seating_chart')
     setGALevels([{ id: 'ga-1', name: 'General Admission', capacity: 500, type: 'standing' }])
     setEditingGALayout(null)
+    setCopyingLayout(false)
     setShowGAWizard(true)
   }
 
@@ -50,7 +52,96 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
     setLayoutType('general_admission')
     setGALevels(layout.gaLevels || [])
     setEditingGALayout(layout)
+    setCopyingLayout(false)
     setShowGAWizard(true)
+  }
+
+  const handleCopyLayout = async (layout: any) => {
+    if (layout.type === 'general_admission') {
+      // Copy GA layout
+      setLayoutName(layout.name + ' (Copy)')
+      setLayoutType('general_admission')
+      setGALevels(
+        (layout.gaLevels || []).map((level: any) => ({
+          ...level,
+          id: `ga-copy-${Date.now()}-${Math.random()}`
+        }))
+      )
+      setEditingGALayout(null) // Important: this is a new layout, not editing
+      setCopyingLayout(true)
+      setShowGAWizard(true)
+    } else {
+      // Copy seating chart layout
+      try {
+        setCopyingLayout(true)
+        
+        // Create a deep copy of the layout with new IDs
+        const copiedLayout: SeatingLayout = {
+          id: `layout-copy-${Date.now()}`,
+          venueId: venue.id,
+          name: layout.name + ' (Copy)',
+          sections: (layout.sections || []).map((section: any) => ({
+            ...section,
+            id: `section-copy-${Date.now()}-${Math.random()}`,
+            seats: section.seats.map((seat: any) => ({
+              ...seat,
+              id: `seat-copy-${Date.now()}-${Math.random()}`
+            }))
+          })),
+          stage: layout.stage || {
+            x: 400,
+            y: 50,
+            width: 400,
+            height: 60,
+            label: 'STAGE',
+            type: 'stage'
+          },
+          aisles: (layout.aisles || []).map((aisle: any) => ({
+            ...aisle,
+            id: `aisle-copy-${Date.now()}-${Math.random()}`
+          })),
+          capacity: layout.totalCapacity || 0,
+          viewBox: layout.viewBox || {
+            x: 0,
+            y: 0,
+            width: 1200,
+            height: 800
+          },
+          priceCategories: layout.priceCategories || [
+            { id: 'vip', name: 'VIP', color: '#9333ea', price: 250 },
+            { id: 'premium', name: 'Premium', color: '#3b82f6', price: 150 },
+            { id: 'standard', name: 'Standard', color: '#10b981', price: 100 },
+            { id: 'economy', name: 'Economy', color: '#f59e0b', price: 75 }
+          ]
+        }
+        
+        // Save the copied layout directly
+        const layoutData = {
+          name: copiedLayout.name,
+          type: 'seating_chart',
+          venueId: venue.id,
+          sections: copiedLayout.sections,
+          stage: copiedLayout.stage,
+          aisles: copiedLayout.aisles,
+          totalCapacity: copiedLayout.capacity,
+          viewBox: copiedLayout.viewBox,
+          priceCategories: copiedLayout.priceCategories,
+          configuration: {
+            version: '2.0',
+            format: 'svg'
+          }
+        }
+        
+        await AdminService.createLayout(layoutData)
+        await loadLayouts()
+        alert('Layout copied successfully!')
+        setCopyingLayout(false)
+      } catch (error) {
+        console.error('Error copying layout:', error)
+        alert('Error copying layout')
+        setCopyingLayout(false)
+      }
+    }
   }
 
   const proceedWithLayoutCreation = () => {
@@ -199,16 +290,17 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
         }
       }
 
-      if (editingGALayout) {
+      if (editingGALayout && !copyingLayout) {
         await AdminService.updateLayout(editingGALayout.id, layoutData)
         alert('GA Layout updated successfully!')
       } else {
         await AdminService.createLayout(layoutData)
-        alert('GA Layout created successfully!')
+        alert(copyingLayout ? 'GA Layout copied successfully!' : 'GA Layout created successfully!')
       }
 
       setShowGAWizard(false)
       setEditingGALayout(null)
+      setCopyingLayout(false)
       await loadLayouts()
     } catch (error) {
       console.error('Error saving GA layout:', error)
@@ -315,13 +407,20 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
                           {layout.type === 'general_admission' ? 'General Admission' : 'Seating Chart'}
                         </p>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-1">
                         <button
                           onClick={() => handleEditLayout(layout)}
                           className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center hover:bg-blue-700"
                           title="Edit"
                         >
                           ✏️
+                        </button>
+                        <button
+                          onClick={() => handleCopyLayout(layout)}
+                          className="w-8 h-8 bg-green-600 rounded flex items-center justify-center hover:bg-green-700"
+                          title="Copy"
+                        >
+                          📋
                         </button>
                         <button
                           onClick={() => handleDeleteLayout(layout.id)}
@@ -349,12 +448,20 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
                         <p>Sections: {layout.sections?.length || 0}</p>
                       )}
                     </div>
-                    <button
-                      onClick={() => handleEditLayout(layout)}
-                      className="w-full mt-3 py-2 bg-purple-600/20 text-purple-400 rounded hover:bg-purple-600/30"
-                    >
-                      {layout.type === 'general_admission' ? 'Edit GA Layout' : 'Open Designer'}
-                    </button>
+                    <div className="flex gap-2 mt-3">
+                      <button
+                        onClick={() => handleEditLayout(layout)}
+                        className="flex-1 py-2 bg-purple-600/20 text-purple-400 rounded hover:bg-purple-600/30 text-sm"
+                      >
+                        {layout.type === 'general_admission' ? 'Edit' : 'Open Designer'}
+                      </button>
+                      <button
+                        onClick={() => handleCopyLayout(layout)}
+                        className="flex-1 py-2 bg-green-600/20 text-green-400 rounded hover:bg-green-600/30 text-sm"
+                      >
+                        Duplicate
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -368,7 +475,7 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[60]">
           <div className="bg-gray-900 rounded-xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
             <h2 className="text-2xl font-bold mb-6">
-              {editingGALayout ? 'Edit GA Layout' : 'Create New Layout'}
+              {copyingLayout ? 'Copy GA Layout' : (editingGALayout ? 'Edit GA Layout' : 'Create New Layout')}
             </h2>
             
             <div className="space-y-4">
@@ -383,7 +490,7 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
                 />
               </div>
 
-              {!editingGALayout && (
+              {!editingGALayout && !copyingLayout && (
                 <div>
                   <label className="block text-sm mb-2">Layout Type</label>
                   <div className="grid grid-cols-2 gap-4">
@@ -415,7 +522,7 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
                 </div>
               )}
 
-              {(layoutType === 'general_admission' || editingGALayout) && (
+              {(layoutType === 'general_admission' || editingGALayout || copyingLayout) && (
                 <div>
                   <div className="flex justify-between items-center mb-3">
                     <label className="text-sm font-semibold">GA Levels</label>
@@ -481,6 +588,7 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
                 onClick={() => {
                   setShowGAWizard(false)
                   setEditingGALayout(null)
+                  setCopyingLayout(false)
                 }}
                 className="px-6 py-2 bg-gray-700 rounded-lg hover:bg-gray-600"
               >
@@ -490,8 +598,10 @@ export default function EnhancedLayoutBuilder({ venue, onClose }: EnhancedLayout
                 onClick={proceedWithLayoutCreation}
                 className="px-6 py-2 bg-purple-600 rounded-lg hover:bg-purple-700"
               >
-                {editingGALayout ? 'Update GA Layout' : (
-                  layoutType === 'general_admission' ? 'Create GA Layout' : 'Open Designer'
+                {copyingLayout ? 'Create Copy' : (
+                  editingGALayout ? 'Update GA Layout' : (
+                    layoutType === 'general_admission' ? 'Create GA Layout' : 'Open Designer'
+                  )
                 )}
               </button>
             </div>
