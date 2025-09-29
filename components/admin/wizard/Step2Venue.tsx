@@ -33,6 +33,7 @@ export default function Step2Venue() {
   const loadLayouts = async (venueId: string) => {
     try {
       const layoutsData = await AdminService.getLayoutsByVenueId(venueId)
+      console.log('Loaded layouts:', layoutsData) // Debug log
       setLayouts(layoutsData)
     } catch (error) {
       console.error('Error loading layouts:', error)
@@ -53,45 +54,46 @@ export default function Step2Venue() {
   
   const handleLayoutChange = (layoutId: string) => {
     const layout = layouts.find(l => l.id === layoutId)
+    console.log('Selected layout:', layout) // Debug log
+    
     if (layout) {
       setSelectedLayout(layout)
       
-      // Use the layout's actual configuration
-      const layoutType = layout.layoutType || layout.type || 'general-admission'
-      const isSeatingChart = layoutType === 'seating-chart'
+      // Check layout type - using underscores as saved in DB
+      const isSeatingChart = layout.type === 'seating_chart'
+      const isGA = layout.type === 'general_admission'
       
       let availableSections = []
       
       if (isSeatingChart && layout.sections) {
-        // Use sections from seating chart with their defined properties
+        // For seating charts, use sections
         availableSections = layout.sections.map((section: any) => ({
           sectionId: section.id,
-          sectionName: section.name,
+          sectionName: section.name || section.label || `Section ${section.id}`,
           available: true,
           capacity: section.totalSeats || section.capacity || 0,
           priceCategory: section.priceCategory || section.category || 'Standard',
           basePrice: section.basePrice || section.price || 0,
           rows: section.rows || []
         }))
-      } else if (layout.levels) {
-        // Use levels from GA layout with their defined properties
-        availableSections = layout.levels.map((level: any) => ({
+      } else if (isGA && layout.gaLevels) {
+        // For GA layouts, use gaLevels (not levels)
+        availableSections = layout.gaLevels.map((level: any) => ({
           sectionId: level.id || level.name,
           sectionName: level.name,
           available: true,
-          capacity: level.totalCapacity || level.capacity || 0,
-          standingCapacity: level.standingCapacity || 0,
-          seatedCapacity: level.seatedCapacity || 0,
+          capacity: level.capacity || 0,
           configurationType: level.type || 'mixed' // standing, seated, or mixed
         }))
       }
       
       updateFormData('venue', { 
         layoutId,
-        layoutType: layoutType,
+        layoutType: layout.type,
         seatingType: isSeatingChart ? 'reserved' : 'general',
         availableSections,
-        totalCapacity: layout.totalCapacity || layout.capacity || 0
+        totalCapacity: layout.totalCapacity || layout.capacity || 
+          availableSections.reduce((sum: number, s: any) => sum + (s.capacity || 0), 0)
       })
     }
   }
@@ -149,7 +151,7 @@ export default function Step2Venue() {
               <option value="">Select a layout</option>
               {layouts.map(layout => (
                 <option key={layout.id} value={layout.id}>
-                  {layout.name} - Capacity: {layout.totalCapacity || layout.capacity}
+                  {layout.name} - Capacity: {layout.totalCapacity || layout.capacity || 'N/A'}
                 </option>
               ))}
             </select>
@@ -162,25 +164,25 @@ export default function Step2Venue() {
       {/* Show layout details if selected */}
       {selectedLayout && (
         <>
-          {/* Layout Type - Automatically determined from layout */}
+          {/* Layout Type Info */}
           <div className="mb-6 p-4 bg-purple-600/20 rounded-lg">
             <p className="text-sm text-gray-300">
               <span className="font-semibold">Seating Type:</span> {
-                selectedLayout.layoutType === 'seating-chart' 
+                selectedLayout.type === 'seating_chart' 
                   ? 'Reserved Seating (Specific seat assignments)' 
                   : 'General Admission (First come, first served)'
               }
             </p>
           </div>
           
-          {/* Section/Level Configuration - From Layout */}
-          {formData.venue.availableSections.length > 0 && (
+          {/* Section/Level Configuration */}
+          {formData.venue.availableSections && formData.venue.availableSections.length > 0 && (
             <div className="mb-6">
               <h4 className="font-semibold mb-3">
-                {selectedLayout.layoutType === 'seating-chart' ? 'Sections' : 'Levels'} Configuration
+                {selectedLayout.type === 'seating_chart' ? 'Sections' : 'Levels'} Configuration
               </h4>
               <p className="text-sm text-gray-400 mb-4">
-                Select which {selectedLayout.layoutType === 'seating-chart' ? 'sections' : 'levels'} to make available for this event
+                Select which {selectedLayout.type === 'seating_chart' ? 'sections' : 'levels'} to make available for this event
               </p>
               
               <div className="space-y-3">
@@ -204,7 +206,7 @@ export default function Step2Venue() {
                         <div>
                           <p className="font-semibold">{section.sectionName}</p>
                           <div className="text-sm text-gray-400 mt-1">
-                            {selectedLayout.layoutType === 'seating-chart' ? (
+                            {selectedLayout.type === 'seating_chart' ? (
                               <>
                                 Capacity: {section.capacity} seats
                                 {section.priceCategory && ` • ${section.priceCategory}`}
@@ -212,15 +214,8 @@ export default function Step2Venue() {
                               </>
                             ) : (
                               <>
-                                {section.configurationType === 'standing' && `Standing: ${section.standingCapacity || section.capacity}`}
-                                {section.configurationType === 'seated' && `Seated: ${section.seatedCapacity || section.capacity}`}
-                                {section.configurationType === 'mixed' && (
-                                  <>
-                                    Total: {section.capacity}
-                                    {section.standingCapacity > 0 && ` (${section.standingCapacity} standing`}
-                                    {section.seatedCapacity > 0 && `, ${section.seatedCapacity} seated)`}
-                                  </>
-                                )}
+                                Capacity: {section.capacity}
+                                {section.configurationType && ` • ${section.configurationType}`}
                               </>
                             )}
                           </div>
@@ -233,7 +228,7 @@ export default function Step2Venue() {
               
               <div className="mt-4 p-3 bg-purple-600/30 rounded-lg text-center">
                 <p className="font-semibold">
-                  Total Available Capacity: {totalAvailableCapacity} {selectedLayout.layoutType === 'seating-chart' ? 'seats' : 'attendees'}
+                  Total Available Capacity: {totalAvailableCapacity} {selectedLayout.type === 'seating_chart' ? 'seats' : 'attendees'}
                 </p>
               </div>
             </div>
@@ -243,52 +238,61 @@ export default function Step2Venue() {
           <div>
             <h4 className="font-semibold mb-3">Layout Preview</h4>
             <div className="bg-gray-900 rounded-lg p-6 min-h-[250px]">
-              {selectedLayout.layoutType === 'seating-chart' ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {formData.venue.availableSections
-                    .filter((s: any) => s.available)
-                    .map((section: any) => (
-                      <div
-                        key={section.sectionId}
-                        className="bg-purple-600/30 border border-purple-500 rounded-lg p-4 text-center"
-                      >
-                        <p className="font-bold text-lg">{section.sectionName}</p>
-                        <p className="text-sm mt-1">{section.capacity} seats</p>
-                        {section.priceCategory && (
-                          <p className="text-xs text-purple-300 mt-2">{section.priceCategory}</p>
-                        )}
-                        {section.rows && section.rows.length > 0 && (
-                          <p className="text-xs text-gray-400 mt-1">{section.rows.length} rows</p>
-                        )}
-                      </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {formData.venue.availableSections
-                    .filter((s: any) => s.available)
-                    .map((section: any, index: number) => (
-                      <div
-                        key={section.sectionId}
-                        className="bg-purple-600/30 border border-purple-500 rounded-lg p-4"
-                      >
-                        <div className="flex justify-between items-center">
-                          <div>
+              {selectedLayout.type === 'seating_chart' ? (
+                <>
+                  {formData.venue.availableSections && formData.venue.availableSections.length > 0 ? (
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      {formData.venue.availableSections
+                        .filter((s: any) => s.available)
+                        .map((section: any) => (
+                          <div
+                            key={section.sectionId}
+                            className="bg-purple-600/30 border border-purple-500 rounded-lg p-4 text-center"
+                          >
                             <p className="font-bold text-lg">{section.sectionName}</p>
-                            <p className="text-sm text-gray-300 mt-1">
-                              {section.configurationType === 'standing' ? '🚶 Standing Room' :
-                               section.configurationType === 'seated' ? '🪑 Seated' :
-                               '🎭 Mixed (Standing & Seated)'}
-                            </p>
+                            <p className="text-sm mt-1">{section.capacity} seats</p>
+                            {section.priceCategory && (
+                              <p className="text-xs text-purple-300 mt-2">{section.priceCategory}</p>
+                            )}
                           </div>
-                          <div className="text-right">
-                            <p className="text-2xl font-bold">{section.capacity}</p>
-                            <p className="text-xs text-gray-400">capacity</p>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-400 text-center">No sections configured</p>
+                  )}
+                </>
+              ) : (
+                <>
+                  {formData.venue.availableSections && formData.venue.availableSections.length > 0 ? (
+                    <div className="space-y-4">
+                      {formData.venue.availableSections
+                        .filter((s: any) => s.available)
+                        .map((level: any, index: number) => (
+                          <div
+                            key={level.sectionId}
+                            className="bg-purple-600/30 border border-purple-500 rounded-lg p-4"
+                          >
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <p className="font-bold text-lg">{level.sectionName}</p>
+                                <p className="text-sm text-gray-300 mt-1">
+                                  {level.configurationType === 'standing' ? '🚶 Standing Room' :
+                                   level.configurationType === 'seated' ? '🪑 Seated' :
+                                   '🎭 Mixed (Standing & Seated)'}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-2xl font-bold">{level.capacity}</p>
+                                <p className="text-xs text-gray-400">capacity</p>
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </div>
-                  ))}
-                </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-400 text-center">No levels configured</p>
+                  )}
+                </>
               )}
             </div>
           </div>
