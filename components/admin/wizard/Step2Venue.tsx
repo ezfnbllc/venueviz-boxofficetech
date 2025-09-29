@@ -82,6 +82,11 @@ export default function Step2Venue() {
   
   const handleLayoutChange = (layoutId: string) => {
     updateFormData('venue', { layoutId })
+    const layout = layouts.find(l => l.id === layoutId)
+    setSelectedLayout(layout)
+    if (layout) {
+      processSections(layout)
+    }
   }
   
   const handleSeatingTypeChange = (type: string) => {

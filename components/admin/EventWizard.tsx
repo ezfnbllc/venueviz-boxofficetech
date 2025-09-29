@@ -93,22 +93,29 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
   const prepareEventData = () => {
     return {
       ...formData.basics,
-      venueId: formData.venue.venueId,
-      venueName: formData.venue.availableSections[0]?.sectionName || '',
-      layoutId: formData.venue.layoutId,
-      seatingType: formData.venue.seatingType,
-      availableSections: formData.venue.availableSections,
-      schedule: formData.schedule,
-      pricing: formData.pricing.tiers,
-      dynamicPricing: formData.pricing.dynamicPricing,
-      fees: formData.pricing.fees,
-      promoterId: formData.promoter.promoterId,
-      promoterConfig: formData.promoter,
-      promotions: formData.promotions,
-      sales: formData.sales,
-      communications: formData.communications,
-      seo: formData.communications.seo,
-      status: userRole === 'promoter' ? 'pending_approval' : formData.basics.status,
+      venueId: formData.venue?.venueId || '',
+      venueName: formData.venue?.availableSections?.[0]?.sectionName || '',
+      layoutId: formData.venue?.layoutId || '',
+      seatingType: formData.venue?.seatingType || 'general',
+      availableSections: formData.venue?.availableSections || [],
+      schedule: formData.schedule || { performances: [], timezone: 'America/Chicago' },
+      pricing: formData.pricing?.tiers || [],
+      dynamicPricing: formData.pricing?.dynamicPricing || {
+        earlyBird: { enabled: false, discount: 10, endDate: '' },
+        lastMinute: { enabled: false, markup: 20, startDate: '' }
+      },
+      fees: formData.pricing?.fees || { 
+        serviceFee: 0, 
+        processingFee: 0, 
+        facilityFee: 0 
+      },
+      promoterId: formData.promoter?.promoterId || '',
+      promoterConfig: formData.promoter || {},
+      promotions: formData.promotions || [],
+      sales: formData.sales || {},
+      communications: formData.communications || {},
+      seo: formData.communications?.seo || {},
+      status: userRole === 'promoter' ? 'pending_approval' : (formData.basics?.status || 'draft'),
       createdBy: auth.currentUser?.uid,
       updatedAt: Timestamp.now()
     }
@@ -120,29 +127,29 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
     
     switch(currentStep) {
       case 1:
-        if (!formData.basics.name) {
+        if (!formData.basics?.name) {
           errors.push('Event name is required')
           isValid = false
         }
-        if (!formData.basics.description) {
+        if (!formData.basics?.description) {
           errors.push('Event description is required')
           isValid = false
         }
         break
       case 2:
-        if (!formData.venue.venueId) {
+        if (!formData.venue?.venueId) {
           errors.push('Venue selection is required')
           isValid = false
         }
         break
       case 3:
-        if (formData.schedule.performances.length === 0) {
+        if (!formData.schedule?.performances || formData.schedule.performances.length === 0) {
           errors.push('At least one performance date is required')
           isValid = false
         }
         break
       case 4:
-        if (formData.pricing.tiers.length === 0) {
+        if (!formData.pricing?.tiers || formData.pricing.tiers.length === 0) {
           errors.push('At least one pricing tier is required')
           isValid = false
         }
