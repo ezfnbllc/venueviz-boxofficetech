@@ -37,7 +37,7 @@ export default function PromotersManagement() {
     logo: '',
     commission: 10,
     active: true,
-    users: [] as string[],
+    users: [] as any[],
     website: '',
     description: ''
   })
@@ -45,7 +45,9 @@ export default function PromotersManagement() {
   const [newUserData, setNewUserData] = useState({
     email: '',
     password: '',
-    name: ''
+    name: '',
+    phone: '',
+    title: ''
   })
 
   useEffect(() => {
@@ -88,8 +90,14 @@ export default function PromotersManagement() {
             })
           }
           
+          // Ensure users is always an array
+          const users = promoter.users || []
+          const userCount = Array.isArray(users) ? users.length : 0
+          
           return {
             ...promoter,
+            users: users,
+            userCount: userCount,
             eventCount: promoterEvents.length,
             totalRevenue,
             totalOrders,
@@ -192,7 +200,10 @@ export default function PromotersManagement() {
   }
 
   const handleAddUser = async () => {
-    if (!selectedPromoter || !newUserData.email || !newUserData.password) return
+    if (!selectedPromoter || !newUserData.email || !newUserData.password) {
+      alert('Please fill in email and password')
+      return
+    }
     
     try {
       // Create user in Firebase Auth
@@ -202,8 +213,17 @@ export default function PromotersManagement() {
         newUserData.password
       )
       
-      // Add user ID to promoter's users array
-      const updatedUsers = [...(selectedPromoter.users || []), userCredential.user.uid]
+      // Create user object
+      const newUser = {
+        id: userCredential.user.uid,
+        email: newUserData.email,
+        name: newUserData.name || newUserData.email.split('@')[0],
+        phone: newUserData.phone || '',
+        title: newUserData.title || 'Promoter Staff'
+      }
+      
+      // Update promoter's users array
+      const updatedUsers = [...(selectedPromoter.users || []), newUser]
       await AdminService.updatePromoter(selectedPromoter.id, {
         users: updatedUsers
       })
@@ -213,18 +233,59 @@ export default function PromotersManagement() {
         uid: userCredential.user.uid,
         email: newUserData.email,
         name: newUserData.name,
+        phone: newUserData.phone,
+        title: newUserData.title,
         role: 'promoter',
         promoterId: selectedPromoter.id,
         createdAt: Timestamp.now()
       })
       
       alert('User created successfully!')
-      setNewUserData({ email: '', password: '', name: '' })
+      setNewUserData({ email: '', password: '', name: '', phone: '', title: '' })
       await loadData()
+      
+      // Update selected promoter with new user
+      setSelectedPromoter({
+        ...selectedPromoter,
+        users: updatedUsers
+      })
       
     } catch (error: any) {
       console.error('Error creating user:', error)
       alert(error.message || 'Error creating user')
+    }
+  }
+
+  const handleRemoveUser = async (userId: string) => {
+    if (!selectedPromoter) return
+    
+    if (confirm('Are you sure you want to remove this user?')) {
+      try {
+        // Filter out the user
+        const updatedUsers = selectedPromoter.users.filter((user: any) => {
+          // Handle both string IDs and user objects
+          const userIdToCheck = typeof user === 'string' ? user : user.id
+          return userIdToCheck !== userId
+        })
+        
+        // Update promoter
+        await AdminService.updatePromoter(selectedPromoter.id, {
+          users: updatedUsers
+        })
+        
+        alert('User removed successfully!')
+        await loadData()
+        
+        // Update selected promoter
+        setSelectedPromoter({
+          ...selectedPromoter,
+          users: updatedUsers
+        })
+        
+      } catch (error) {
+        console.error('Error removing user:', error)
+        alert('Error removing user')
+      }
     }
   }
 
@@ -263,6 +324,20 @@ export default function PromotersManagement() {
 
   const getPromoterPortalUrl = (slug: string) => {
     return `${window.location.origin}/p/${slug}`
+  }
+
+  // Helper function to get user display info
+  const getUserDisplay = (user: any) => {
+    if (typeof user === 'string') {
+      return { id: user, name: 'User ID', email: user, title: '', phone: '' }
+    }
+    return {
+      id: user.id || user.uid || 'unknown',
+      name: user.name || 'Unknown User',
+      email: user.email || 'No email',
+      title: user.title || '',
+      phone: user.phone || ''
+    }
   }
 
   return (
@@ -430,7 +505,7 @@ export default function PromotersManagement() {
                     </div>
                     <div className="bg-white/5 p-2 rounded text-center">
                       <p className="text-xs text-gray-400">Users</p>
-                      <p className="text-lg font-bold">{promoter.users?.length || 0}</p>
+                      <p className="text-lg font-bold">{promoter.userCount || 0}</p>
                     </div>
                   </div>
 
@@ -466,7 +541,7 @@ export default function PromotersManagement() {
                       onClick={() => handleShowUsers(promoter)}
                       className="px-3 py-2 bg-green-600/20 text-green-400 rounded-lg hover:bg-green-600/30 text-sm"
                     >
-                      Users ({promoter.users?.length || 0})
+                      Users ({promoter.userCount || 0})
                     </button>
                     <button
                       onClick={() => handleDelete(promoter.id)}
@@ -481,7 +556,7 @@ export default function PromotersManagement() {
           </div>
         )}
 
-        {/* Form Modal */}
+        {/* Form Modal - Same as before */}
         {showForm && (
           <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
             <div className="bg-gray-900 rounded-xl p-6 w-full max-w-3xl my-8">
@@ -501,7 +576,7 @@ export default function PromotersManagement() {
               </div>
               
               <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Basic Info */}
+                {/* Form fields same as before */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm mb-2">Name *</label>
@@ -556,7 +631,6 @@ export default function PromotersManagement() {
                   </div>
                 </div>
                 
-                {/* Branding */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm mb-2">Branding Type</label>
@@ -583,7 +657,6 @@ export default function PromotersManagement() {
                   </div>
                 </div>
                 
-                {/* Logo Upload */}
                 <div>
                   <label className="block text-sm mb-2">Logo</label>
                   <input
@@ -603,7 +676,6 @@ export default function PromotersManagement() {
                   )}
                 </div>
                 
-                {/* Color Scheme */}
                 <div>
                   <label className="block text-sm mb-2">Color Scheme</label>
                   <div className="grid grid-cols-5 gap-3">
@@ -670,41 +742,6 @@ export default function PromotersManagement() {
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm mb-2">Website</label>
-                    <input
-                      type="url"
-                      value={formData.website}
-                      onChange={(e) => setFormData({...formData, website: e.target.value})}
-                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
-                      placeholder="https://example.com"
-                    />
-                  </div>
-                  
-                  <div className="flex items-end">
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={formData.active}
-                        onChange={(e) => setFormData({...formData, active: e.target.checked})}
-                        className="rounded"
-                      />
-                      <span>Active (Can manage events)</span>
-                    </label>
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm mb-2">Description</label>
-                  <textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData({...formData, description: e.target.value})}
-                    className="w-full px-4 py-2 bg-white/10 rounded-lg h-20"
-                    placeholder="Notes about this promoter..."
-                  />
-                </div>
-                
                 <div className="flex justify-end gap-3 pt-4">
                   <button
                     type="button"
@@ -728,7 +765,7 @@ export default function PromotersManagement() {
           </div>
         )}
 
-        {/* Events Modal */}
+        {/* Events Modal - Same as before */}
         {showEventsModal && selectedPromoter && (
           <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
             <div className="bg-gray-900 rounded-xl p-6 w-full max-w-4xl my-8 max-h-[80vh] overflow-y-auto">
@@ -777,10 +814,10 @@ export default function PromotersManagement() {
           </div>
         )}
 
-        {/* Users Management Modal */}
+        {/* Fixed Users Management Modal */}
         {showUsersModal && selectedPromoter && (
           <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
-            <div className="bg-gray-900 rounded-xl p-6 w-full max-w-2xl my-8">
+            <div className="bg-gray-900 rounded-xl p-6 w-full max-w-3xl my-8 max-h-[80vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold">
                   Manage Users for {selectedPromoter.name}
@@ -789,7 +826,7 @@ export default function PromotersManagement() {
                   onClick={() => {
                     setShowUsersModal(false)
                     setSelectedPromoter(null)
-                    setNewUserData({ email: '', password: '', name: '' })
+                    setNewUserData({ email: '', password: '', name: '', phone: '', title: '' })
                   }}
                   className="text-gray-400 hover:text-white"
                 >
@@ -799,55 +836,114 @@ export default function PromotersManagement() {
               
               <div className="mb-6">
                 <h3 className="text-lg font-semibold mb-3">Current Users</h3>
-                {selectedPromoter.users?.length > 0 ? (
-                  <div className="space-y-2">
-                    {selectedPromoter.users.map((userId: string) => (
-                      <div key={userId} className="bg-black/40 rounded-lg p-3">
-                        <p className="text-sm font-mono">{userId}</p>
-                      </div>
-                    ))}
+                {selectedPromoter.users && selectedPromoter.users.length > 0 ? (
+                  <div className="space-y-3">
+                    {selectedPromoter.users.map((user: any, index: number) => {
+                      const userInfo = getUserDisplay(user)
+                      return (
+                        <div key={userInfo.id || index} className="bg-black/40 rounded-lg p-4 flex justify-between items-center">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-bold">
+                                {userInfo.name.charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <p className="font-semibold">{userInfo.name}</p>
+                                <p className="text-sm text-gray-400">{userInfo.email}</p>
+                                {userInfo.title && (
+                                  <p className="text-xs text-purple-400">{userInfo.title}</p>
+                                )}
+                                {userInfo.phone && (
+                                  <p className="text-xs text-gray-400">📱 {userInfo.phone}</p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleRemoveUser(userInfo.id)}
+                            className="px-3 py-1 bg-red-600/20 text-red-400 rounded-lg hover:bg-red-600/30 text-sm"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      )
+                    })}
                   </div>
                 ) : (
-                  <p className="text-gray-400">No users assigned yet</p>
+                  <p className="text-gray-400 text-center py-4 bg-black/40 rounded-lg">
+                    No users assigned yet
+                  </p>
                 )}
               </div>
               
               <div className="border-t border-white/10 pt-6">
                 <h3 className="text-lg font-semibold mb-3">Add New User</h3>
                 <div className="space-y-3">
-                  <div>
-                    <label className="block text-sm mb-2">Name</label>
-                    <input
-                      type="text"
-                      value={newUserData.name}
-                      onChange={(e) => setNewUserData({...newUserData, name: e.target.value})}
-                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
-                      placeholder="User Name"
-                    />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm mb-2">Name</label>
+                      <input
+                        type="text"
+                        value={newUserData.name}
+                        onChange={(e) => setNewUserData({...newUserData, name: e.target.value})}
+                        className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                        placeholder="John Doe"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm mb-2">Title/Role</label>
+                      <input
+                        type="text"
+                        value={newUserData.title}
+                        onChange={(e) => setNewUserData({...newUserData, title: e.target.value})}
+                        className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                        placeholder="Sales Manager"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm mb-2">Email</label>
-                    <input
-                      type="email"
-                      value={newUserData.email}
-                      onChange={(e) => setNewUserData({...newUserData, email: e.target.value})}
-                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
-                      placeholder="user@example.com"
-                    />
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm mb-2">Email *</label>
+                      <input
+                        type="email"
+                        value={newUserData.email}
+                        onChange={(e) => setNewUserData({...newUserData, email: e.target.value})}
+                        className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                        placeholder="user@example.com"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm mb-2">Phone</label>
+                      <input
+                        type="tel"
+                        value={newUserData.phone}
+                        onChange={(e) => setNewUserData({...newUserData, phone: e.target.value})}
+                        className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                        placeholder="(555) 123-4567"
+                      />
+                    </div>
                   </div>
+                  
                   <div>
-                    <label className="block text-sm mb-2">Password</label>
+                    <label className="block text-sm mb-2">Password *</label>
                     <input
                       type="password"
                       value={newUserData.password}
                       onChange={(e) => setNewUserData({...newUserData, password: e.target.value})}
                       className="w-full px-4 py-2 bg-white/10 rounded-lg"
                       placeholder="••••••••"
+                      required
                     />
+                    <p className="text-xs text-gray-400 mt-1">
+                      User will be able to login with this email and password
+                    </p>
                   </div>
+                  
                   <button
                     onClick={handleAddUser}
-                    className="w-full px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700"
+                    className="w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg hover:from-purple-700 hover:to-pink-700"
                   >
                     Create User
                   </button>
