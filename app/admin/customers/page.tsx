@@ -5,7 +5,6 @@ import {AdminService} from '@/lib/admin/adminService'
 import {auth, db} from '@/lib/firebase'
 import {onAuthStateChanged} from 'firebase/auth'
 import {doc, updateDoc, Timestamp, collection, query, where, getDocs} from 'firebase/firestore'
-import AdminLayout from '@/components/AdminLayout'
 
 export default function CustomersManagement() {
   const router = useRouter()

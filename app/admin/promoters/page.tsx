@@ -6,7 +6,6 @@ import {StorageService} from '@/lib/storage/storageService'
 import {db, auth} from '@/lib/firebase'
 import {collection, getDocs, query, where, Timestamp, doc, updateDoc} from 'firebase/firestore'
 import {createUserWithEmailAndPassword, onAuthStateChanged, sendPasswordResetEmail} from 'firebase/auth'
-import AdminLayout from '@/components/AdminLayout'
 
 export default function PromotersManagement() {
   const router = useRouter()

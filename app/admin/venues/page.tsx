@@ -5,7 +5,6 @@ import {AdminService} from '@/lib/admin/adminService'
 import {StorageService} from '@/lib/storage/storageService'
 import {auth} from '@/lib/firebase'
 import {onAuthStateChanged} from 'firebase/auth'
-import AdminLayout from '@/components/AdminLayout'
 import EnhancedLayoutBuilder from '@/components/EnhancedLayoutBuilder'
 
 export default function VenuesManagement() {

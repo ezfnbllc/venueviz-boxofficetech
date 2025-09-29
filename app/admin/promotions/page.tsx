@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation'
 import { AdminService } from '@/lib/admin/adminService'
 import { auth } from '@/lib/firebase'
 import { onAuthStateChanged } from 'firebase/auth'
-import AdminLayout from '@/components/AdminLayout'
 
 export default function PromotionsManagement() {
   const router = useRouter()
