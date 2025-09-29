@@ -184,7 +184,7 @@ export default function OrdersManagement() {
   })
 
   return (
-    <AdminLayout>
+    <>
       <div className="max-w-7xl mx-auto p-6">
         <div className="mb-8">
           <h1 className="text-3xl font-bold">Orders Management</h1>
@@ -670,6 +670,6 @@ export default function OrdersManagement() {
           </div>
         )}
       </div>
-    </AdminLayout>
+    </>
   )
 }
