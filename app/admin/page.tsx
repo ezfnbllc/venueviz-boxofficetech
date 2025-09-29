@@ -1,13 +1,10 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { onAuthStateChanged } from 'firebase/auth'
-import { auth } from '@/lib/firebase'
 import { AdminService } from '@/lib/admin/adminService'
 import Link from 'next/link'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 
 export default function AdminPage() {
-  const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [events, setEvents] = useState<any[]>([])
   const [venues, setVenues] = useState<any[]>([])
@@ -18,20 +15,11 @@ export default function AdminPage() {
   const [orderStats, setOrderStats] = useState<any>(null)
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        setUser(currentUser)
-        await loadDashboardData()
-      } else {
-        window.location.href = '/admin/login'
-      }
-      setLoading(false)
-    })
-
-    return () => unsubscribe()
+    loadDashboardData()
   }, [])
 
   const loadDashboardData = async () => {
+    setLoading(true)
     try {
       const [eventsData, venuesData, ordersData, customersData, promotionsData, promotersData, statsData] = await Promise.all([
         AdminService.getEvents(),
@@ -53,6 +41,7 @@ export default function AdminPage() {
     } catch (error) {
       console.error('Error loading dashboard data:', error)
     }
+    setLoading(false)
   }
 
   const monthlyRevenueData = [
@@ -88,7 +77,7 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-      {/* Overview Tabs */}
+      {/* Sub-navigation tabs specific to dashboard */}
       <div className="p-8 border-b border-white/10">
         <div className="flex gap-4">
           <button className="px-6 py-2 bg-purple-600 rounded-lg">Overview</button>
