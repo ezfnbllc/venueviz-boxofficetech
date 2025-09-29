@@ -14,6 +14,32 @@ import {
 } from 'firebase/firestore'
 
 export class AdminService {
+  // Helper function to clean undefined values from objects
+  static cleanUndefinedValues(obj: any): any {
+    if (obj === null || obj === undefined) {
+      return null
+    }
+    
+    if (Array.isArray(obj)) {
+      return obj.map(item => this.cleanUndefinedValues(item))
+    }
+    
+    if (typeof obj === 'object') {
+      const cleaned: any = {}
+      for (const key in obj) {
+        if (obj.hasOwnProperty(key)) {
+          const value = obj[key]
+          if (value !== undefined) {
+            cleaned[key] = this.cleanUndefinedValues(value)
+          }
+        }
+      }
+      return cleaned
+    }
+    
+    return obj
+  }
+
   // Venue Methods
   static async getVenues() {
     try {
@@ -49,30 +75,53 @@ export class AdminService {
     await deleteDoc(doc(db, 'venues', id))
   }
 
-  // Helper function to clean undefined values from objects
-  static cleanUndefinedValues(obj: any): any {
-    if (obj === null || obj === undefined) {
-      return null
+  // Event Methods
+  static async getEvents() {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'events'))
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+    } catch (error) {
+      console.error('Error fetching events:', error)
+      return []
     }
-    
-    if (Array.isArray(obj)) {
-      return obj.map(item => this.cleanUndefinedValues(item))
+  }
+
+  static async createEvent(data: any) {
+    const eventData = {
+      ...data,
+      analytics: {
+        views: 0,
+        ticketsSold: 0,
+        revenue: 0,
+        lastUpdated: Timestamp.now()
+      },
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now()
     }
-    
-    if (typeof obj === 'object') {
-      const cleaned: any = {}
-      for (const key in obj) {
-        if (obj.hasOwnProperty(key)) {
-          const value = obj[key]
-          if (value !== undefined) {
-            cleaned[key] = this.cleanUndefinedValues(value)
-          }
-        }
-      }
-      return cleaned
+    const docRef = await addDoc(collection(db, 'events'), eventData)
+    return docRef.id
+  }
+
+  static async updateEvent(id: string, data: any) {
+    await updateDoc(doc(db, 'events', id), {
+      ...data,
+      updatedAt: Timestamp.now()
+    })
+  }
+
+  static async deleteEvent(id: string) {
+    await deleteDoc(doc(db, 'events', id))
+  }
+
+  static async getEvent(id: string) {
+    const docSnap = await getDoc(doc(db, 'events', id))
+    if (docSnap.exists()) {
+      return { id: docSnap.id, ...docSnap.data() }
     }
-    
-    return obj
+    return null
   }
 
   // Layout Methods
@@ -90,7 +139,6 @@ export class AdminService {
     }
   }
 
-  // NEW: Get all layouts
   static async getLayouts() {
     try {
       const querySnapshot = await getDocs(collection(db, 'layouts'))
@@ -105,7 +153,6 @@ export class AdminService {
   }
 
   static async createLayout(data: any): Promise<string> {
-    // Clean sections data
     const cleanedSections = (data.sections || []).map((section: any) => ({
       id: section.id || `section-${Date.now()}-${Math.random()}`,
       name: section.name || 'Unnamed Section',
@@ -136,7 +183,6 @@ export class AdminService {
       rowAlignment: section.rowAlignment || 'center'
     }))
     
-    // Clean price categories
     const cleanedPriceCategories = (data.priceCategories || []).map((cat: any) => ({
       id: cat.id || `cat-${Date.now()}`,
       name: cat.name || 'Unnamed',
@@ -172,15 +218,12 @@ export class AdminService {
       updatedAt: Timestamp.now()
     }
     
-    // Clean the entire object to remove any undefined values
     const finalCleanedData = this.cleanUndefinedValues(layoutData)
-    
     const docRef = await addDoc(collection(db, 'layouts'), finalCleanedData)
     return docRef.id
   }
 
   static async updateLayout(id: string, data: any) {
-    // Apply same cleaning as create
     const cleanedSections = (data.sections || []).map((section: any) => ({
       id: section.id || `section-${Date.now()}-${Math.random()}`,
       name: section.name || 'Unnamed Section',
@@ -245,9 +288,7 @@ export class AdminService {
       updatedAt: Timestamp.now()
     }
     
-    // Clean the entire object
     const finalCleanedData = this.cleanUndefinedValues(updateData)
-    
     await updateDoc(doc(db, 'layouts', id), finalCleanedData)
   }
 
@@ -263,88 +304,17 @@ export class AdminService {
     return null
   }
 
-  // Event Methods
-  static async getEvents() {
-    try {
-      const q = query(collection(db, 'events'), orderBy('schedule.date', 'desc'))
-      const querySnapshot = await getDocs(q)
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }))
-    } catch (error) {
-      console.error('Error fetching events:', error)
-      // If orderBy fails (no index), try without ordering
-      try {
-        const querySnapshot = await getDocs(collection(db, 'events'))
-        return querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }))
-      } catch (fallbackError) {
-        console.error('Fallback error fetching events:', fallbackError)
-        return []
-      }
-    }
-  }
-
-  static async createEvent(data: any) {
-    const eventData = {
-      ...data,
-      analytics: {
-        views: 0,
-        ticketsSold: 0,
-        revenue: 0,
-        lastUpdated: Timestamp.now()
-      },
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now()
-    }
-    const docRef = await addDoc(collection(db, 'events'), eventData)
-    return docRef.id
-  }
-
-  static async updateEvent(id: string, data: any) {
-    await updateDoc(doc(db, 'events', id), {
-      ...data,
-      updatedAt: Timestamp.now()
-    })
-  }
-
-  static async deleteEvent(id: string) {
-    await deleteDoc(doc(db, 'events', id))
-  }
-
-  static async getEvent(id: string) {
-    const docSnap = await getDoc(doc(db, 'events', id))
-    if (docSnap.exists()) {
-      return { id: docSnap.id, ...docSnap.data() }
-    }
-    return null
-  }
-
   // Order Methods
   static async getOrders() {
     try {
-      const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'))
-      const querySnapshot = await getDocs(q)
+      const querySnapshot = await getDocs(collection(db, 'orders'))
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }))
     } catch (error) {
       console.error('Error fetching orders:', error)
-      // If orderBy fails, try without ordering
-      try {
-        const querySnapshot = await getDocs(collection(db, 'orders'))
-        return querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }))
-      } catch (fallbackError) {
-        console.error('Fallback error fetching orders:', fallbackError)
-        return []
-      }
+      return []
     }
   }
 
@@ -362,18 +332,29 @@ export class AdminService {
     }
   }
 
-  // NEW: Get order statistics
   static async getOrderStats() {
     try {
       const orders = await this.getOrders()
       
       const totalRevenue = orders.reduce((sum, order) => {
-        return sum + (order.pricing?.total || 0)
+        const orderRevenue = 
+          order.pricing?.total || 
+          order.totalAmount || 
+          order.total ||
+          (order.tickets || []).reduce((ticketSum: number, ticket: any) => {
+            return ticketSum + (ticket.price || ticket.ticketPrice || 0)
+          }, 0)
+        
+        return sum + (orderRevenue || 0)
       }, 0)
       
       const totalOrders = orders.length
-      const completedOrders = orders.filter(o => o.status === 'confirmed').length
-      const pendingOrders = orders.filter(o => o.status === 'pending').length
+      const completedOrders = orders.filter(o => 
+        o.status === 'confirmed' || o.status === 'completed' || o.paymentStatus === 'paid'
+      ).length
+      const pendingOrders = orders.filter(o => 
+        o.status === 'pending' || o.paymentStatus === 'pending'
+      ).length
       
       return {
         totalRevenue,
@@ -515,6 +496,7 @@ export class AdminService {
   static async createPromotion(data: any) {
     const promotionData = {
       ...data,
+      usedCount: 0,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now()
     }
@@ -531,6 +513,41 @@ export class AdminService {
 
   static async deletePromotion(id: string) {
     await deleteDoc(doc(db, 'promotions', id))
+  }
+
+  // Promoters Methods
+  static async getPromoters() {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'promoters'))
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+    } catch (error) {
+      console.error('Error fetching promoters:', error)
+      return []
+    }
+  }
+
+  static async createPromoter(data: any) {
+    const promoterData = {
+      ...data,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now()
+    }
+    const docRef = await addDoc(collection(db, 'promoters'), promoterData)
+    return docRef.id
+  }
+
+  static async updatePromoter(id: string, data: any) {
+    await updateDoc(doc(db, 'promoters', id), {
+      ...data,
+      updatedAt: Timestamp.now()
+    })
+  }
+
+  static async deletePromoter(id: string) {
+    await deleteDoc(doc(db, 'promoters', id))
   }
 
   // Report Methods
@@ -557,7 +574,6 @@ export class AdminService {
       if (docSnap.exists()) {
         return docSnap.data()
       }
-      // Return default settings if none exist
       return {
         system: {
           maintenanceMode: false,
@@ -584,39 +600,4 @@ export class AdminService {
       updatedAt: Timestamp.now()
     })
   }
-}
-
-// Add these methods if they don't exist
-static async getPromoters() {
-  try {
-    const querySnapshot = await getDocs(collection(db, 'promoters'))
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }))
-  } catch (error) {
-    console.error('Error fetching promoters:', error)
-    return []
-  }
-}
-
-static async createPromoter(data: any) {
-  const promoterData = {
-    ...data,
-    createdAt: Timestamp.now(),
-    updatedAt: Timestamp.now()
-  }
-  const docRef = await addDoc(collection(db, 'promoters'), promoterData)
-  return docRef.id
-}
-
-static async updatePromoter(id: string, data: any) {
-  await updateDoc(doc(db, 'promoters', id), {
-    ...data,
-    updatedAt: Timestamp.now()
-  })
-}
-
-static async deletePromoter(id: string) {
-  await deleteDoc(doc(db, 'promoters', id))
 }
