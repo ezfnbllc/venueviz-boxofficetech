@@ -144,12 +144,19 @@ export class AdminService {
   static async getOrders() {
     try {
       const ordersRef = collection(db, 'orders')
-      const q = query(ordersRef, orderBy('createdAt', 'desc'))
-      const snapshot = await getDocs(q)
-      return snapshot.docs.map(doc => ({
+      // Try without orderBy first, in case there's an index issue
+      const snapshot = await getDocs(ordersRef)
+      const orders = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }))
+      
+      // Sort in JavaScript if database sorting fails
+      return orders.sort((a, b) => {
+        const dateA = a.createdAt?.toDate?.() || a.purchaseDate?.toDate?.() || new Date(0)
+        const dateB = b.createdAt?.toDate?.() || b.purchaseDate?.toDate?.() || new Date(0)
+        return dateB.getTime() - dateA.getTime()
+      })
     } catch (error) {
       console.error('Error fetching orders:', error)
       return []
@@ -628,6 +635,22 @@ export class AdminService {
       }))
     } catch (error) {
       console.error('Error fetching layouts:', error)
+      return []
+    }
+  }
+
+  // Add the missing method that venues page is calling
+  static async getLayoutsByVenueId(venueId: string) {
+    try {
+      const layoutsRef = collection(db, 'layouts')
+      const q = query(layoutsRef, where('venueId', '==', venueId))
+      const snapshot = await getDocs(q)
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+    } catch (error) {
+      console.error('Error fetching layouts for venue:', error)
       return []
     }
   }
