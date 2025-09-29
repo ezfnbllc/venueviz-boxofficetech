@@ -13,7 +13,6 @@ export default function OrdersManagement() {
   const [user, setUser] = useState<any>(null)
 
   useEffect(() => {
-    // Wait for auth before fetching
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
         console.log('Orders page - User authenticated:', firebaseUser.email)
@@ -36,12 +35,27 @@ export default function OrdersManagement() {
         AdminService.getOrderStats()
       ])
       console.log('Orders loaded:', ordersData.length)
+      console.log('Order stats:', orderStats)
       setOrders(ordersData)
       setStats(orderStats)
     } catch (error) {
       console.error('Error loading orders:', error)
     }
     setLoading(false)
+  }
+
+  // Safe function to get order total
+  const getOrderTotal = (order: any) => {
+    return order?.pricing?.total || 
+           order?.totalAmount || 
+           order?.total || 
+           0
+  }
+
+  // Safe function to format currency
+  const formatCurrency = (amount: any) => {
+    const value = parseFloat(amount) || 0
+    return value.toFixed(2)
   }
 
   return (
@@ -61,20 +75,20 @@ export default function OrdersManagement() {
         {stats && (
           <div className="grid md:grid-cols-4 gap-6 mb-8">
             <div className="p-6 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10">
-              <p className="text-2xl font-bold">${stats.totalRevenue.toLocaleString()}</p>
-              <p className="text-gray-400">Total Revenue</p>
+              <p className="text-gray-400 text-sm mb-1">Total Orders</p>
+              <p className="text-3xl font-bold">{stats.totalOrders || 0}</p>
             </div>
             <div className="p-6 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10">
-              <p className="text-2xl font-bold">{stats.totalOrders}</p>
-              <p className="text-gray-400">Total Orders</p>
+              <p className="text-gray-400 text-sm mb-1">Total Revenue</p>
+              <p className="text-3xl font-bold">${formatCurrency(stats.totalRevenue)}</p>
             </div>
             <div className="p-6 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10">
-              <p className="text-2xl font-bold">{stats.totalTickets}</p>
-              <p className="text-gray-400">Tickets Sold</p>
+              <p className="text-gray-400 text-sm mb-1">Avg Order Value</p>
+              <p className="text-3xl font-bold">${formatCurrency(stats.averageOrderValue)}</p>
             </div>
             <div className="p-6 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10">
-              <p className="text-2xl font-bold">${stats.avgOrderValue.toFixed(2)}</p>
-              <p className="text-gray-400">Avg Order Value</p>
+              <p className="text-gray-400 text-sm mb-1">Completed</p>
+              <p className="text-3xl font-bold">{stats.completedOrders || 0}</p>
             </div>
           </div>
         )}
@@ -83,50 +97,59 @@ export default function OrdersManagement() {
           <div className="flex justify-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-purple-500"/>
           </div>
+        ) : orders.length === 0 ? (
+          <div className="text-center py-12 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10">
+            <p className="text-gray-400">No orders yet</p>
+          </div>
         ) : (
-          <div className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-6">
-            {orders.length === 0 ? (
-              <p className="text-center py-8 text-gray-400">
-                No orders found. Orders will appear here once customers make purchases.
-              </p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="border-b border-white/10">
-                    <tr>
-                      <th className="text-left py-2">Order ID</th>
-                      <th className="text-left py-2">Customer</th>
-                      <th className="text-left py-2">Email</th>
-                      <th className="text-left py-2">Event</th>
-                      <th className="text-left py-2">Seats</th>
-                      <th className="text-left py-2">Total</th>
-                      <th className="text-left py-2">Status</th>
-                      <th className="text-left py-2">Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {orders.map(order => (
-                      <tr key={order.id} className="border-b border-white/5">
-                        <td className="py-2">{order.orderId || order.id.slice(0,8)}</td>
-                        <td className="py-2">{order.customerName}</td>
-                        <td className="py-2">{order.customerEmail}</td>
-                        <td className="py-2">{order.eventName}</td>
-                        <td className="py-2">{order.seats?.length || 0}</td>
-                        <td className="py-2">${order.total?.toFixed(2)}</td>
-                        <td className="py-2">
-                          <span className="px-2 py-1 bg-green-600/20 text-green-400 rounded text-xs">
-                            {order.status}
-                          </span>
-                        </td>
-                        <td className="py-2">
-                          {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'N/A'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+          <div className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden">
+            <table className="w-full">
+              <thead className="border-b border-white/10">
+                <tr>
+                  <th className="text-left p-4">Order ID</th>
+                  <th className="text-left p-4">Customer</th>
+                  <th className="text-left p-4">Event</th>
+                  <th className="text-left p-4">Date</th>
+                  <th className="text-left p-4">Amount</th>
+                  <th className="text-left p-4">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orders.map(order => (
+                  <tr key={order.id} className="border-b border-white/5 hover:bg-white/5">
+                    <td className="p-4 font-mono text-sm">
+                      {order.orderNumber || order.orderId || order.id.slice(0, 8)}
+                    </td>
+                    <td className="p-4">
+                      <div>
+                        <div className="font-semibold">{order.customerName || 'N/A'}</div>
+                        <div className="text-sm text-gray-400">{order.customerEmail || ''}</div>
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      <div className="text-sm">{order.eventName || 'N/A'}</div>
+                    </td>
+                    <td className="p-4 text-sm">
+                      {order.createdAt ? new Date(order.createdAt.toDate()).toLocaleDateString() : 
+                       order.purchaseDate ? new Date(order.purchaseDate.toDate()).toLocaleDateString() : 
+                       'N/A'}
+                    </td>
+                    <td className="p-4 font-semibold">${formatCurrency(getOrderTotal(order))}</td>
+                    <td className="p-4">
+                      <span className={`px-3 py-1 rounded-full text-xs ${
+                        order.status === 'confirmed' || order.status === 'completed' 
+                          ? 'bg-green-600/20 text-green-400'
+                          : order.status === 'cancelled' || order.status === 'refunded'
+                          ? 'bg-red-600/20 text-red-400'
+                          : 'bg-yellow-600/20 text-yellow-400'
+                      }`}>
+                        {order.status || order.paymentStatus || 'pending'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

@@ -585,3 +585,38 @@ export class AdminService {
     })
   }
 }
+
+// Add these methods if they don't exist
+static async getPromoters() {
+  try {
+    const querySnapshot = await getDocs(collection(db, 'promoters'))
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }))
+  } catch (error) {
+    console.error('Error fetching promoters:', error)
+    return []
+  }
+}
+
+static async createPromoter(data: any) {
+  const promoterData = {
+    ...data,
+    createdAt: Timestamp.now(),
+    updatedAt: Timestamp.now()
+  }
+  const docRef = await addDoc(collection(db, 'promoters'), promoterData)
+  return docRef.id
+}
+
+static async updatePromoter(id: string, data: any) {
+  await updateDoc(doc(db, 'promoters', id), {
+    ...data,
+    updatedAt: Timestamp.now()
+  })
+}
+
+static async deletePromoter(id: string) {
+  await deleteDoc(doc(db, 'promoters', id))
+}
