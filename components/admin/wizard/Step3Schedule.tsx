@@ -22,7 +22,7 @@ export default function Step3Schedule() {
   }
   
   const updatePerformance = (index: number, field: string, value: any) => {
-    const performances = [...((formData.schedule?.performances || [])]
+    const performances = [...(formData.schedule?.performances || [])]
     performances[index] = { ...performances[index], [field]: value }
     updateFormData('schedule', { performances })
   }
