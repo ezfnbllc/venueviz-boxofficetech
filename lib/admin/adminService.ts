@@ -1,85 +1,26 @@
-import { db } from '@/lib/firebase'
-import { 
-  collection, 
-  doc, 
-  getDocs, 
-  getDoc, 
-  addDoc, 
-  updateDoc, 
+import {db} from '@/lib/firebase'
+import {
+  collection,
+  doc,
+  getDocs,
+  getDoc,
+  addDoc,
+  updateDoc,
   deleteDoc,
-  query, 
+  query,
   where,
   orderBy,
-  Timestamp
+  Timestamp,
+  setDoc
 } from 'firebase/firestore'
 
 export class AdminService {
-  // Helper function to clean undefined values from objects
-  static cleanUndefinedValues(obj: any): any {
-    if (obj === null || obj === undefined) {
-      return null
-    }
-    
-    if (Array.isArray(obj)) {
-      return obj.map(item => this.cleanUndefinedValues(item))
-    }
-    
-    if (typeof obj === 'object') {
-      const cleaned: any = {}
-      for (const key in obj) {
-        if (obj.hasOwnProperty(key)) {
-          const value = obj[key]
-          if (value !== undefined) {
-            cleaned[key] = this.cleanUndefinedValues(value)
-          }
-        }
-      }
-      return cleaned
-    }
-    
-    return obj
-  }
-
-  // Venue Methods
-  static async getVenues() {
-    try {
-      const querySnapshot = await getDocs(collection(db, 'venues'))
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }))
-    } catch (error) {
-      console.error('Error fetching venues:', error)
-      return []
-    }
-  }
-
-  static async createVenue(data: any) {
-    const venueData = {
-      ...data,
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now()
-    }
-    const docRef = await addDoc(collection(db, 'venues'), venueData)
-    return docRef.id
-  }
-
-  static async updateVenue(id: string, data: any) {
-    await updateDoc(doc(db, 'venues', id), {
-      ...data,
-      updatedAt: Timestamp.now()
-    })
-  }
-
-  static async deleteVenue(id: string) {
-    await deleteDoc(doc(db, 'venues', id))
-  }
-
-  // Event Methods
+  // ============ EVENTS ============
   static async getEvents() {
     try {
-      const querySnapshot = await getDocs(collection(db, 'events'))
-      return querySnapshot.docs.map(doc => ({
+      const eventsRef = collection(db, 'events')
+      const snapshot = await getDocs(eventsRef)
+      return snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }))
@@ -89,226 +30,123 @@ export class AdminService {
     }
   }
 
-  static async createEvent(data: any) {
-    const eventData = {
-      ...data,
-      analytics: {
-        views: 0,
-        ticketsSold: 0,
-        revenue: 0,
-        lastUpdated: Timestamp.now()
-      },
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now()
-    }
-    const docRef = await addDoc(collection(db, 'events'), eventData)
-    return docRef.id
-  }
-
-  static async updateEvent(id: string, data: any) {
-    await updateDoc(doc(db, 'events', id), {
-      ...data,
-      updatedAt: Timestamp.now()
-    })
-  }
-
-  static async deleteEvent(id: string) {
-    await deleteDoc(doc(db, 'events', id))
-  }
-
-  static async getEvent(id: string) {
-    const docSnap = await getDoc(doc(db, 'events', id))
-    if (docSnap.exists()) {
-      return { id: docSnap.id, ...docSnap.data() }
-    }
-    return null
-  }
-
-  // Layout Methods
-  static async getLayoutsByVenueId(venueId: string) {
+  static async createEvent(eventData: any) {
     try {
-      const q = query(collection(db, 'layouts'), where('venueId', '==', venueId))
-      const querySnapshot = await getDocs(q)
-      return querySnapshot.docs.map(doc => ({
+      const eventsRef = collection(db, 'events')
+      const docRef = await addDoc(eventsRef, {
+        ...eventData,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      })
+      return docRef.id
+    } catch (error) {
+      console.error('Error creating event:', error)
+      throw error
+    }
+  }
+
+  static async updateEvent(eventId: string, eventData: any) {
+    try {
+      const eventRef = doc(db, 'events', eventId)
+      await updateDoc(eventRef, {
+        ...eventData,
+        updatedAt: Timestamp.now()
+      })
+      return true
+    } catch (error) {
+      console.error('Error updating event:', error)
+      throw error
+    }
+  }
+
+  static async deleteEvent(eventId: string) {
+    try {
+      const eventRef = doc(db, 'events', eventId)
+      await deleteDoc(eventRef)
+      return true
+    } catch (error) {
+      console.error('Error deleting event:', error)
+      throw error
+    }
+  }
+
+  // ============ VENUES ============
+  static async getVenues() {
+    try {
+      const venuesRef = collection(db, 'venues')
+      const snapshot = await getDocs(venuesRef)
+      return snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }))
     } catch (error) {
-      console.error('Error fetching layouts by venue:', error)
+      console.error('Error fetching venues:', error)
       return []
     }
   }
 
-  static async getLayouts() {
+  static async getVenue(venueId: string) {
     try {
-      const querySnapshot = await getDocs(collection(db, 'layouts'))
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }))
+      const venueRef = doc(db, 'venues', venueId)
+      const venueDoc = await getDoc(venueRef)
+      if (venueDoc.exists()) {
+        return { id: venueDoc.id, ...venueDoc.data() }
+      }
+      return null
     } catch (error) {
-      console.error('Error fetching layouts:', error)
-      return []
+      console.error('Error fetching venue:', error)
+      return null
     }
   }
 
-  static async createLayout(data: any): Promise<string> {
-    const cleanedSections = (data.sections || []).map((section: any) => ({
-      id: section.id || `section-${Date.now()}-${Math.random()}`,
-      name: section.name || 'Unnamed Section',
-      x: section.x || 0,
-      y: section.y || 0,
-      rows: section.rows || 0,
-      seatsPerRow: section.seatsPerRow || 0,
-      seats: (section.seats || []).map((seat: any) => ({
-        id: seat.id || `seat-${Date.now()}-${Math.random()}`,
-        row: seat.row || 'A',
-        number: seat.number || 1,
-        x: seat.x || 0,
-        y: seat.y || 0,
-        status: seat.status || 'available',
-        price: seat.price || 0,
-        category: seat.category || 'standard',
-        isAccessible: seat.isAccessible || false,
-        angle: seat.angle || 0
-      })),
-      pricing: section.pricing || 'standard',
-      rotation: section.rotation || 0,
-      rowPricing: section.rowPricing || {},
-      seatsByRow: section.seatsByRow || {},
-      curveRadius: section.curveRadius || 0,
-      curveAngle: section.curveAngle || 0,
-      curveRotation: section.curveRotation || 0,
-      sectionType: section.sectionType || 'standard',
-      rowAlignment: section.rowAlignment || 'center'
-    }))
-    
-    const cleanedPriceCategories = (data.priceCategories || []).map((cat: any) => ({
-      id: cat.id || `cat-${Date.now()}`,
-      name: cat.name || 'Unnamed',
-      color: cat.color || '#000000',
-      price: cat.price || 0
-    }))
-    
-    const layoutData = {
-      venueId: data.venueId || '',
-      name: data.name || 'Unnamed Layout',
-      type: data.type || 'seating_chart',
-      sections: cleanedSections,
-      gaLevels: data.gaLevels || [],
-      totalCapacity: data.totalCapacity || 0,
-      configuration: data.configuration || { version: '2.0', format: 'svg' },
-      stage: {
-        x: data.stage?.x || 400,
-        y: data.stage?.y || 50,
-        width: data.stage?.width || 400,
-        height: data.stage?.height || 60,
-        label: data.stage?.label || 'STAGE',
-        type: 'stage'
-      },
-      aisles: data.aisles || [],
-      viewBox: {
-        x: data.viewBox?.x || 0,
-        y: data.viewBox?.y || 0,
-        width: data.viewBox?.width || 1200,
-        height: data.viewBox?.height || 800
-      },
-      priceCategories: cleanedPriceCategories,
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now()
+  static async createVenue(venueData: any) {
+    try {
+      const venuesRef = collection(db, 'venues')
+      const docRef = await addDoc(venuesRef, {
+        ...venueData,
+        active: true,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      })
+      return docRef.id
+    } catch (error) {
+      console.error('Error creating venue:', error)
+      throw error
     }
-    
-    const finalCleanedData = this.cleanUndefinedValues(layoutData)
-    const docRef = await addDoc(collection(db, 'layouts'), finalCleanedData)
-    return docRef.id
   }
 
-  static async updateLayout(id: string, data: any) {
-    const cleanedSections = (data.sections || []).map((section: any) => ({
-      id: section.id || `section-${Date.now()}-${Math.random()}`,
-      name: section.name || 'Unnamed Section',
-      x: section.x || 0,
-      y: section.y || 0,
-      rows: section.rows || 0,
-      seatsPerRow: section.seatsPerRow || 0,
-      seats: (section.seats || []).map((seat: any) => ({
-        id: seat.id || `seat-${Date.now()}-${Math.random()}`,
-        row: seat.row || 'A',
-        number: seat.number || 1,
-        x: seat.x || 0,
-        y: seat.y || 0,
-        status: seat.status || 'available',
-        price: seat.price || 0,
-        category: seat.category || 'standard',
-        isAccessible: seat.isAccessible === true,
-        angle: seat.angle || 0
-      })),
-      pricing: section.pricing || 'standard',
-      rotation: section.rotation || 0,
-      rowPricing: section.rowPricing || {},
-      seatsByRow: section.seatsByRow || {},
-      curveRadius: section.curveRadius || 0,
-      curveAngle: section.curveAngle || 0,
-      curveRotation: section.curveRotation || 0,
-      sectionType: section.sectionType || 'standard',
-      rowAlignment: section.rowAlignment || 'center'
-    }))
-    
-    const cleanedPriceCategories = (data.priceCategories || []).map((cat: any) => ({
-      id: cat.id || `cat-${Date.now()}`,
-      name: cat.name || 'Unnamed',
-      color: cat.color || '#000000',
-      price: cat.price || 0
-    }))
-    
-    const updateData = {
-      venueId: data.venueId || '',
-      name: data.name || 'Unnamed Layout',
-      type: data.type || 'seating_chart',
-      sections: cleanedSections,
-      gaLevels: data.gaLevels || [],
-      totalCapacity: data.totalCapacity || 0,
-      configuration: data.configuration || { version: '2.0', format: 'svg' },
-      stage: {
-        x: data.stage?.x || 400,
-        y: data.stage?.y || 50,
-        width: data.stage?.width || 400,
-        height: data.stage?.height || 60,
-        label: data.stage?.label || 'STAGE',
-        type: 'stage'
-      },
-      aisles: data.aisles || [],
-      viewBox: {
-        x: data.viewBox?.x || 0,
-        y: data.viewBox?.y || 0,
-        width: data.viewBox?.width || 1200,
-        height: data.viewBox?.height || 800
-      },
-      priceCategories: cleanedPriceCategories,
-      updatedAt: Timestamp.now()
+  static async updateVenue(venueId: string, venueData: any) {
+    try {
+      const venueRef = doc(db, 'venues', venueId)
+      await updateDoc(venueRef, {
+        ...venueData,
+        updatedAt: Timestamp.now()
+      })
+      return true
+    } catch (error) {
+      console.error('Error updating venue:', error)
+      throw error
     }
-    
-    const finalCleanedData = this.cleanUndefinedValues(updateData)
-    await updateDoc(doc(db, 'layouts', id), finalCleanedData)
   }
 
-  static async deleteLayout(id: string) {
-    await deleteDoc(doc(db, 'layouts', id))
-  }
-
-  static async getLayout(id: string) {
-    const docSnap = await getDoc(doc(db, 'layouts', id))
-    if (docSnap.exists()) {
-      return { id: docSnap.id, ...docSnap.data() }
+  static async deleteVenue(venueId: string) {
+    try {
+      const venueRef = doc(db, 'venues', venueId)
+      await deleteDoc(venueRef)
+      return true
+    } catch (error) {
+      console.error('Error deleting venue:', error)
+      throw error
     }
-    return null
   }
 
-  // Order Methods
+  // ============ ORDERS ============
   static async getOrders() {
     try {
-      const querySnapshot = await getDocs(collection(db, 'orders'))
-      return querySnapshot.docs.map(doc => ({
+      const ordersRef = collection(db, 'orders')
+      const q = query(ordersRef, orderBy('createdAt', 'desc'))
+      const snapshot = await getDocs(q)
+      return snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }))
@@ -318,17 +156,50 @@ export class AdminService {
     }
   }
 
-  static async getOrdersByEventId(eventId: string) {
+  static async getOrder(orderId: string) {
     try {
-      const q = query(collection(db, 'orders'), where('eventId', '==', eventId))
-      const querySnapshot = await getDocs(q)
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }))
+      const orderRef = doc(db, 'orders', orderId)
+      const orderDoc = await getDoc(orderRef)
+      if (orderDoc.exists()) {
+        return { id: orderDoc.id, ...orderDoc.data() }
+      }
+      return null
     } catch (error) {
-      console.error('Error fetching orders by event:', error)
-      return []
+      console.error('Error fetching order:', error)
+      return null
+    }
+  }
+
+  static async updateOrder(orderId: string, orderData: any) {
+    try {
+      const orderRef = doc(db, 'orders', orderId)
+      await updateDoc(orderRef, {
+        ...orderData,
+        updatedAt: Timestamp.now()
+      })
+      return true
+    } catch (error) {
+      console.error('Error updating order:', error)
+      throw error
+    }
+  }
+
+  static async refundOrder(orderId: string, refundData: any) {
+    try {
+      const orderRef = doc(db, 'orders', orderId)
+      await updateDoc(orderRef, {
+        status: 'refunded',
+        paymentStatus: 'refunded',
+        refundInfo: {
+          ...refundData,
+          refundedAt: Timestamp.now()
+        },
+        updatedAt: Timestamp.now()
+      })
+      return true
+    } catch (error) {
+      console.error('Error refunding order:', error)
+      throw error
     }
   }
 
@@ -336,110 +207,50 @@ export class AdminService {
     try {
       const orders = await this.getOrders()
       
-      const totalRevenue = orders.reduce((sum, order) => {
-        const orderRevenue = 
-          order.pricing?.total || 
-          order.totalAmount || 
-          order.total ||
-          (order.tickets || []).reduce((ticketSum: number, ticket: any) => {
-            return ticketSum + (ticket.price || ticket.ticketPrice || 0)
-          }, 0)
-        
-        return sum + (orderRevenue || 0)
-      }, 0)
-      
-      const totalOrders = orders.length
-      const completedOrders = orders.filter(o => 
-        o.status === 'confirmed' || o.status === 'completed' || o.paymentStatus === 'paid'
-      ).length
-      const pendingOrders = orders.filter(o => 
-        o.status === 'pending' || o.paymentStatus === 'pending'
-      ).length
-      
-      return {
-        totalRevenue,
-        totalOrders,
-        completedOrders,
-        pendingOrders,
-        averageOrderValue: totalOrders > 0 ? totalRevenue / totalOrders : 0
+      const stats = {
+        totalOrders: orders.length,
+        totalRevenue: 0,
+        averageOrderValue: 0,
+        completedOrders: 0,
+        pendingOrders: 0,
+        refundedOrders: 0
       }
+
+      orders.forEach(order => {
+        const amount = order.pricing?.total || order.totalAmount || order.total || 0
+        stats.totalRevenue += amount
+        
+        if (order.status === 'completed' || order.status === 'confirmed') {
+          stats.completedOrders++
+        } else if (order.status === 'pending') {
+          stats.pendingOrders++
+        } else if (order.status === 'refunded') {
+          stats.refundedOrders++
+        }
+      })
+
+      stats.averageOrderValue = stats.totalOrders > 0 ? stats.totalRevenue / stats.totalOrders : 0
+
+      return stats
     } catch (error) {
       console.error('Error calculating order stats:', error)
       return {
-        totalRevenue: 0,
         totalOrders: 0,
+        totalRevenue: 0,
+        averageOrderValue: 0,
         completedOrders: 0,
         pendingOrders: 0,
-        averageOrderValue: 0
+        refundedOrders: 0
       }
     }
   }
 
-  static async createOrder(data: any) {
-    const orderData = {
-      ...data,
-      orderNumber: `ORD-${Date.now()}`,
-      status: 'pending',
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now()
-    }
-    const docRef = await addDoc(collection(db, 'orders'), orderData)
-    return docRef.id
-  }
-
-  static async updateOrder(id: string, data: any) {
-    await updateDoc(doc(db, 'orders', id), {
-      ...data,
-      updatedAt: Timestamp.now()
-    })
-  }
-
-  // Ticket Methods
-  static async getTicketsByEventId(eventId: string) {
-    try {
-      const q = query(collection(db, 'tickets'), where('eventId', '==', eventId))
-      const querySnapshot = await getDocs(q)
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }))
-    } catch (error) {
-      console.error('Error fetching tickets:', error)
-      return []
-    }
-  }
-
-  static async createTicket(data: any) {
-    const ticketData = {
-      ...data,
-      qrCode: `QR-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      barcode: `BAR-${Date.now()}`,
-      status: 'reserved',
-      validation: {
-        isUsed: false,
-        usedAt: null,
-        scannedBy: null,
-        entryGate: null
-      },
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now()
-    }
-    const docRef = await addDoc(collection(db, 'tickets'), ticketData)
-    return docRef.id
-  }
-
-  static async updateTicket(id: string, data: any) {
-    await updateDoc(doc(db, 'tickets', id), {
-      ...data,
-      updatedAt: Timestamp.now()
-    })
-  }
-
-  // Customer Methods
+  // ============ CUSTOMERS ============
   static async getCustomers() {
     try {
-      const querySnapshot = await getDocs(collection(db, 'customers'))
-      return querySnapshot.docs.map(doc => ({
+      const customersRef = collection(db, 'customers')
+      const snapshot = await getDocs(customersRef)
+      return snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }))
@@ -449,77 +260,131 @@ export class AdminService {
     }
   }
 
-  static async createCustomer(data: any) {
-    const customerData = {
-      ...data,
-      loyalty: {
-        points: 0,
-        tier: 'bronze',
-        memberSince: Timestamp.now(),
-        lifetimeValue: 0
-      },
-      analytics: {
+  static async getCustomer(customerId: string) {
+    try {
+      const customerRef = doc(db, 'customers', customerId)
+      const customerDoc = await getDoc(customerRef)
+      if (customerDoc.exists()) {
+        return { id: customerDoc.id, ...customerDoc.data() }
+      }
+      return null
+    } catch (error) {
+      console.error('Error fetching customer:', error)
+      return null
+    }
+  }
+
+  static async createCustomer(customerData: any) {
+    try {
+      const customersRef = collection(db, 'customers')
+      
+      // Check if customer already exists
+      const q = query(customersRef, where('email', '==', customerData.email))
+      const existing = await getDocs(q)
+      
+      if (!existing.empty) {
+        // Update existing customer
+        const existingId = existing.docs[0].id
+        await this.updateCustomer(existingId, customerData)
+        return existingId
+      }
+      
+      // Create new customer
+      const docRef = await addDoc(customersRef, {
+        ...customerData,
         totalOrders: 0,
         totalSpent: 0,
-        averageOrderValue: 0,
-        lastOrderDate: null,
-        favoriteCategory: null
-      },
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now()
-    }
-    const docRef = await addDoc(collection(db, 'customers'), customerData)
-    return docRef.id
-  }
-
-  static async updateCustomer(id: string, data: any) {
-    await updateDoc(doc(db, 'customers', id), {
-      ...data,
-      updatedAt: Timestamp.now()
-    })
-  }
-
-  // Promotions Methods
-  static async getPromotions() {
-    try {
-      const querySnapshot = await getDocs(collection(db, 'promotions'))
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }))
+        loyaltyPoints: 0,
+        membershipTier: 'bronze',
+        preferences: {
+          notifications: true,
+          newsletter: true,
+          smsAlerts: false
+        },
+        tags: [],
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      })
+      return docRef.id
     } catch (error) {
-      console.error('Error fetching promotions:', error)
-      return []
+      console.error('Error creating customer:', error)
+      throw error
     }
   }
 
-  static async createPromotion(data: any) {
-    const promotionData = {
-      ...data,
-      usedCount: 0,
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now()
+  static async updateCustomer(customerId: string, customerData: any) {
+    try {
+      const customerRef = doc(db, 'customers', customerId)
+      await updateDoc(customerRef, {
+        ...customerData,
+        updatedAt: Timestamp.now()
+      })
+      return true
+    } catch (error) {
+      console.error('Error updating customer:', error)
+      throw error
     }
-    const docRef = await addDoc(collection(db, 'promotions'), promotionData)
-    return docRef.id
   }
 
-  static async updatePromotion(id: string, data: any) {
-    await updateDoc(doc(db, 'promotions', id), {
-      ...data,
-      updatedAt: Timestamp.now()
-    })
+  static async updateCustomerStats(email: string) {
+    try {
+      // Get all orders for this customer
+      const ordersRef = collection(db, 'orders')
+      const q = query(ordersRef, where('customerEmail', '==', email))
+      const ordersSnapshot = await getDocs(q)
+      
+      let totalOrders = 0
+      let totalSpent = 0
+      let lastOrderDate = null
+      
+      ordersSnapshot.docs.forEach(doc => {
+        const order = doc.data()
+        if (order.status !== 'cancelled' && order.status !== 'refunded') {
+          totalOrders++
+          totalSpent += order.pricing?.total || order.totalAmount || order.total || 0
+          
+          const orderDate = order.purchaseDate || order.createdAt
+          if (!lastOrderDate || orderDate > lastOrderDate) {
+            lastOrderDate = orderDate
+          }
+        }
+      })
+      
+      // Calculate membership tier
+      let membershipTier = 'bronze'
+      if (totalSpent >= 10000) membershipTier = 'platinum'
+      else if (totalSpent >= 5000) membershipTier = 'gold'
+      else if (totalSpent >= 1000) membershipTier = 'silver'
+      
+      // Update customer record
+      const customersRef = collection(db, 'customers')
+      const customerQuery = query(customersRef, where('email', '==', email))
+      const customerSnapshot = await getDocs(customerQuery)
+      
+      if (!customerSnapshot.empty) {
+        const customerId = customerSnapshot.docs[0].id
+        await updateDoc(doc(db, 'customers', customerId), {
+          totalOrders,
+          totalSpent,
+          lastOrderDate,
+          membershipTier,
+          updatedAt: Timestamp.now()
+        })
+      }
+      
+      return true
+    } catch (error) {
+      console.error('Error updating customer stats:', error)
+      return false
+    }
   }
 
-  static async deletePromotion(id: string) {
-    await deleteDoc(doc(db, 'promotions', id))
-  }
-
-  // Promoters Methods
+  // ============ PROMOTERS ============
   static async getPromoters() {
     try {
-      const querySnapshot = await getDocs(collection(db, 'promoters'))
-      return querySnapshot.docs.map(doc => ({
+      const promotersRef = collection(db, 'promoters')
+      const snapshot = await getDocs(promotersRef)
+      return snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }))
@@ -529,75 +394,331 @@ export class AdminService {
     }
   }
 
-  static async createPromoter(data: any) {
-    const promoterData = {
-      ...data,
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now()
-    }
-    const docRef = await addDoc(collection(db, 'promoters'), promoterData)
-    return docRef.id
-  }
-
-  static async updatePromoter(id: string, data: any) {
-    await updateDoc(doc(db, 'promoters', id), {
-      ...data,
-      updatedAt: Timestamp.now()
-    })
-  }
-
-  static async deletePromoter(id: string) {
-    await deleteDoc(doc(db, 'promoters', id))
-  }
-
-  // Report Methods
-  static async generateReport(type: string, filters: any) {
-    const reportData = {
-      name: `${type}_report_${Date.now()}`,
-      type,
-      filters,
-      data: {
-        summary: {},
-        breakdown: {},
-        chartData: {}
-      },
-      createdAt: Timestamp.now()
-    }
-    const docRef = await addDoc(collection(db, 'reports'), reportData)
-    return docRef.id
-  }
-
-  // Settings Methods
-  static async getSettings() {
+  static async getPromoter(promoterId: string) {
     try {
-      const docSnap = await getDoc(doc(db, 'settings', 'global'))
-      if (docSnap.exists()) {
-        return docSnap.data()
+      const promoterRef = doc(db, 'promoters', promoterId)
+      const promoterDoc = await getDoc(promoterRef)
+      if (promoterDoc.exists()) {
+        return { id: promoterDoc.id, ...promoterDoc.data() }
       }
-      return {
-        system: {
-          maintenanceMode: false,
-          maintenanceMessage: '',
-          version: '1.0.0'
-        },
-        features: {
-          dynamicPricing: true,
-          waitlist: true,
-          transferable: true,
-          refundable: true,
-          accessible: true
-        }
-      }
+      return null
     } catch (error) {
-      console.error('Error fetching settings:', error)
+      console.error('Error fetching promoter:', error)
       return null
     }
   }
 
-  static async updateSettings(data: any) {
-    await updateDoc(doc(db, 'settings', 'global'), {
-      ...data,
-      updatedAt: Timestamp.now()
-    })
+  static async createPromoter(promoterData: any) {
+    try {
+      const promotersRef = collection(db, 'promoters')
+      const docRef = await addDoc(promotersRef, {
+        ...promoterData,
+        active: true,
+        users: [],
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      })
+      return docRef.id
+    } catch (error) {
+      console.error('Error creating promoter:', error)
+      throw error
+    }
+  }
+
+  static async updatePromoter(promoterId: string, promoterData: any) {
+    try {
+      const promoterRef = doc(db, 'promoters', promoterId)
+      await updateDoc(promoterRef, {
+        ...promoterData,
+        updatedAt: Timestamp.now()
+      })
+      return true
+    } catch (error) {
+      console.error('Error updating promoter:', error)
+      throw error
+    }
+  }
+
+  static async deletePromoter(promoterId: string) {
+    try {
+      const promoterRef = doc(db, 'promoters', promoterId)
+      await deleteDoc(promoterRef)
+      return true
+    } catch (error) {
+      console.error('Error deleting promoter:', error)
+      throw error
+    }
+  }
+
+  // ============ USERS ============
+  static async createUser(userData: any) {
+    try {
+      const userRef = doc(db, 'users', userData.uid)
+      await setDoc(userRef, {
+        ...userData,
+        role: userData.role || 'customer',
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      })
+      return userData.uid
+    } catch (error) {
+      console.error('Error creating user:', error)
+      throw error
+    }
+  }
+
+  static async updateUser(userId: string, userData: any) {
+    try {
+      const userRef = doc(db, 'users', userId)
+      await updateDoc(userRef, {
+        ...userData,
+        updatedAt: Timestamp.now()
+      })
+      return true
+    } catch (error) {
+      console.error('Error updating user:', error)
+      throw error
+    }
+  }
+
+  // ============ PROMOTIONS ============
+  static async getPromotions() {
+    try {
+      const promotionsRef = collection(db, 'promotions')
+      const snapshot = await getDocs(promotionsRef)
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+    } catch (error) {
+      console.error('Error fetching promotions:', error)
+      return []
+    }
+  }
+
+  static async createPromotion(promotionData: any) {
+    try {
+      const promotionsRef = collection(db, 'promotions')
+      const docRef = await addDoc(promotionsRef, {
+        ...promotionData,
+        code: promotionData.code.toUpperCase(),
+        usedCount: 0,
+        active: true,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      })
+      return docRef.id
+    } catch (error) {
+      console.error('Error creating promotion:', error)
+      throw error
+    }
+  }
+
+  static async updatePromotion(promotionId: string, promotionData: any) {
+    try {
+      const promotionRef = doc(db, 'promotions', promotionId)
+      await updateDoc(promotionRef, {
+        ...promotionData,
+        updatedAt: Timestamp.now()
+      })
+      return true
+    } catch (error) {
+      console.error('Error updating promotion:', error)
+      throw error
+    }
+  }
+
+  static async deletePromotion(promotionId: string) {
+    try {
+      const promotionRef = doc(db, 'promotions', promotionId)
+      await deleteDoc(promotionRef)
+      return true
+    } catch (error) {
+      console.error('Error deleting promotion:', error)
+      throw error
+    }
+  }
+
+  static async validatePromoCode(code: string, eventId?: string) {
+    try {
+      const promotionsRef = collection(db, 'promotions')
+      const q = query(
+        promotionsRef, 
+        where('code', '==', code.toUpperCase()),
+        where('active', '==', true)
+      )
+      const snapshot = await getDocs(q)
+      
+      if (snapshot.empty) {
+        return { valid: false, message: 'Invalid promo code' }
+      }
+      
+      const promo = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() }
+      
+      // Check expiration
+      const now = Timestamp.now()
+      if (promo.endDate && promo.endDate < now) {
+        return { valid: false, message: 'Promo code expired' }
+      }
+      
+      if (promo.startDate && promo.startDate > now) {
+        return { valid: false, message: 'Promo code not yet active' }
+      }
+      
+      // Check usage limits
+      if (promo.maxUses && promo.usedCount >= promo.maxUses) {
+        return { valid: false, message: 'Promo code usage limit reached' }
+      }
+      
+      // Check event applicability
+      if (eventId && promo.applicableEvents && promo.applicableEvents.length > 0) {
+        if (!promo.applicableEvents.includes(eventId)) {
+          return { valid: false, message: 'Promo code not valid for this event' }
+        }
+      }
+      
+      return { 
+        valid: true, 
+        promo,
+        discount: {
+          type: promo.type,
+          value: promo.value
+        }
+      }
+    } catch (error) {
+      console.error('Error validating promo code:', error)
+      return { valid: false, message: 'Error validating promo code' }
+    }
+  }
+
+  static async incrementPromoUsage(promoId: string) {
+    try {
+      const promoRef = doc(db, 'promotions', promoId)
+      const promoDoc = await getDoc(promoRef)
+      
+      if (promoDoc.exists()) {
+        const currentCount = promoDoc.data().usedCount || 0
+        await updateDoc(promoRef, {
+          usedCount: currentCount + 1,
+          updatedAt: Timestamp.now()
+        })
+      }
+      
+      return true
+    } catch (error) {
+      console.error('Error incrementing promo usage:', error)
+      return false
+    }
+  }
+
+  // ============ LAYOUTS ============
+  static async getLayouts(venueId?: string) {
+    try {
+      const layoutsRef = collection(db, 'layouts')
+      let q = layoutsRef as any
+      
+      if (venueId) {
+        q = query(layoutsRef, where('venueId', '==', venueId))
+      }
+      
+      const snapshot = await getDocs(q)
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+    } catch (error) {
+      console.error('Error fetching layouts:', error)
+      return []
+    }
+  }
+
+  static async createLayout(layoutData: any) {
+    try {
+      const layoutsRef = collection(db, 'layouts')
+      const docRef = await addDoc(layoutsRef, {
+        ...layoutData,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      })
+      return docRef.id
+    } catch (error) {
+      console.error('Error creating layout:', error)
+      throw error
+    }
+  }
+
+  static async updateLayout(layoutId: string, layoutData: any) {
+    try {
+      const layoutRef = doc(db, 'layouts', layoutId)
+      await updateDoc(layoutRef, {
+        ...layoutData,
+        updatedAt: Timestamp.now()
+      })
+      return true
+    } catch (error) {
+      console.error('Error updating layout:', error)
+      throw error
+    }
+  }
+
+  // ============ DASHBOARD STATS ============
+  static async getDashboardStats() {
+    try {
+      const [events, venues, orders, customers, promoters] = await Promise.all([
+        this.getEvents(),
+        this.getVenues(),
+        this.getOrders(),
+        this.getCustomers(),
+        this.getPromoters()
+      ])
+      
+      const now = new Date()
+      const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      
+      // Calculate monthly revenue
+      let monthlyRevenue = 0
+      let lastMonthRevenue = 0
+      
+      orders.forEach(order => {
+        const orderDate = order.purchaseDate?.toDate?.() || order.createdAt?.toDate?.() || new Date(0)
+        const amount = order.pricing?.total || order.totalAmount || order.total || 0
+        
+        if (orderDate >= thisMonth) {
+          monthlyRevenue += amount
+        } else if (orderDate >= lastMonth && orderDate < thisMonth) {
+          lastMonthRevenue += amount
+        }
+      })
+      
+      const revenueGrowth = lastMonthRevenue > 0 
+        ? ((monthlyRevenue - lastMonthRevenue) / lastMonthRevenue) * 100 
+        : 0
+      
+      return {
+        totalEvents: events.length,
+        activeEvents: events.filter(e => e.status === 'published').length,
+        totalVenues: venues.length,
+        activeVenues: venues.filter(v => v.active !== false).length,
+        totalOrders: orders.length,
+        totalCustomers: customers.length,
+        totalPromoters: promoters.length,
+        monthlyRevenue,
+        revenueGrowth: revenueGrowth.toFixed(1)
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error)
+      return {
+        totalEvents: 0,
+        activeEvents: 0,
+        totalVenues: 0,
+        activeVenues: 0,
+        totalOrders: 0,
+        totalCustomers: 0,
+        totalPromoters: 0,
+        monthlyRevenue: 0,
+        revenueGrowth: '0'
+      }
+    }
   }
 }
