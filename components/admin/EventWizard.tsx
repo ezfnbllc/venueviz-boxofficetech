@@ -4,8 +4,9 @@ import { useEventWizardStore } from '@/lib/store/eventWizardStore'
 import { AdminService } from '@/lib/admin/adminService'
 import { Timestamp } from 'firebase/firestore'
 import { auth } from '@/lib/firebase'
+import { useRouter } from 'next/navigation'
 
-// Import step components (we'll create these next)
+// Import step components
 import Step1Basics from './wizard/Step1Basics'
 import Step2Venue from './wizard/Step2Venue'
 import Step3Schedule from './wizard/Step3Schedule'
@@ -17,6 +18,7 @@ import Step8Communications from './wizard/Step8Communications'
 import Step9Review from './wizard/Step9Review'
 
 export default function EventWizard({ onClose, eventId }: { onClose: () => void, eventId?: string }) {
+  const router = useRouter()
   const {
     currentStep,
     setCurrentStep,
@@ -35,7 +37,6 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
   const [userRole, setUserRole] = useState<'admin' | 'promoter'>('admin')
   
   useEffect(() => {
-    // Check user role
     const checkUserRole = async () => {
       const user = auth.currentUser
       if (user) {
@@ -45,13 +46,11 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
     }
     checkUserRole()
     
-    // Load event data if editing
     if (eventId && !isEditing) {
       loadExistingEvent(eventId)
     }
     
     return () => {
-      // Auto-save on unmount if there are changes
       if (formData.basics.name) {
         handleAutoSave()
       }
@@ -135,10 +134,6 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
           errors.push('Venue selection is required')
           isValid = false
         }
-        if (!formData.venue.layoutId) {
-          errors.push('Layout selection is required')
-          isValid = false
-        }
         break
       case 3:
         if (formData.schedule.performances.length === 0) {
@@ -200,6 +195,13 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
     onClose()
   }
   
+  const handleCancel = () => {
+    if (confirm('Are you sure? Any unsaved changes will be lost.')) {
+      resetWizard()
+      onClose()
+    }
+  }
+  
   const steps = [
     { number: 1, title: 'Event Basics', component: Step1Basics },
     { number: 2, title: 'Venue & Seating', component: Step2Venue },
@@ -215,20 +217,30 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
   const CurrentStepComponent = steps[currentStep - 1].component
   
   return (
-    <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
-      <div className="bg-gray-900 rounded-xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold">
-              {isEditing ? 'Edit Event' : 'Create New Event'}
-            </h2>
-            <button
-              onClick={onClose}
-              className="text-white/80 hover:text-white text-2xl"
-            >
-              ✕
-            </button>
+    <div className="min-h-screen bg-gray-950">
+      {/* Header */}
+      <div className="bg-gray-900 border-b border-white/10 p-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex justify-between items-center mb-6">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={handleCancel}
+                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                title="Back to Events"
+              >
+                ← Back
+              </button>
+              <h2 className="text-2xl font-bold">
+                {isEditing ? 'Edit Event' : 'Create New Event'}
+              </h2>
+            </div>
+            <div className="flex items-center gap-3">
+              {saving && (
+                <span className="text-sm text-gray-400 flex items-center">
+                  <span className="animate-spin mr-2">⏳</span> Saving...
+                </span>
+              )}
+            </div>
           </div>
           
           {/* Progress Steps */}
@@ -242,13 +254,13 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
                 <button
                   onClick={() => handleStepClick(step.number)}
                   className={`
-                    flex items-center justify-center w-10 h-10 rounded-full
+                    flex items-center justify-center w-10 h-10 rounded-full text-sm font-semibold
                     ${currentStep === step.number 
-                      ? 'bg-white text-purple-600' 
+                      ? 'bg-purple-600 text-white' 
                       : currentStep > step.number 
-                      ? 'bg-green-500 text-white' 
-                      : 'bg-white/30 text-white/60'}
-                    ${step.number <= currentStep ? 'cursor-pointer' : 'cursor-not-allowed'}
+                      ? 'bg-green-600 text-white' 
+                      : 'bg-gray-700 text-gray-400'}
+                    ${step.number <= currentStep ? 'cursor-pointer hover:opacity-80' : 'cursor-not-allowed'}
                     transition-all
                   `}
                   disabled={step.number > currentStep}
@@ -258,7 +270,7 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
                 {index < steps.length - 1 && (
                   <div 
                     className={`flex-1 h-0.5 mx-2 ${
-                      currentStep > step.number ? 'bg-green-500' : 'bg-white/30'
+                      currentStep > step.number ? 'bg-green-600' : 'bg-gray-700'
                     }`}
                   />
                 )}
@@ -267,14 +279,16 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
           </div>
           
           {/* Step Title */}
-          <div className="mt-4 text-center">
-            <p className="text-white/80 text-sm">Step {currentStep} of {steps.length}</p>
-            <h3 className="text-xl font-semibold">{steps[currentStep - 1].title}</h3>
+          <div className="mt-4">
+            <p className="text-gray-400 text-sm">Step {currentStep} of {steps.length}</p>
+            <h3 className="text-lg font-semibold">{steps[currentStep - 1].title}</h3>
           </div>
         </div>
-        
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+      </div>
+      
+      {/* Content */}
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="bg-gray-900 rounded-xl p-6">
           <CurrentStepComponent />
           
           {/* Validation Errors */}
@@ -290,60 +304,52 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
           )}
         </div>
         
-        {/* Footer */}
-        <div className="border-t border-white/10 p-6">
-          <div className="flex justify-between items-center">
-            <div className="flex gap-3">
-              {currentStep > 1 && (
-                <button
-                  onClick={handlePrev}
-                  className="px-6 py-2 bg-gray-700 rounded-lg hover:bg-gray-600"
-                >
-                  Previous
-                </button>
-              )}
+        {/* Navigation */}
+        <div className="flex justify-between items-center mt-6">
+          <div className="flex gap-3">
+            {currentStep > 1 && (
               <button
-                onClick={handleSaveDraft}
-                className="px-6 py-2 bg-gray-700 rounded-lg hover:bg-gray-600"
+                onClick={handlePrev}
+                className="px-6 py-2 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors"
               >
-                Save Draft
+                Previous
               </button>
-            </div>
-            
-            <div className="flex gap-3">
-              {saving && (
-                <span className="text-sm text-gray-400 flex items-center">
-                  <span className="animate-spin mr-2">⏳</span> Saving...
-                </span>
-              )}
-              
-              {currentStep < 9 ? (
-                <button
-                  onClick={handleNext}
-                  className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg hover:from-purple-700 hover:to-pink-700"
-                >
-                  Next
-                </button>
-              ) : (
-                <>
-                  {userRole === 'promoter' ? (
-                    <button
-                      onClick={handlePublish}
-                      className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg hover:from-purple-700 hover:to-pink-700"
-                    >
-                      Submit for Approval
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handlePublish}
-                      className="px-6 py-2 bg-gradient-to-r from-green-600 to-green-700 rounded-lg hover:from-green-700 hover:to-green-800"
-                    >
-                      Publish Event
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
+            )}
+            <button
+              onClick={handleSaveDraft}
+              className="px-6 py-2 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors"
+            >
+              Save Draft
+            </button>
+          </div>
+          
+          <div className="flex gap-3">
+            {currentStep < 9 ? (
+              <button
+                onClick={handleNext}
+                className="px-6 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors"
+              >
+                Next
+              </button>
+            ) : (
+              <>
+                {userRole === 'promoter' ? (
+                  <button
+                    onClick={handlePublish}
+                    className="px-6 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors"
+                  >
+                    Submit for Approval
+                  </button>
+                ) : (
+                  <button
+                    onClick={handlePublish}
+                    className="px-6 py-2 bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    Publish Event
+                  </button>
+                )}
+              </>
+            )}
           </div>
         </div>
       </div>
