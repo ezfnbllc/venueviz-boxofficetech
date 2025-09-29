@@ -12,6 +12,7 @@ import {
   Timestamp,
   setDoc
 } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
 
 export class AdminService {
   // ============ EVENTS ============
