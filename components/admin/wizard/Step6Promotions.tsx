@@ -25,7 +25,7 @@ export default function Step6Promotions() {
     setLoading(true)
     try {
       const promotionsData = await AdminService.getPromotions()
-      setExistingPromotions(promotionsData.filter(p => p.active))
+      setExistingPromotions(promotionsData.filter((p: any) => p.active !== false))
     } catch (error) {
       console.error('Error loading promotions:', error)
     }

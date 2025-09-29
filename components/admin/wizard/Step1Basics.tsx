@@ -15,7 +15,9 @@ export default function Step1Basics() {
     
     setUploadingCover(true)
     try {
-      const url = await StorageService.uploadEventImage(file)
+      // Use event name if available, otherwise use a temporary name
+      const eventName = formData.basics.name || 'temp-event'
+      const url = await StorageService.uploadEventImage(file, eventName)
       updateFormData('basics', {
         images: {
           ...formData.basics.images,
@@ -34,8 +36,10 @@ export default function Step1Basics() {
     
     setUploadingGallery(true)
     try {
+      // Use event name if available, otherwise use a temporary name
+      const eventName = formData.basics.name || 'temp-event'
       const uploadPromises = Array.from(files).map(file => 
-        StorageService.uploadEventImage(file)
+        StorageService.uploadEventImage(file, eventName)
       )
       const urls = await Promise.all(uploadPromises)
       
@@ -187,6 +191,9 @@ export default function Step1Basics() {
             />
           </div>
         )}
+        <p className="text-xs text-gray-400 mt-1">
+          Tip: Add the event name above before uploading images for better organization
+        </p>
       </div>
       
       {/* Gallery Images */}

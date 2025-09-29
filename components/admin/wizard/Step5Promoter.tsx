@@ -30,7 +30,7 @@ export default function Step5Promoter() {
     setLoading(true)
     try {
       const promotersData = await AdminService.getPromoters()
-      setPromoters(promotersData.filter(p => p.active))
+      setPromoters(promotersData.filter((p: any) => p.active !== false))
     } catch (error) {
       console.error('Error loading promoters:', error)
     }
