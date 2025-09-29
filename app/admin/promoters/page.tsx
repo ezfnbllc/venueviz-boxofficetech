@@ -247,42 +247,6 @@ export default function PromotersManagement() {
     }
   }
 
-  const handleSetNewPassword = async () => {
-    if (!selectedUser || !newPassword) {
-      alert('Please enter a new password')
-      return
-    }
-    
-    if (newPassword !== confirmPassword) {
-      alert('Passwords do not match')
-      return
-    }
-    
-    if (newPassword.length < 6) {
-      alert('Password must be at least 6 characters')
-      return
-    }
-    
-    try {
-      // Note: In a production environment, you would need Firebase Admin SDK 
-      // or a Cloud Function to update another user's password
-      // For now, we'll send a password reset email as the secure option
-      
-      alert('For security reasons, a password reset email will be sent to the user.')
-      await sendPasswordResetEmail(auth, selectedUser.email)
-      alert(`Password reset email sent to ${selectedUser.email}`)
-      
-      setShowPasswordModal(false)
-      setSelectedUser(null)
-      setNewPassword('')
-      setConfirmPassword('')
-      
-    } catch (error: any) {
-      console.error('Error setting password:', error)
-      alert(error.message || 'Error updating password')
-    }
-  }
-
   const handleSaveUser = async () => {
     if (!selectedPromoter) return
     
@@ -478,7 +442,7 @@ export default function PromotersManagement() {
   // Helper function to get user display info
   const getUserDisplay = (user: any) => {
     if (typeof user === 'string') {
-      // For legacy string UIDs (like your example: jtiJk3zUYNVz6HncJpsb5jgrDcn1)
+      // For legacy string UIDs
       return { 
         id: user, 
         name: `User (${user.slice(0, 8)}...)`, 
@@ -515,7 +479,7 @@ export default function PromotersManagement() {
           </button>
         </div>
 
-        {/* Stats Cards - Same as before */}
+        {/* Stats Cards */}
         <div className="grid md:grid-cols-5 gap-4 mb-8">
           <div className="p-4 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10">
             <p className="text-gray-400 text-sm mb-1">Total Promoters</p>
@@ -566,7 +530,6 @@ export default function PromotersManagement() {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {promoters.map(promoter => (
               <div key={promoter.id} className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden hover:scale-105 transition-transform">
-                {/* Promoter Card - Same as before */}
                 <div className="p-6 pb-4">
                   <div className="flex justify-between items-start mb-4">
                     <div className="flex items-center gap-3">
@@ -599,7 +562,6 @@ export default function PromotersManagement() {
                     </div>
                   </div>
 
-                  {/* Rest of card content - same as before */}
                   {promoter.colorScheme && (
                     <div className="flex gap-1 mb-3">
                       <div 
@@ -707,12 +669,302 @@ export default function PromotersManagement() {
           </div>
         )}
 
-        {/* All modals remain the same except Users Management Modal */}
-        {/* Form Modal, Events Modal - Same as before */}
+        {/* COMPLETE Form Modal */}
+        {showForm && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
+            <div className="bg-gray-900 rounded-xl p-6 w-full max-w-3xl my-8">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold">
+                  {editingPromoter ? 'Edit Promoter' : 'Add New Promoter'}
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowForm(false)
+                    resetForm()
+                  }}
+                  className="text-gray-400 hover:text-white"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm mb-2">Name *</label>
+                    <input
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) => setFormData({...formData, name: e.target.value})}
+                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                      placeholder="Promoter Name"
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm mb-2">Portal Slug *</label>
+                    <div className="flex items-center">
+                      <span className="text-gray-400 mr-2">/p/</span>
+                      <input
+                        type="text"
+                        value={formData.slug}
+                        onChange={(e) => setFormData({...formData, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '')})}
+                        className="flex-1 px-4 py-2 bg-white/10 rounded-lg"
+                        placeholder="promoter-name"
+                      />
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">Auto-generated if left empty</p>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm mb-2">Email *</label>
+                    <input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData({...formData, email: e.target.value})}
+                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                      placeholder="promoter@example.com"
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm mb-2">Phone</label>
+                    <input
+                      type="tel"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                      placeholder="(555) 123-4567"
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm mb-2">Branding Type</label>
+                    <select
+                      value={formData.brandingType}
+                      onChange={(e) => setFormData({...formData, brandingType: e.target.value as 'basic' | 'advanced'})}
+                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                    >
+                      <option value="basic">Basic</option>
+                      <option value="advanced">Advanced</option>
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm mb-2">Commission (%)</label>
+                    <input
+                      type="number"
+                      value={formData.commission}
+                      onChange={(e) => setFormData({...formData, commission: parseInt(e.target.value)})}
+                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                      min="0"
+                      max="100"
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm mb-2">Logo</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoUpload}
+                    className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                    disabled={uploadingLogo}
+                  />
+                  {uploadingLogo && (
+                    <p className="text-xs text-purple-400 mt-2">Uploading logo...</p>
+                  )}
+                  {logoUrl && (
+                    <div className="mt-2">
+                      <img src={logoUrl} alt="Logo preview" className="h-20 object-contain rounded" />
+                    </div>
+                  )}
+                </div>
+                
+                <div>
+                  <label className="block text-sm mb-2">Color Scheme</label>
+                  <div className="grid grid-cols-5 gap-3">
+                    <div>
+                      <label className="text-xs text-gray-400">Primary</label>
+                      <input
+                        type="color"
+                        value={formData.colorScheme.primary}
+                        onChange={(e) => setFormData({
+                          ...formData, 
+                          colorScheme: {...formData.colorScheme, primary: e.target.value}
+                        })}
+                        className="w-full h-10 rounded cursor-pointer"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400">Secondary</label>
+                      <input
+                        type="color"
+                        value={formData.colorScheme.secondary}
+                        onChange={(e) => setFormData({
+                          ...formData, 
+                          colorScheme: {...formData.colorScheme, secondary: e.target.value}
+                        })}
+                        className="w-full h-10 rounded cursor-pointer"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400">Accent</label>
+                      <input
+                        type="color"
+                        value={formData.colorScheme.accent}
+                        onChange={(e) => setFormData({
+                          ...formData, 
+                          colorScheme: {...formData.colorScheme, accent: e.target.value}
+                        })}
+                        className="w-full h-10 rounded cursor-pointer"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400">Background</label>
+                      <input
+                        type="color"
+                        value={formData.colorScheme.background}
+                        onChange={(e) => setFormData({
+                          ...formData, 
+                          colorScheme: {...formData.colorScheme, background: e.target.value}
+                        })}
+                        className="w-full h-10 rounded cursor-pointer"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400">Text</label>
+                      <input
+                        type="color"
+                        value={formData.colorScheme.text}
+                        onChange={(e) => setFormData({
+                          ...formData, 
+                          colorScheme: {...formData.colorScheme, text: e.target.value}
+                        })}
+                        className="w-full h-10 rounded cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm mb-2">Website</label>
+                    <input
+                      type="url"
+                      value={formData.website}
+                      onChange={(e) => setFormData({...formData, website: e.target.value})}
+                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                      placeholder="https://example.com"
+                    />
+                  </div>
+                  
+                  <div className="flex items-end">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={formData.active}
+                        onChange={(e) => setFormData({...formData, active: e.target.checked})}
+                        className="rounded"
+                      />
+                      <span>Active (Can manage events)</span>
+                    </label>
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm mb-2">Description</label>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({...formData, description: e.target.value})}
+                    className="w-full px-4 py-2 bg-white/10 rounded-lg h-20"
+                    placeholder="Notes about this promoter..."
+                  />
+                </div>
+                
+                <div className="flex justify-end gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowForm(false)
+                      resetForm()
+                    }}
+                    className="px-6 py-2 bg-gray-700 rounded-lg hover:bg-gray-600"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg hover:from-purple-700 hover:to-pink-700"
+                  >
+                    {editingPromoter ? 'Update' : 'Add'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
-        {/* Enhanced Users Management Modal with Password Reset */}
+        {/* COMPLETE Events Modal */}
+        {showEventsModal && selectedPromoter && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
+            <div className="bg-gray-900 rounded-xl p-6 w-full max-w-4xl my-8 max-h-[80vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold">
+                  Events for {selectedPromoter.name}
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowEventsModal(false)
+                    setSelectedPromoter(null)
+                  }}
+                  className="text-gray-400 hover:text-white"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              {getPromoterEvents(selectedPromoter.id).length === 0 ? (
+                <p className="text-gray-400 text-center py-8">No events yet</p>
+              ) : (
+                <div className="grid gap-4">
+                  {getPromoterEvents(selectedPromoter.id).map(event => (
+                    <div key={event.id} className="bg-black/40 rounded-lg p-4 flex justify-between items-center">
+                      <div>
+                        <h3 className="font-bold">{event.name}</h3>
+                        <p className="text-sm text-gray-400">
+                          {event.venueName || event.venue} • {
+                            event.schedule?.date ? 
+                              new Date(event.schedule.date.toDate ? event.schedule.date.toDate() : event.schedule.date).toLocaleDateString() : 
+                              'Date TBD'
+                          }
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => router.push('/admin/events')}
+                        className="px-4 py-2 bg-purple-600 rounded-lg text-sm hover:bg-purple-700"
+                      >
+                        View Events
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Users Management Modal - already complete */}
         {showUsersModal && selectedPromoter && (
           <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
+            {/* ... Users modal content (already complete in previous code) ... */}
             <div className="bg-gray-900 rounded-xl p-6 w-full max-w-3xl my-8 max-h-[80vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold">
@@ -744,7 +996,6 @@ export default function PromotersManagement() {
                       return (
                         <div key={userInfo.id || index} className="bg-black/40 rounded-lg p-4">
                           {isEditing ? (
-                            // Edit Mode
                             <div className="space-y-3">
                               <div className="grid grid-cols-2 gap-3">
                                 <div>
@@ -802,7 +1053,6 @@ export default function PromotersManagement() {
                               </div>
                             </div>
                           ) : (
-                            // Display Mode
                             <div className="flex justify-between items-center">
                               <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-bold">
@@ -855,7 +1105,6 @@ export default function PromotersManagement() {
                 )}
               </div>
               
-              {/* Add New User Form - Only show if not editing */}
               {!editingUser && (
                 <div className="border-t border-white/10 pt-6">
                   <h3 className="text-lg font-semibold mb-3">Add New User</h3>
@@ -935,7 +1184,7 @@ export default function PromotersManagement() {
           </div>
         )}
 
-        {/* Password Reset Modal */}
+        {/* Password Reset Modal - already complete */}
         {showPasswordModal && selectedUser && (
           <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
             <div className="bg-gray-900 rounded-xl p-6 w-full max-w-md">
@@ -979,20 +1228,10 @@ export default function PromotersManagement() {
                     The user will receive an email with instructions to reset their password
                   </p>
                 </div>
-                
-                {/* Note about manual password setting */}
-                <div className="mt-4 p-3 bg-yellow-600/10 border border-yellow-600/30 rounded-lg">
-                  <p className="text-xs text-yellow-400">
-                    Note: Direct password updates require Firebase Admin SDK (server-side). 
-                    For security, use password reset emails in production.
-                  </p>
-                </div>
               </div>
             </div>
           </div>
         )}
-
-        {/* Other modals remain the same */}
       </div>
     </AdminLayout>
   )
