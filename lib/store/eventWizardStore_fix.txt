@@ -1,0 +1,11 @@
+  schedule: {
+    performances: [{
+      date: '',
+      doorsOpen: '',
+      startTime: '',
+      endTime: '',
+      pricingModifier: 0,
+      capacity: 0
+    }],
+    timezone: 'America/Chicago'
+  },
