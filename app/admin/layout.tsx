@@ -62,7 +62,7 @@ export default function AdminLayout({
         <div className="flex items-center justify-between px-6 py-4">
           {/* Logo */}
           <Link href="/admin" className="flex items-center gap-2">
-            <img src="/BOLogo.png" alt="BoxOffice Tech" className="h-8" />
+            <img src="https://firebasestorage.googleapis.com/v0/b/venueviz.appspot.com/o/BOLogo.png?alt=media" alt="BoxOffice Tech" className="h-8" />
             <span className="text-xl font-bold text-purple-400">Admin Panel</span>
           </Link>
 
