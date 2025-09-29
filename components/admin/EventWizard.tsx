@@ -1,3 +1,4 @@
+import React from 'react'
 'use client'
 import { useState, useEffect } from 'react'
 import { useEventWizardStore } from '@/lib/store/eventWizardStore'
@@ -247,7 +248,7 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
           {/* Compact Progress Steps */}
           <div className="flex items-center gap-1">
             {steps.map((step, index) => (
-              <React.Fragment key={step.number}>
+              <> key={step.number}>
                 <button
                   onClick={() => handleStepClick(step.number)}
                   className={`
@@ -272,7 +273,7 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
                     }`}
                   />
                 )}
-              </React.Fragment>
+              </>
             ))}
           </div>
         </div>
