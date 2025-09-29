@@ -148,7 +148,7 @@ export default function Step6Promotions() {
                     <div>
                       <p className="font-semibold">{promo.code}</p>
                       <p className="text-sm text-gray-400">
-                        {promo.discountType === 'percentage' ? `${promo.discountValue}% off` : `$${promo.discountValue} off`}
+                        {promo.discountType === 'percentage' ? `${promo.discountValue || promo.value || promo.discount}% off` : `$${promo.discountValue || promo.value || promo.discount} off`}
                         • {promo.maxUses ? `${promo.maxUses} uses remaining` : 'Unlimited'}
                       </p>
                     </div>
