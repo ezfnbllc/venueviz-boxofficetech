@@ -5,38 +5,59 @@ import { useEventWizardStore } from '@/lib/store/eventWizardStore'
 export default function Step4Pricing() {
   const { formData, updateFormData } = useEventWizardStore()
   
-  // Initialize pricing for each section/level from venue configuration
+  // Initialize pricing tiers from venue configuration when component mounts or venue changes
   useEffect(() => {
-    if (formData.venue?.availableSections && formData.pricing?.tiers?.length === 0) {
-      const initialTiers = formData.venue.availableSections
-        .filter((s: any) => s.available)
-        .map((section: any) => ({
+    console.log('Step4Pricing - Venue data:', formData.venue)
+    console.log('Step4Pricing - Available sections:', formData.venue?.availableSections)
+    console.log('Step4Pricing - Current pricing tiers:', formData.pricing?.tiers)
+    
+    // Initialize tiers if we have venue sections but no pricing tiers yet
+    if (formData.venue?.availableSections?.length > 0) {
+      const availableSections = formData.venue.availableSections.filter((s: any) => s.available)
+      
+      if (availableSections.length > 0) {
+        // Check if we need to initialize or update tiers
+        const existingTiers = formData.pricing?.tiers || []
+        
+        // Create tiers from available sections
+        const newTiers = availableSections.map((section: any) => ({
           id: section.sectionId,
           name: section.sectionName,
-          basePrice: section.basePrice || 0,
+          basePrice: existingTiers.find((t: any) => t.id === section.sectionId)?.basePrice || section.basePrice || 0,
           sectionId: section.sectionId,
           capacity: section.capacity || 0,
+          priceCategories: section.priceCategories || '',
+          minPrice: section.minPrice || 0,
+          maxPrice: section.maxPrice || 0,
           sold: 0
         }))
-      
-      if (initialTiers.length > 0) {
-        updateFormData('pricing', { tiers: initialTiers })
+        
+        console.log('Step4Pricing - Creating tiers:', newTiers)
+        
+        // Update pricing with new tiers
+        updateFormData('pricing', {
+          ...formData.pricing,
+          tiers: newTiers
+        })
       }
     }
   }, [formData.venue?.availableSections])
   
   const updateTierPrice = (tierId: string, price: number) => {
-    const tiers = formData.pricing?.tiers?.map((tier: any) => 
+    const tiers = (formData.pricing?.tiers || []).map((tier: any) => 
       tier.id === tierId ? { ...tier, basePrice: price } : tier
-    ) || []
-    updateFormData('pricing', { tiers })
+    )
+    updateFormData('pricing', {
+      ...formData.pricing,
+      tiers
+    })
   }
   
   const updateFees = (field: string, value: any) => {
-    const currentFees = formData.pricing?.fees || {}
     updateFormData('pricing', {
+      ...formData.pricing,
       fees: {
-        ...currentFees,
+        ...formData.pricing?.fees,
         [field]: value
       }
     })
@@ -49,6 +70,7 @@ export default function Step4Pricing() {
     }
     
     updateFormData('pricing', {
+      ...formData.pricing,
       dynamicPricing: {
         ...currentDynamicPricing,
         [type]: {
@@ -61,44 +83,64 @@ export default function Step4Pricing() {
   
   const isSeatingChart = formData.venue?.layoutType === 'seating_chart'
   const isGA = formData.venue?.layoutType === 'general_admission'
+  const hasTiers = formData.pricing?.tiers?.length > 0
   
   return (
     <div>
       <h3 className="text-xl font-bold mb-4">Ticket Pricing & Fees</h3>
       
+      {/* Debug info - remove in production */}
+      {!hasTiers && (
+        <div className="mb-4 p-3 bg-yellow-600/20 rounded text-yellow-300 text-sm">
+          No pricing tiers found. Venue sections: {formData.venue?.availableSections?.length || 0}
+        </div>
+      )}
+      
       {/* Ticket Pricing by Section/Level */}
-      <div className="mb-6">
-        <h4 className="font-semibold mb-4">
-          {isSeatingChart ? 'Section' : 'Level'} Pricing
-        </h4>
-        <div className="space-y-3">
-          {formData.pricing?.tiers?.map((tier: any) => (
-            <div key={tier.id} className="p-4 bg-black/20 rounded-lg">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-semibold">{tier.name}</p>
-                  <p className="text-sm text-gray-400">
-                    Capacity: {tier.capacity} {isSeatingChart ? 'seats' : 'tickets'}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-400">$</span>
-                  <input
-                    type="number"
-                    value={tier.basePrice || 0}
-                    onChange={(e) => updateTierPrice(tier.id, parseFloat(e.target.value) || 0)}
-                    className="w-32 px-3 py-2 bg-white/10 rounded-lg focus:bg-white/20 outline-none text-right"
-                    placeholder="0.00"
-                    step="0.01"
-                    min="0"
-                  />
-                  <span className="text-sm text-gray-400">per ticket</span>
+      {hasTiers ? (
+        <div className="mb-6">
+          <h4 className="font-semibold mb-4">
+            {isSeatingChart ? 'Section' : 'Level'} Pricing
+          </h4>
+          <div className="space-y-3">
+            {formData.pricing.tiers.map((tier: any) => (
+              <div key={tier.id} className="p-4 bg-black/20 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-semibold">{tier.name}</p>
+                    <p className="text-sm text-gray-400">
+                      Capacity: {tier.capacity} {isSeatingChart ? 'seats' : 'tickets'}
+                      {tier.priceCategories && ` • Categories: ${tier.priceCategories}`}
+                    </p>
+                    {tier.minPrice > 0 && tier.maxPrice > 0 && tier.minPrice !== tier.maxPrice && (
+                      <p className="text-xs text-gray-500">
+                        Layout price range: ${tier.minPrice} - ${tier.maxPrice}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-400">$</span>
+                    <input
+                      type="number"
+                      value={tier.basePrice || ''}
+                      onChange={(e) => updateTierPrice(tier.id, parseFloat(e.target.value) || 0)}
+                      className="w-32 px-3 py-2 bg-white/10 rounded-lg focus:bg-white/20 outline-none text-right"
+                      placeholder="0.00"
+                      step="0.01"
+                      min="0"
+                    />
+                    <span className="text-sm text-gray-400">per ticket</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="mb-6 p-4 bg-red-600/20 rounded-lg text-red-300">
+          No venue levels/sections available. Please go back to Step 2 and select a venue layout.
+        </div>
+      )}
       
       {/* Service Fees */}
       <div className="mb-6">
@@ -111,7 +153,7 @@ export default function Step4Pricing() {
             </label>
             <div className="flex gap-3">
               <select
-                value={formData.pricing?.fees?.serviceFeeType || 'fixed'}
+                value={formData.pricing?.fees?.serviceFeeType || 'percentage'}
                 onChange={(e) => updateFees('serviceFeeType', e.target.value)}
                 className="px-3 py-2 bg-white/10 rounded-lg focus:bg-white/20 outline-none"
               >
@@ -120,7 +162,7 @@ export default function Step4Pricing() {
               </select>
               <input
                 type="number"
-                value={formData.pricing?.fees?.serviceFee || 0}
+                value={formData.pricing?.fees?.serviceFee ?? 4}
                 onChange={(e) => updateFees('serviceFee', parseFloat(e.target.value) || 0)}
                 className="flex-1 px-3 py-2 bg-white/10 rounded-lg focus:bg-white/20 outline-none"
                 placeholder={formData.pricing?.fees?.serviceFeeType === 'percentage' ? '0%' : '$0.00'}
@@ -154,7 +196,7 @@ export default function Step4Pricing() {
               </select>
               <input
                 type="number"
-                value={formData.pricing?.fees?.processingFee || 2.5}
+                value={formData.pricing?.fees?.processingFee ?? 2.5}
                 onChange={(e) => updateFees('processingFee', parseFloat(e.target.value) || 0)}
                 className="flex-1 px-3 py-2 bg-white/10 rounded-lg focus:bg-white/20 outline-none"
                 placeholder={formData.pricing?.fees?.processingFeeType === 'percentage' ? '0%' : '$0.00'}
@@ -188,7 +230,7 @@ export default function Step4Pricing() {
               </select>
               <input
                 type="number"
-                value={formData.pricing?.fees?.facilityFee || 0}
+                value={formData.pricing?.fees?.facilityFee ?? 0}
                 onChange={(e) => updateFees('facilityFee', parseFloat(e.target.value) || 0)}
                 className="flex-1 px-3 py-2 bg-white/10 rounded-lg focus:bg-white/20 outline-none"
                 placeholder={formData.pricing?.fees?.facilityFeeType === 'percentage' ? '0%' : '$0.00'}
@@ -214,7 +256,7 @@ export default function Step4Pricing() {
             <div className="flex gap-3">
               <input
                 type="number"
-                value={formData.pricing?.fees?.salesTax || 8.25}
+                value={formData.pricing?.fees?.salesTax ?? 8.25}
                 onChange={(e) => updateFees('salesTax', parseFloat(e.target.value) || 0)}
                 className="flex-1 px-3 py-2 bg-white/10 rounded-lg focus:bg-white/20 outline-none"
                 placeholder="0%"
