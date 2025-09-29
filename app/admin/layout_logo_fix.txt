@@ -1,1 +1,0 @@
-<img src="https://firebasestorage.googleapis.com/v0/b/venueviz.appspot.com/o/BOLogo.png?alt=media" alt="BoxOffice Tech" className="h-8" />

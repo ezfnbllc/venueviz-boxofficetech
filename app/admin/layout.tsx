@@ -20,7 +20,7 @@ export default function AdminLayout({
       if (currentUser) {
         setUser(currentUser)
       } else {
-        router.push('/admin/login')
+        router.push('/login')
       }
       setLoading(false)
     })
@@ -31,7 +31,7 @@ export default function AdminLayout({
   const handleSignOut = async () => {
     try {
       await auth.signOut()
-      router.push('/admin/login')
+      router.push('/login')
     } catch (error) {
       console.error('Error signing out:', error)
     }
