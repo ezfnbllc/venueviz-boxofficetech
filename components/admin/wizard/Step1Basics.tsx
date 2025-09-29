@@ -46,7 +46,7 @@ export default function Step1Basics() {
       updateFormData('basics', {
         images: {
           ...formData.basics.images,
-          gallery: [...formData.basics.images.gallery, ...urls]
+          gallery: [...formData.basics?.images?.gallery, ...urls]
         }
       })
     } catch (error) {
@@ -66,7 +66,7 @@ export default function Step1Basics() {
   
   const handleRemovePerformer = (index: number) => {
     updateFormData('basics', {
-      performers: formData.basics.performers.filter((_, i) => i !== index)
+      performers: formData.basics?.performers?.filter((_, i) => i !== index)
     })
   }
   
@@ -74,7 +74,7 @@ export default function Step1Basics() {
     updateFormData('basics', {
       images: {
         ...formData.basics.images,
-        gallery: formData.basics.images.gallery.filter((_, i) => i !== index)
+        gallery: formData.basics?.images?.gallery.filter((_, i) => i !== index)
       }
     })
   }
@@ -150,7 +150,7 @@ export default function Step1Basics() {
           </button>
         </div>
         <div className="flex flex-wrap gap-2">
-          {formData.basics.performers.map((performer, index) => (
+          {formData.basics?.performers?.map((performer, index) => (
             <span
               key={index}
               className="px-3 py-1 bg-purple-600/20 text-purple-400 rounded-full flex items-center gap-2"
@@ -182,10 +182,10 @@ export default function Step1Basics() {
         {uploadingCover && (
           <p className="text-xs text-purple-400 mt-2">Uploading cover image...</p>
         )}
-        {formData.basics.images.cover && (
+        {formData.basics?.images?.cover && (
           <div className="mt-3">
             <img
-              src={formData.basics.images.cover}
+              src={formData.basics?.images?.cover}
               alt="Cover"
               className="w-full max-w-md h-48 object-cover rounded-lg"
             />
@@ -210,9 +210,9 @@ export default function Step1Basics() {
         {uploadingGallery && (
           <p className="text-xs text-purple-400 mt-2">Uploading gallery images...</p>
         )}
-        {formData.basics.images.gallery.length > 0 && (
+        {formData.basics?.images?.gallery.length > 0 && (
           <div className="grid grid-cols-4 gap-3 mt-3">
-            {formData.basics.images.gallery.map((image, index) => (
+            {formData.basics?.images?.gallery.map((image, index) => (
               <div key={index} className="relative group">
                 <img
                   src={image}

@@ -17,13 +17,13 @@ export default function Step8Communications() {
   
   const addKeyword = () => {
     if (keywordInput.trim()) {
-      updateSEO('keywords', [...formData.communications.seo.keywords, keywordInput.trim()])
+      updateSEO('keywords', [...formData.communications?.seo?.keywords, keywordInput.trim()])
       setKeywordInput('')
     }
   }
   
   const removeKeyword = (index: number) => {
-    updateSEO('keywords', formData.communications.seo.keywords.filter((_, i) => i !== index))
+    updateSEO('keywords', formData.communications?.seo?.keywords.filter((_, i) => i !== index))
   }
   
   const updateEmailAutomation = (field: string, value: any) => {
@@ -72,28 +72,28 @@ export default function Step8Communications() {
             <label className="block text-xs mb-1">Meta Title</label>
             <input
               type="text"
-              value={formData.communications.seo.metaTitle}
+              value={formData.communications?.seo?.metaTitle}
               onChange={(e) => updateSEO('metaTitle', e.target.value)}
               className="w-full px-3 py-2 bg-white/10 rounded"
               placeholder={formData.basics.name || 'Event title for search engines'}
               maxLength={60}
             />
             <p className="text-xs text-gray-400 mt-1">
-              {formData.communications.seo.metaTitle.length}/60 characters
+              {formData.communications?.seo?.metaTitle.length}/60 characters
             </p>
           </div>
           
           <div>
             <label className="block text-xs mb-1">Meta Description</label>
             <textarea
-              value={formData.communications.seo.metaDescription}
+              value={formData.communications?.seo?.metaDescription}
               onChange={(e) => updateSEO('metaDescription', e.target.value)}
               className="w-full px-3 py-2 bg-white/10 rounded h-20"
               placeholder={formData.basics.description?.substring(0, 160) || 'Brief description for search results'}
               maxLength={160}
             />
             <p className="text-xs text-gray-400 mt-1">
-              {formData.communications.seo.metaDescription.length}/160 characters
+              {formData.communications?.seo?.metaDescription.length}/160 characters
             </p>
           </div>
           
@@ -102,7 +102,7 @@ export default function Step8Communications() {
             <div className="flex gap-2">
               <input
                 type="text"
-                value={formData.communications.seo.urlSlug}
+                value={formData.communications?.seo?.urlSlug}
                 onChange={(e) => updateSEO('urlSlug', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
                 className="flex-1 px-3 py-2 bg-white/10 rounded"
                 placeholder="event-url-slug"
@@ -137,7 +137,7 @@ export default function Step8Communications() {
               </button>
             </div>
             <div className="flex flex-wrap gap-2">
-              {formData.communications.seo.keywords.map((keyword, index) => (
+              {formData.communications?.seo?.keywords.map((keyword, index) => (
                 <span key={index} className="px-3 py-1 bg-purple-600/20 text-purple-400 rounded-full flex items-center gap-2 text-sm">
                   {keyword}
                   <button
@@ -155,10 +155,10 @@ export default function Step8Communications() {
             <label className="block text-xs mb-1">Open Graph Image</label>
             <input
               type="text"
-              value={formData.communications.seo.ogImage}
+              value={formData.communications?.seo?.ogImage}
               onChange={(e) => updateSEO('ogImage', e.target.value)}
               className="w-full px-3 py-2 bg-white/10 rounded"
-              placeholder={formData.basics.images.cover || 'URL for social media preview image'}
+              placeholder={formData.basics?.images?.cover || 'URL for social media preview image'}
             />
             <p className="text-xs text-gray-400 mt-1">
               Image shown when sharing on social media (1200x630px recommended)
@@ -174,7 +174,7 @@ export default function Step8Communications() {
           <label className="flex items-center gap-3">
             <input
               type="checkbox"
-              checked={formData.communications.emailAutomation.confirmationEmail}
+              checked={formData.communications?.emailAutomation?.confirmationEmail}
               onChange={(e) => updateEmailAutomation('confirmationEmail', e.target.checked)}
               className="w-5 h-5 rounded"
             />
@@ -189,7 +189,7 @@ export default function Step8Communications() {
           <label className="flex items-center gap-3">
             <input
               type="checkbox"
-              checked={formData.communications.emailAutomation.reminderEmail}
+              checked={formData.communications?.emailAutomation?.reminderEmail}
               onChange={(e) => updateEmailAutomation('reminderEmail', e.target.checked)}
               className="w-5 h-5 rounded"
             />
@@ -201,12 +201,12 @@ export default function Step8Communications() {
             </div>
           </label>
           
-          {formData.communications.emailAutomation.reminderEmail && (
+          {formData.communications?.emailAutomation?.reminderEmail && (
             <div className="ml-8">
               <label className="block text-xs mb-1">Days Before Event</label>
               <input
                 type="number"
-                value={formData.communications.emailAutomation.reminderDays}
+                value={formData.communications?.emailAutomation?.reminderDays}
                 onChange={(e) => updateEmailAutomation('reminderDays', parseInt(e.target.value) || 1)}
                 className="w-full px-3 py-2 bg-white/10 rounded"
                 min="1"
@@ -218,7 +218,7 @@ export default function Step8Communications() {
           <label className="flex items-center gap-3">
             <input
               type="checkbox"
-              checked={formData.communications.emailAutomation.postEventSurvey}
+              checked={formData.communications?.emailAutomation?.postEventSurvey}
               onChange={(e) => updateEmailAutomation('postEventSurvey', e.target.checked)}
               className="w-5 h-5 rounded"
             />
@@ -239,7 +239,7 @@ export default function Step8Communications() {
           <label className="flex items-center gap-3">
             <input
               type="checkbox"
-              checked={formData.communications.smsNotifications.enabled}
+              checked={formData.communications?.smsNotifications?.enabled}
               onChange={(e) => updateSMSNotifications('enabled', e.target.checked)}
               className="w-5 h-5 rounded"
             />
@@ -251,12 +251,12 @@ export default function Step8Communications() {
             </div>
           </label>
           
-          {formData.communications.smsNotifications.enabled && (
+          {formData.communications?.smsNotifications?.enabled && (
             <>
               <label className="flex items-center gap-3 ml-8">
                 <input
                   type="checkbox"
-                  checked={formData.communications.smsNotifications.confirmationSMS}
+                  checked={formData.communications?.smsNotifications?.confirmationSMS}
                   onChange={(e) => updateSMSNotifications('confirmationSMS', e.target.checked)}
                   className="w-5 h-5 rounded"
                 />
@@ -271,7 +271,7 @@ export default function Step8Communications() {
               <label className="flex items-center gap-3 ml-8">
                 <input
                   type="checkbox"
-                  checked={formData.communications.smsNotifications.reminderSMS}
+                  checked={formData.communications?.smsNotifications?.reminderSMS}
                   onChange={(e) => updateSMSNotifications('reminderSMS', e.target.checked)}
                   className="w-5 h-5 rounded"
                 />
@@ -294,7 +294,7 @@ export default function Step8Communications() {
           <label className="flex items-center gap-3">
             <input
               type="checkbox"
-              checked={formData.communications.calendarSync.googleCalendar}
+              checked={formData.communications?.calendarSync?.googleCalendar}
               onChange={(e) => updateCalendarSync('googleCalendar', e.target.checked)}
               className="w-5 h-5 rounded"
             />
@@ -309,7 +309,7 @@ export default function Step8Communications() {
           <label className="flex items-center gap-3">
             <input
               type="checkbox"
-              checked={formData.communications.calendarSync.appleCalendar}
+              checked={formData.communications?.calendarSync?.appleCalendar}
               onChange={(e) => updateCalendarSync('appleCalendar', e.target.checked)}
               className="w-5 h-5 rounded"
             />
@@ -324,7 +324,7 @@ export default function Step8Communications() {
           <label className="flex items-center gap-3">
             <input
               type="checkbox"
-              checked={formData.communications.calendarSync.outlookCalendar}
+              checked={formData.communications?.calendarSync?.outlookCalendar}
               onChange={(e) => updateCalendarSync('outlookCalendar', e.target.checked)}
               className="w-5 h-5 rounded"
             />
@@ -345,26 +345,26 @@ export default function Step8Communications() {
           <div>
             <span className="text-gray-400">Emails:</span>
             <ul className="ml-4 mt-1">
-              {formData.communications.emailAutomation.confirmationEmail && <li>• Order confirmation</li>}
-              {formData.communications.emailAutomation.reminderEmail && <li>• Reminder ({formData.communications.emailAutomation.reminderDays} day before)</li>}
-              {formData.communications.emailAutomation.postEventSurvey && <li>• Post-event survey</li>}
+              {formData.communications?.emailAutomation?.confirmationEmail && <li>• Order confirmation</li>}
+              {formData.communications?.emailAutomation?.reminderEmail && <li>• Reminder ({formData.communications?.emailAutomation?.reminderDays} day before)</li>}
+              {formData.communications?.emailAutomation?.postEventSurvey && <li>• Post-event survey</li>}
             </ul>
           </div>
-          {formData.communications.smsNotifications.enabled && (
+          {formData.communications?.smsNotifications?.enabled && (
             <div>
               <span className="text-gray-400">SMS:</span>
               <ul className="ml-4 mt-1">
-                {formData.communications.smsNotifications.confirmationSMS && <li>• Order confirmation</li>}
-                {formData.communications.smsNotifications.reminderSMS && <li>• Event day reminder</li>}
+                {formData.communications?.smsNotifications?.confirmationSMS && <li>• Order confirmation</li>}
+                {formData.communications?.smsNotifications?.reminderSMS && <li>• Event day reminder</li>}
               </ul>
             </div>
           )}
           <div>
             <span className="text-gray-400">Calendar:</span>
             <ul className="ml-4 mt-1">
-              {formData.communications.calendarSync.googleCalendar && <li>• Google Calendar</li>}
-              {formData.communications.calendarSync.appleCalendar && <li>• Apple Calendar</li>}
-              {formData.communications.calendarSync.outlookCalendar && <li>• Outlook</li>}
+              {formData.communications?.calendarSync?.googleCalendar && <li>• Google Calendar</li>}
+              {formData.communications?.calendarSync?.appleCalendar && <li>• Apple Calendar</li>}
+              {formData.communications?.calendarSync?.outlookCalendar && <li>• Outlook</li>}
             </ul>
           </div>
         </div>

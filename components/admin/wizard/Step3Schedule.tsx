@@ -29,7 +29,7 @@ export default function Step3Schedule() {
   
   const removePerformance = (index: number) => {
     updateFormData('schedule', {
-      performances: formData.schedule.performances.filter((_, i) => i !== index)
+      performances: formData.schedule?.performances?.filter((_, i) => i !== index)
     })
   }
   
@@ -62,7 +62,7 @@ export default function Step3Schedule() {
         </div>
         
         <div className="space-y-4">
-          {formData.schedule.performances.map((perf, index) => (
+          {formData.schedule?.performances?.map((perf, index) => (
             <div key={index} className="bg-black/20 rounded-lg p-4">
               <div className="flex justify-between items-start mb-3">
                 <h4 className="font-semibold">

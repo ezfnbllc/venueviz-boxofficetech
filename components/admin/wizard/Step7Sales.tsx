@@ -43,7 +43,7 @@ export default function Step7Sales() {
               <label className="block text-xs mb-1">Sales Start Date</label>
               <input
                 type="datetime-local"
-                value={formData.sales.salesPeriod.startDate}
+                value={formData.sales?.salesPeriod?.startDate}
                 onChange={(e) => updateSalesPeriod('startDate', e.target.value)}
                 className="w-full px-3 py-2 bg-white/10 rounded"
               />
@@ -52,7 +52,7 @@ export default function Step7Sales() {
               <label className="block text-xs mb-1">Sales End Date</label>
               <input
                 type="datetime-local"
-                value={formData.sales.salesPeriod.endDate}
+                value={formData.sales?.salesPeriod?.endDate}
                 onChange={(e) => updateSalesPeriod('endDate', e.target.value)}
                 className="w-full px-3 py-2 bg-white/10 rounded"
               />
@@ -63,7 +63,7 @@ export default function Step7Sales() {
             <label className="block text-xs mb-1">Auto-close sales (hours before event)</label>
             <input
               type="number"
-              value={formData.sales.salesPeriod.autoCloseBeforeEvent}
+              value={formData.sales?.salesPeriod?.autoCloseBeforeEvent}
               onChange={(e) => updateSalesPeriod('autoCloseBeforeEvent', parseInt(e.target.value) || 0)}
               className="w-full px-3 py-2 bg-white/10 rounded"
               min="0"
@@ -84,11 +84,11 @@ export default function Step7Sales() {
             <div>
               <div className="flex justify-between items-center mb-2">
                 <label className="text-sm">Online Sales</label>
-                <span className="text-sm font-semibold">{formData.sales.distribution.online}%</span>
+                <span className="text-sm font-semibold">{formData.sales?.distribution?.online}%</span>
               </div>
               <input
                 type="range"
-                value={formData.sales.distribution.online}
+                value={formData.sales?.distribution?.online}
                 onChange={(e) => updateDistribution('online', parseInt(e.target.value))}
                 className="w-full"
                 min="0"
@@ -100,11 +100,11 @@ export default function Step7Sales() {
             <div>
               <div className="flex justify-between items-center mb-2">
                 <label className="text-sm">Box Office / Comp Reserve</label>
-                <span className="text-sm font-semibold">{formData.sales.distribution.boxOffice}%</span>
+                <span className="text-sm font-semibold">{formData.sales?.distribution?.boxOffice}%</span>
               </div>
               <input
                 type="range"
-                value={formData.sales.distribution.boxOffice}
+                value={formData.sales?.distribution?.boxOffice}
                 onChange={(e) => updateDistribution('boxOffice', parseInt(e.target.value))}
                 className="w-full"
                 min="0"
@@ -130,7 +130,7 @@ export default function Step7Sales() {
           <label className="flex items-center gap-3">
             <input
               type="checkbox"
-              checked={formData.sales.waitlist.enabled}
+              checked={formData.sales?.waitlist?.enabled}
               onChange={(e) => updateWaitlist('enabled', e.target.checked)}
               className="w-5 h-5 rounded"
             />
@@ -142,11 +142,11 @@ export default function Step7Sales() {
             </div>
           </label>
           
-          {formData.sales.waitlist.enabled && (
+          {formData.sales?.waitlist?.enabled && (
             <label className="flex items-center gap-3 ml-8">
               <input
                 type="checkbox"
-                checked={formData.sales.waitlist.autoRelease}
+                checked={formData.sales?.waitlist?.autoRelease}
                 onChange={(e) => updateWaitlist('autoRelease', e.target.checked)}
                 className="w-5 h-5 rounded"
               />
@@ -238,22 +238,22 @@ export default function Step7Sales() {
           <div className="flex justify-between">
             <span className="text-gray-400">Sales Period:</span>
             <span>
-              {formData.sales.salesPeriod.startDate 
-                ? new Date(formData.sales.salesPeriod.startDate).toLocaleDateString()
+              {formData.sales?.salesPeriod?.startDate 
+                ? new Date(formData.sales?.salesPeriod?.startDate).toLocaleDateString()
                 : 'Not set'} 
               {' - '}
-              {formData.sales.salesPeriod.endDate
-                ? new Date(formData.sales.salesPeriod.endDate).toLocaleDateString()
+              {formData.sales?.salesPeriod?.endDate
+                ? new Date(formData.sales?.salesPeriod?.endDate).toLocaleDateString()
                 : 'Event date'}
             </span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-400">Online Allocation:</span>
-            <span>{formData.sales.distribution.online}% of capacity</span>
+            <span>{formData.sales?.distribution?.online}% of capacity</span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-400">Box Office Reserve:</span>
-            <span>{formData.sales.distribution.boxOffice}% of capacity</span>
+            <span>{formData.sales?.distribution?.boxOffice}% of capacity</span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-400">Transfer Policy:</span>
@@ -261,7 +261,7 @@ export default function Step7Sales() {
           </div>
           <div className="flex justify-between">
             <span className="text-gray-400">Waitlist:</span>
-            <span>{formData.sales.waitlist.enabled ? 'Enabled' : 'Disabled'}</span>
+            <span>{formData.sales?.waitlist?.enabled ? 'Enabled' : 'Disabled'}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-400">Max Per Customer:</span>

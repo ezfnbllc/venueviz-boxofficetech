@@ -107,7 +107,7 @@ export default function Step2Venue() {
   }
   
   const toggleSectionAvailability = (sectionId: string) => {
-    const sections = formData.venue.availableSections.map(section =>
+    const sections = formData.venue?.availableSections?.map(section =>
       section.sectionId === sectionId
         ? { ...section, available: !section.available }
         : section
@@ -116,7 +116,7 @@ export default function Step2Venue() {
   }
   
   const updateSectionType = (sectionId: string, type: string) => {
-    const sections = formData.venue.availableSections.map(section =>
+    const sections = formData.venue?.availableSections?.map(section =>
       section.sectionId === sectionId
         ? { ...section, seatingType: type }
         : section
@@ -228,12 +228,12 @@ export default function Step2Venue() {
       </div>
       
       {/* Section Configuration */}
-      {selectedLayout && formData.venue.availableSections.length > 0 && (
+      {selectedLayout && formData.venue?.availableSections?.length > 0 && (
         <div>
           <label className="block text-sm font-medium mb-2">Section Configuration</label>
           <div className="bg-black/20 rounded-lg p-4">
             <div className="space-y-3">
-              {formData.venue.availableSections.map(section => (
+              {formData.venue?.availableSections?.map(section => (
                 <div key={section.sectionId} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
                   <div className="flex items-center gap-3">
                     <input
@@ -283,7 +283,7 @@ export default function Step2Venue() {
                 <div
                   key={section.id}
                   className={`p-3 rounded-lg border ${
-                    formData.venue.availableSections.find(s => s.sectionId === section.id)?.available
+                    formData.venue?.availableSections?.find(s => s.sectionId === section.id)?.available
                       ? 'bg-purple-600/20 border-purple-600'
                       : 'bg-gray-600/20 border-gray-600'
                   }`}

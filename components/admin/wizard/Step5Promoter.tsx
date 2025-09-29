@@ -181,7 +181,7 @@ export default function Step5Promoter() {
                 <label className="flex items-center gap-3">
                   <input
                     type="checkbox"
-                    checked={formData.promoter.portalCustomization.usePromoterBranding}
+                    checked={formData.promoter?.portalCustomization?.usePromoterBranding}
                     onChange={(e) => updatePortalCustomization('usePromoterBranding', e.target.checked)}
                     className="w-5 h-5 rounded"
                   />
@@ -200,7 +200,7 @@ export default function Step5Promoter() {
                   <span className="text-gray-400 mr-2">/p/{selectedPromoter?.slug}/</span>
                   <input
                     type="text"
-                    value={formData.promoter.portalCustomization.customSlug}
+                    value={formData.promoter?.portalCustomization?.customSlug}
                     onChange={(e) => updatePortalCustomization('customSlug', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
                     className="flex-1 px-3 py-2 bg-white/10 rounded"
                     placeholder="event-custom-url"
@@ -220,7 +220,7 @@ export default function Step5Promoter() {
               <label className="flex items-center gap-3">
                 <input
                   type="checkbox"
-                  checked={formData.promoter.restrictions.canEditAfterPublish}
+                  checked={formData.promoter?.restrictions?.canEditAfterPublish}
                   onChange={(e) => updateRestriction('canEditAfterPublish', e.target.checked)}
                   className="w-5 h-5 rounded"
                 />
@@ -235,7 +235,7 @@ export default function Step5Promoter() {
               <label className="flex items-center gap-3">
                 <input
                   type="checkbox"
-                  checked={formData.promoter.restrictions.canAccessCustomerData}
+                  checked={formData.promoter?.restrictions?.canAccessCustomerData}
                   onChange={(e) => updateRestriction('canAccessCustomerData', e.target.checked)}
                   className="w-5 h-5 rounded"
                 />
@@ -250,7 +250,7 @@ export default function Step5Promoter() {
               <label className="flex items-center gap-3">
                 <input
                   type="checkbox"
-                  checked={formData.promoter.restrictions.canIssueRefunds}
+                  checked={formData.promoter?.restrictions?.canIssueRefunds}
                   onChange={(e) => updateRestriction('canIssueRefunds', e.target.checked)}
                   className="w-5 h-5 rounded"
                 />
@@ -267,11 +267,11 @@ export default function Step5Promoter() {
       )}
       
       {/* Commission Calculation Preview */}
-      {formData.promoter.promoterId && formData.pricing.tiers.length > 0 && (
+      {formData.promoter.promoterId && formData.pricing?.tiers?.length > 0 && (
         <div className="bg-purple-600/10 border border-purple-600/30 rounded-lg p-4">
           <h4 className="font-semibold mb-3">Commission Preview</h4>
           <div className="space-y-2 text-sm">
-            {formData.pricing.tiers.map(tier => (
+            {formData.pricing?.tiers?.map(tier => (
               <div key={tier.id} className="flex justify-between">
                 <span>{tier.name} (${tier.basePrice})</span>
                 <span className="text-green-400">

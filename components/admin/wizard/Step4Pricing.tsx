@@ -32,12 +32,12 @@ export default function Step4Pricing() {
   
   const removeTier = (tierId: string) => {
     updateFormData('pricing', {
-      tiers: formData.pricing.tiers.filter(t => t.id !== tierId)
+      tiers: formData.pricing?.tiers?.filter(t => t.id !== tierId)
     })
   }
   
   const assignSectionToTier = (tierId: string, sectionId: string) => {
-    const tiers = formData.pricing.tiers.map(tier => {
+    const tiers = formData.pricing?.tiers?.map(tier => {
       // Remove section from all tiers first
       const sections = tier.sections.filter(s => s !== sectionId)
       
@@ -126,7 +126,7 @@ export default function Step4Pricing() {
         
         {(formData.pricing?.tiers?.length || 0) > 0 && (
           <div className="space-y-3">
-            {formData.pricing.tiers.map(tier => (
+            {formData.pricing?.tiers?.map(tier => (
               <div key={tier.id} className="bg-white/5 rounded-lg p-4">
                 <div className="flex justify-between items-start mb-3">
                   <div>
@@ -263,7 +263,7 @@ export default function Step4Pricing() {
               <label className="block text-xs mb-1">Processing Fee (%)</label>
               <input
                 type="number"
-                value={formData.pricing?.fees.processingFee}
+                value={formData.pricing?.fees?.processingFee}
                 onChange={(e) => updateFees('processingFee', parseFloat(e.target.value) || 0)}
                 className="w-full px-3 py-2 bg-white/10 rounded"
                 step="0.1"
@@ -273,7 +273,7 @@ export default function Step4Pricing() {
               <label className="block text-xs mb-1">Platform Fee (%)</label>
               <input
                 type="number"
-                value={formData.pricing?.fees.platformFee}
+                value={formData.pricing?.fees?.platformFee}
                 onChange={(e) => updateFees('platformFee', parseFloat(e.target.value) || 0)}
                 className="w-full px-3 py-2 bg-white/10 rounded"
                 step="0.1"
@@ -283,7 +283,7 @@ export default function Step4Pricing() {
               <label className="block text-xs mb-1">Tax Rate (%)</label>
               <input
                 type="number"
-                value={formData.pricing?.fees.taxRate}
+                value={formData.pricing?.fees?.taxRate}
                 onChange={(e) => updateFees('taxRate', parseFloat(e.target.value) || 0)}
                 className="w-full px-3 py-2 bg-white/10 rounded"
                 step="0.1"

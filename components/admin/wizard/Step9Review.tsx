@@ -15,15 +15,15 @@ export default function Step9Review() {
     if (!formData.basics.description) errors.push('Event description is required')
     if (!formData.venue.venueId) errors.push('Venue selection is required')
     if (!formData.venue.layoutId) errors.push('Layout selection is required')
-    if (formData.schedule.performances.length === 0) errors.push('At least one performance date is required')
-    if (formData.pricing.tiers.length === 0) errors.push('At least one pricing tier is required')
+    if (formData.schedule?.performances?.length === 0) errors.push('At least one performance date is required')
+    if (formData.pricing?.tiers?.length === 0) errors.push('At least one pricing tier is required')
     
     // Warnings
-    if (!formData.basics.images.cover) warnings.push('No cover image uploaded')
-    if (!formData.communications.seo.metaTitle) warnings.push('SEO title not set')
-    if (!formData.communications.seo.metaDescription) warnings.push('SEO description not set')
+    if (!formData.basics?.images?.cover) warnings.push('No cover image uploaded')
+    if (!formData.communications?.seo?.metaTitle) warnings.push('SEO title not set')
+    if (!formData.communications?.seo?.metaDescription) warnings.push('SEO description not set')
     if (!formData.promoter.promoterId) warnings.push('No promoter assigned')
-    if (formData.promotions.linkedPromotions.length === 0 && formData.promotions.eventPromotions.length === 0) {
+    if (formData.promotions?.linkedPromotions?.length === 0 && formData.promotions?.eventPromotions?.length === 0) {
       warnings.push('No promotions configured')
     }
     
@@ -41,7 +41,7 @@ export default function Step9Review() {
   
   const calculateRevenuePotential = () => {
     let total = 0
-    formData.pricing.tiers.forEach(tier => {
+    formData.pricing?.tiers?.forEach(tier => {
       total += tier.basePrice * tier.inventory
     })
     return total
@@ -130,7 +130,7 @@ export default function Step9Review() {
               <div>
                 <span className="text-gray-400">Active Sections:</span>
                 <p className="font-semibold">
-                  {formData.venue.availableSections.filter(s => s.available).length}
+                  {formData.venue?.availableSections?.filter(s => s.available).length}
                 </p>
               </div>
             </div>
@@ -140,7 +140,7 @@ export default function Step9Review() {
           <div>
             <h4 className="font-semibold text-purple-400 mb-2">Schedule</h4>
             <div className="space-y-2">
-              {formData.schedule.performances.map((perf, index) => (
+              {formData.schedule?.performances?.map((perf, index) => (
                 <div key={index} className="flex justify-between text-sm">
                   <span>
                     {perf.date ? new Date(perf.date).toLocaleDateString() : 'Date not set'}
@@ -162,7 +162,7 @@ export default function Step9Review() {
           <div>
             <h4 className="font-semibold text-purple-400 mb-2">Pricing Tiers</h4>
             <div className="space-y-2">
-              {formData.pricing.tiers.map(tier => (
+              {formData.pricing?.tiers?.map(tier => (
                 <div key={tier.id} className="flex justify-between text-sm">
                   <span>{tier.name}</span>
                   <span>
@@ -224,9 +224,9 @@ export default function Step9Review() {
           previewMode === 'mobile' ? 'max-w-sm mx-auto' : 'w-full'
         }`}>
           <div className="bg-gray-100 p-4 text-gray-900">
-            {formData.basics.images.cover ? (
+            {formData.basics?.images?.cover ? (
               <img 
-                src={formData.basics.images.cover} 
+                src={formData.basics?.images?.cover} 
                 alt={formData.basics.name}
                 className="w-full h-48 object-cover rounded mb-4"
               />
@@ -247,7 +247,7 @@ export default function Step9Review() {
             
             <div className="border-t pt-4">
               <p className="font-semibold mb-2">Ticket Prices:</p>
-              {formData.pricing.tiers.map(tier => (
+              {formData.pricing?.tiers?.map(tier => (
                 <div key={tier.id} className="flex justify-between mb-1">
                   <span>{tier.name}:</span>
                   <span>${tier.basePrice}</span>

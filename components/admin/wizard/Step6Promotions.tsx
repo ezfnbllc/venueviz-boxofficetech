@@ -33,8 +33,8 @@ export default function Step6Promotions() {
   }
   
   const toggleLinkedPromotion = (promotionId: string) => {
-    const linked = formData.promotions.linkedPromotions.includes(promotionId)
-      ? formData.promotions.linkedPromotions.filter(id => id !== promotionId)
+    const linked = formData.promotions?.linkedPromotions?.includes(promotionId)
+      ? formData.promotions?.linkedPromotions?.filter(id => id !== promotionId)
       : [...formData.promotions.linkedPromotions, promotionId]
     
     updateFormData('promotions', { linkedPromotions: linked })
@@ -46,7 +46,7 @@ export default function Step6Promotions() {
     const promotion = {
       ...newPromotion,
       code: newPromotion.code.toUpperCase(),
-      applicableToTiers: formData.pricing.tiers.map(t => t.id) // Apply to all tiers by default
+      applicableToTiers: formData.pricing?.tiers?.map(t => t.id) // Apply to all tiers by default
     }
     
     updateFormData('promotions', {
@@ -67,7 +67,7 @@ export default function Step6Promotions() {
   
   const removeEventPromotion = (index: number) => {
     updateFormData('promotions', {
-      eventPromotions: formData.promotions.eventPromotions.filter((_, i) => i !== index)
+      eventPromotions: formData.promotions?.eventPromotions?.filter((_, i) => i !== index)
     })
   }
   
@@ -95,7 +95,7 @@ export default function Step6Promotions() {
         maxUses: 1,
         validFrom: '',
         validTo: '',
-        applicableToTiers: formData.pricing.tiers.map(t => t.id)
+        applicableToTiers: formData.pricing?.tiers?.map(t => t.id)
       })
     }
     
@@ -125,7 +125,7 @@ export default function Step6Promotions() {
                   <div className="flex items-center gap-3">
                     <input
                       type="checkbox"
-                      checked={formData.promotions.linkedPromotions.includes(promo.id)}
+                      checked={formData.promotions?.linkedPromotions?.includes(promo.id)}
                       onChange={() => toggleLinkedPromotion(promo.id)}
                       className="w-5 h-5 rounded"
                     />
@@ -231,7 +231,7 @@ export default function Step6Promotions() {
         {/* List of Event Promotions */}
         {(formData.promotions?.eventPromotions?.length || 0) > 0 && (
           <div className="mt-4 space-y-2">
-            {formData.promotions.eventPromotions.map((promo, index) => (
+            {formData.promotions?.eventPromotions?.map((promo, index) => (
               <div key={index} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
                 <div>
                   <p className="font-semibold">{promo.code}</p>
@@ -265,7 +265,7 @@ export default function Step6Promotions() {
             <label className="flex items-center gap-3">
               <input
                 type="checkbox"
-                checked={formData.promotions.automaticDiscounts.student}
+                checked={formData.promotions?.automaticDiscounts?.student}
                 onChange={() => toggleAutomaticDiscount('student')}
                 className="w-5 h-5 rounded"
               />
@@ -278,7 +278,7 @@ export default function Step6Promotions() {
             <label className="flex items-center gap-3">
               <input
                 type="checkbox"
-                checked={formData.promotions.automaticDiscounts.senior}
+                checked={formData.promotions?.automaticDiscounts?.senior}
                 onChange={() => toggleAutomaticDiscount('senior')}
                 className="w-5 h-5 rounded"
               />
@@ -291,7 +291,7 @@ export default function Step6Promotions() {
             <label className="flex items-center gap-3">
               <input
                 type="checkbox"
-                checked={formData.promotions.automaticDiscounts.military}
+                checked={formData.promotions?.automaticDiscounts?.military}
                 onChange={() => toggleAutomaticDiscount('military')}
                 className="w-5 h-5 rounded"
               />
@@ -321,7 +321,7 @@ export default function Step6Promotions() {
                 const code = (document.getElementById('test-code') as HTMLInputElement)?.value
                 if (code) {
                   // Test the code
-                  const eventPromo = formData.promotions.eventPromotions.find(p => p.code === code.toUpperCase())
+                  const eventPromo = formData.promotions?.eventPromotions?.find(p => p.code === code.toUpperCase())
                   if (eventPromo) {
                     alert(`✅ Valid! ${eventPromo.type === 'percentage' ? `${eventPromo.value}% off` : `$${eventPromo.value} off`}`)
                   } else {
