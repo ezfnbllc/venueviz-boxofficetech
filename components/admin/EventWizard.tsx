@@ -218,43 +218,40 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
   
   return (
     <div className="min-h-screen bg-gray-950">
-      {/* Header */}
-      <div className="bg-gray-900 border-b border-white/10 p-6">
+      {/* Compact Header */}
+      <div className="bg-gray-900 border-b border-white/10 py-3 px-6">
         <div className="max-w-6xl mx-auto">
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center gap-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-3">
               <button
                 onClick={handleCancel}
-                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                className="text-gray-400 hover:text-white transition-colors"
                 title="Back to Events"
               >
                 ← Back
               </button>
-              <h2 className="text-2xl font-bold">
+              <h2 className="text-xl font-bold">
                 {isEditing ? 'Edit Event' : 'Create New Event'}
               </h2>
+              <span className="text-sm text-gray-400">
+                Step {currentStep} of 9: {steps[currentStep - 1].title}
+              </span>
             </div>
-            <div className="flex items-center gap-3">
-              {saving && (
-                <span className="text-sm text-gray-400 flex items-center">
-                  <span className="animate-spin mr-2">⏳</span> Saving...
-                </span>
-              )}
-            </div>
+            {saving && (
+              <span className="text-sm text-gray-400 flex items-center">
+                <span className="animate-spin mr-2">⏳</span> Saving...
+              </span>
+            )}
           </div>
           
-          {/* Progress Steps */}
-          <div className="flex items-center justify-between">
+          {/* Compact Progress Steps */}
+          <div className="flex items-center gap-1">
             {steps.map((step, index) => (
-              <div
-                key={step.number}
-                className="flex items-center"
-                style={{ flex: index < steps.length - 1 ? 1 : 'initial' }}
-              >
+              <React.Fragment key={step.number}>
                 <button
                   onClick={() => handleStepClick(step.number)}
                   className={`
-                    flex items-center justify-center w-10 h-10 rounded-full text-sm font-semibold
+                    w-8 h-8 rounded-full text-xs font-semibold flex items-center justify-center
                     ${currentStep === step.number 
                       ? 'bg-purple-600 text-white' 
                       : currentStep > step.number 
@@ -264,24 +261,19 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
                     transition-all
                   `}
                   disabled={step.number > currentStep}
+                  title={step.title}
                 >
                   {currentStep > step.number ? '✓' : step.number}
                 </button>
                 {index < steps.length - 1 && (
                   <div 
-                    className={`flex-1 h-0.5 mx-2 ${
+                    className={`flex-1 h-0.5 ${
                       currentStep > step.number ? 'bg-green-600' : 'bg-gray-700'
                     }`}
                   />
                 )}
-              </div>
+              </React.Fragment>
             ))}
-          </div>
-          
-          {/* Step Title */}
-          <div className="mt-4">
-            <p className="text-gray-400 text-sm">Step {currentStep} of {steps.length}</p>
-            <h3 className="text-lg font-semibold">{steps[currentStep - 1].title}</h3>
           </div>
         </div>
       </div>
