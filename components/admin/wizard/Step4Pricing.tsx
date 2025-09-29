@@ -119,7 +119,7 @@ export default function Step4Pricing() {
           </div>
         </div>
         
-        {formData.pricing.tiers.length > 0 && (
+        {(formData.pricing?.tiers?.length || 0) > 0 && (
           <div className="space-y-3">
             {formData.pricing.tiers.map(tier => (
               <div key={tier.id} className="bg-white/5 rounded-lg p-4">
@@ -140,7 +140,7 @@ export default function Step4Pricing() {
                 </div>
                 
                 {/* Section Assignment */}
-                {formData.venue.availableSections.length > 0 && (
+                {(formData.venue?.availableSections?.length || 0) > 0 && (
                   <div>
                     <p className="text-sm mb-2">Assigned Sections:</p>
                     <div className="flex flex-wrap gap-2">

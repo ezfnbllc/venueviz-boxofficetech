@@ -229,7 +229,7 @@ export default function Step6Promotions() {
         </div>
         
         {/* List of Event Promotions */}
-        {formData.promotions.eventPromotions.length > 0 && (
+        {(formData.promotions?.eventPromotions?.length || 0) > 0 && (
           <div className="mt-4 space-y-2">
             {formData.promotions.eventPromotions.map((promo, index) => (
               <div key={index} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">

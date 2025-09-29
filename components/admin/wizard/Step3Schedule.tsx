@@ -8,7 +8,7 @@ export default function Step3Schedule() {
   const addPerformance = () => {
     updateFormData('schedule', {
       performances: [
-        ...formData.schedule.performances,
+        ...(formData.schedule?.performances || []),
         {
           date: '',
           doorsOpen: '',
@@ -22,7 +22,7 @@ export default function Step3Schedule() {
   }
   
   const updatePerformance = (index: number, field: string, value: any) => {
-    const performances = [...formData.schedule.performances]
+    const performances = [...((formData.schedule?.performances || [])]
     performances[index] = { ...performances[index], [field]: value }
     updateFormData('schedule', { performances })
   }
@@ -73,7 +73,7 @@ export default function Step3Schedule() {
                     </span>
                   )}
                 </h4>
-                {formData.schedule.performances.length > 1 && (
+                {(formData.schedule?.performances?.length || 0) > 1 && (
                   <button
                     type="button"
                     onClick={() => removePerformance(index)}
