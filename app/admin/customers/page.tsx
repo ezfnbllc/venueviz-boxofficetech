@@ -28,7 +28,19 @@ export default function CustomersManagement() {
       console.log('Loading customers...')
       const customersData = await AdminService.getCustomers()
       console.log('Customers loaded:', customersData.length)
-      setCustomers(customersData.sort((a, b) => b.totalSpent - a.totalSpent))
+      
+      // Ensure all fields exist with defaults
+      const normalizedCustomers = customersData.map(customer => ({
+        ...customer,
+        totalSpent: customer.totalSpent || 0,
+        totalOrders: customer.totalOrders || 0,
+        orderHistory: customer.orderHistory || [],
+        email: customer.email || '',
+        name: customer.name || 'Unknown',
+        phone: customer.phone || ''
+      }))
+      
+      setCustomers(normalizedCustomers.sort((a, b) => b.totalSpent - a.totalSpent))
     } catch (error) {
       console.error('Error loading customers:', error)
     }
@@ -52,46 +64,53 @@ export default function CustomersManagement() {
           <div className="flex justify-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-purple-500"/>
           </div>
+        ) : customers.length === 0 ? (
+          <div className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-12 text-center">
+            <p className="text-gray-400">No customers yet. Customer data will appear here once orders are placed.</p>
+          </div>
         ) : (
-          <div className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-6">
-            {customers.length === 0 ? (
-              <p className="text-center py-8 text-gray-400">
-                No customers yet. Customer data will appear here once orders are placed.
-              </p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="border-b border-white/10">
-                    <tr>
-                      <th className="text-left py-2">Name</th>
-                      <th className="text-left py-2">Email</th>
-                      <th className="text-left py-2">Orders</th>
-                      <th className="text-left py-2">Total Spent</th>
-                      <th className="text-left py-2">Customer Type</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {customers.map((customer, i) => (
-                      <tr key={i} className="border-b border-white/5">
-                        <td className="py-2">{customer.name}</td>
-                        <td className="py-2">{customer.email}</td>
-                        <td className="py-2">{customer.orders.length}</td>
-                        <td className="py-2">${customer.totalSpent.toFixed(2)}</td>
-                        <td className="py-2">
-                          <span className={`px-2 py-1 rounded text-xs ${
-                            customer.totalSpent > 500 
-                              ? 'bg-purple-600/20 text-purple-400' 
-                              : 'bg-blue-600/20 text-blue-400'
-                          }`}>
-                            {customer.totalSpent > 500 ? 'VIP' : 'Regular'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+          <div className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden">
+            <table className="w-full">
+              <thead className="border-b border-white/10">
+                <tr>
+                  <th className="text-left p-4">Customer</th>
+                  <th className="text-left p-4">Contact</th>
+                  <th className="text-center p-4">Orders</th>
+                  <th className="text-right p-4">Total Spent</th>
+                  <th className="text-center p-4">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {customers.map((customer, idx) => (
+                  <tr key={customer.id || idx} className="border-b border-white/5 hover:bg-white/5">
+                    <td className="p-4">
+                      <div className="font-semibold">{customer.name}</div>
+                      <div className="text-sm text-gray-400">{customer.email}</div>
+                    </td>
+                    <td className="p-4 text-sm text-gray-400">
+                      {customer.phone || 'No phone'}
+                    </td>
+                    <td className="p-4 text-center">
+                      <span className="px-3 py-1 bg-purple-600/20 rounded-full text-sm">
+                        {customer.totalOrders || 0}
+                      </span>
+                    </td>
+                    <td className="p-4 text-right font-semibold">
+                      ${(customer.totalSpent || 0).toFixed(2)}
+                    </td>
+                    <td className="p-4 text-center">
+                      <span className={`px-3 py-1 rounded-full text-xs ${
+                        (customer.totalSpent || 0) > 100 
+                          ? 'bg-yellow-600/20 text-yellow-400' 
+                          : 'bg-gray-600/20 text-gray-400'
+                      }`}>
+                        {(customer.totalSpent || 0) > 100 ? 'VIP' : 'Regular'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
