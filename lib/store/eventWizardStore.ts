@@ -1,3 +1,57 @@
+const getCompleteInitialFormData = () => ({
+  basics: {
+    name: "",
+    description: "",
+    category: "concert",
+    tags: [],
+    images: { cover: "", thumbnail: "", gallery: [] },
+    status: "draft",
+    featured: false,
+    performers: []
+  },
+  venue: {
+    venueId: "",
+    layoutId: "",
+    seatingType: "general",
+    availableSections: []
+  },
+  schedule: {
+    performances: [],
+    timezone: "America/Chicago"
+  },
+  pricing: {
+    tiers: [],
+    dynamicPricing: {
+      earlyBird: { enabled: false, discount: 10, endDate: "" },
+      lastMinute: { enabled: false, markup: 20, startDate: "" }
+    },
+    fees: { serviceFee: 0, processingFee: 0, facilityFee: 0 }
+  },
+  promoter: {
+    promoterId: "",
+    commission: 10,
+    paymentTerms: "net-30",
+    responsibilities: []
+  },
+  promotions: {
+    groupDiscount: { enabled: false, minTickets: 10, discountPercentage: 15 },
+    promoCodes: [],
+    eventPromotions: []
+  },
+  sales: {
+    maxTicketsPerOrder: 10,
+    allowWillCall: true,
+    refundPolicy: "no-refunds",
+    salesStartDate: "",
+    salesEndDate: ""
+  },
+  communications: {
+    confirmationEmail: { enabled: true, template: "default", customMessage: "" },
+    reminderEmail: { enabled: true, daysBefore: 1, template: "default", customMessage: "" },
+    seo: { metaTitle: "", metaDescription: "", keywords: [] }
+  }
+})
+
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
@@ -169,126 +223,7 @@ interface EventWizardState {
   setIsEditing: (isEditing: boolean) => void
 }
 
-const initialFormData = {
-  basics: {
-    name: '',
-    description: '',
-    type: 'concert' as const,
-    performers: [],
-    images: {
-      cover: '',
-      gallery: []
-    },
-    status: 'draft' as const,
-    maxTicketsPerCustomer: 10
-  },
-  venue: {
-    venueId: '',
-    layoutId: '',
-    seatingType: 'reserved' as const,
-    availableSections: []
-  },
-  schedule: {
-    performances: [{
-      date: '',
-      doorsOpen: '',
-      startTime: '',
-      endTime: '',
-      pricingModifier: 0,
-      capacity: 0
-    }],
-    timezone: 'America/Chicago'
-  },
-  pricing: {
-    tiers: [],
-    dynamicPricing: {
-      earlyBird: {
-        enabled: false,
-        discount: 10,
-        endDate: ''
-      },
-      lastMinute: {
-        enabled: false,
-        markup: 20,
-        daysBeforeEvent: 3
-      },
-      groupDiscount: {
-        enabled: false,
-        minSize: 10,
-        discount: 15
-      }
-    },
-    fees: {
-      processingFee: 2.9,
-      platformFee: 2.5,
-      taxRate: 8.25
-    }
-  },
-  promoter: {
-    promoterId: '',
-    commission: 10,
-    approvalRequired: false,
-    portalCustomization: {
-      usePromoterBranding: false,
-      customSlug: ''
-    },
-    restrictions: {
-      canEditAfterPublish: false,
-      canAccessCustomerData: true,
-      canIssueRefunds: false
-    }
-  },
-  promotions: {
-    linkedPromotions: [],
-    eventPromotions: [],
-    automaticDiscounts: {
-      student: false,
-      senior: false,
-      military: false
-    }
-  },
-  sales: {
-    salesPeriod: {
-      startDate: '',
-      endDate: '',
-      autoCloseBeforeEvent: 1
-    },
-    distribution: {
-      online: 90,
-      boxOffice: 10
-    },
-    waitlist: {
-      enabled: false,
-      autoRelease: true
-    },
-    transferPolicy: 'allowed' as const
-  },
-  communications: {
-    seo: {
-      metaTitle: '',
-      metaDescription: '',
-      keywords: [],
-      urlSlug: '',
-      ogImage: ''
-    },
-    emailAutomation: {
-      confirmationEmail: true,
-      reminderEmail: true,
-      reminderDays: 1,
-      postEventSurvey: true
-    },
-    smsNotifications: {
-      enabled: false,
-      confirmationSMS: true,
-      reminderSMS: true
-    },
-    calendarSync: {
-      googleCalendar: true,
-      appleCalendar: true,
-      outlookCalendar: false
-    }
-  }
-}
+const initialFormData = getCompleteInitialFormData()
 
 export const useEventWizardStore = create<EventWizardState>()(
   persist(
