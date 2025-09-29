@@ -1,26 +1,47 @@
 'use client'
-import {useState, useEffect} from 'react'
+import {useState, useEffect, useCallback} from 'react'
 import {useRouter} from 'next/navigation'
 import {AdminService} from '@/lib/admin/adminService'
+import {StorageService} from '@/lib/storage/storageService'
 import {auth} from '@/lib/firebase'
 import {onAuthStateChanged} from 'firebase/auth'
 import AdminLayout from '@/components/AdminLayout'
+import EnhancedLayoutBuilder from '@/components/EnhancedLayoutBuilder'
 
 export default function VenuesManagement() {
   const router = useRouter()
   const [venues, setVenues] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showWizard, setShowWizard] = useState(false)
+  const [showLayoutBuilder, setShowLayoutBuilder] = useState(false)
   const [editingVenue, setEditingVenue] = useState<any>(null)
+  const [selectedVenue, setSelectedVenue] = useState<any>(null)
+  const [wizardStep, setWizardStep] = useState(1)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [uploadingImages, setUploadingImages] = useState(false)
+  const [imageFiles, setImageFiles] = useState<File[]>([])
+  const [imageUrls, setImageUrls] = useState<string[]>([])
   
   const [formData, setFormData] = useState({
     name: '',
     streetAddress1: '',
+    streetAddress2: '',
     city: 'Dallas',
     state: 'TX',
-    zipCode: '',
+    zipCode: '75001',
+    latitude: 32.7767,
+    longitude: -96.7970,
     capacity: 1000,
-    type: 'theater'
+    type: 'theater',
+    amenities: [] as string[],
+    parkingCapacity: 500,
+    images: [] as string[],
+    layouts: [] as any[],
+    defaultLayoutId: '',
+    contactEmail: '',
+    contactPhone: '',
+    website: '',
+    description: ''
   })
 
   useEffect(() => {
@@ -37,11 +58,142 @@ export default function VenuesManagement() {
   const loadVenues = async () => {
     try {
       const venuesData = await AdminService.getVenues()
-      setVenues(venuesData)
+      const venuesWithLayouts = await Promise.all(
+        venuesData.map(async (venue) => {
+          const layouts = await AdminService.getLayoutsByVenueId(venue.id)
+          return { ...venue, layouts }
+        })
+      )
+      setVenues(venuesWithLayouts)
     } catch (error) {
       console.error('Error loading venues:', error)
     }
     setLoading(false)
+  }
+
+  const handleEdit = (venue: any) => {
+    setEditingVenue(venue)
+    setFormData({
+      name: venue.name || '',
+      streetAddress1: venue.streetAddress1 || venue.address?.street || '',
+      streetAddress2: venue.streetAddress2 || '',
+      city: venue.city || venue.address?.city || 'Dallas',
+      state: venue.state || venue.address?.state || 'TX',
+      zipCode: venue.zipCode || venue.address?.zip || '',
+      latitude: venue.latitude || venue.address?.coordinates?.lat || 32.7767,
+      longitude: venue.longitude || venue.address?.coordinates?.lng || -96.7970,
+      capacity: venue.capacity || 1000,
+      type: venue.type || 'theater',
+      amenities: venue.amenities || [],
+      parkingCapacity: venue.parkingCapacity || 500,
+      images: venue.images || [],
+      layouts: venue.layouts || [],
+      defaultLayoutId: venue.defaultLayoutId || '',
+      contactEmail: venue.contactEmail || '',
+      contactPhone: venue.contactPhone || '',
+      website: venue.website || '',
+      description: venue.description || ''
+    })
+    setImageUrls(venue.images || [])
+    setShowWizard(true)
+    setWizardStep(1)
+  }
+
+  const handleDelete = async (venueId: string) => {
+    if (confirm('Are you sure you want to delete this venue?')) {
+      try {
+        await AdminService.deleteVenue(venueId)
+        await loadVenues()
+      } catch (error) {
+        console.error('Error deleting venue:', error)
+      }
+    }
+  }
+
+  const handleOpenLayoutBuilder = (venue: any) => {
+    setSelectedVenue(venue)
+    setShowLayoutBuilder(true)
+  }
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
+    
+    setUploadingImages(true)
+    try {
+      const uploadPromises = files.map(file => StorageService.uploadVenueImage(file))
+      const urls = await Promise.all(uploadPromises)
+      setImageUrls([...imageUrls, ...urls])
+      setFormData({...formData, images: [...formData.images, ...urls]})
+    } catch (error) {
+      console.error('Error uploading images:', error)
+    }
+    setUploadingImages(false)
+  }
+
+  const handleSubmit = async () => {
+    try {
+      const venueData = {
+        ...formData,
+        address: {
+          street: formData.streetAddress1,
+          city: formData.city,
+          state: formData.state,
+          zip: formData.zipCode,
+          country: 'USA',
+          coordinates: {
+            lat: formData.latitude,
+            lng: formData.longitude
+          }
+        }
+      }
+      
+      if (editingVenue) {
+        await AdminService.updateVenue(editingVenue.id, venueData)
+      } else {
+        await AdminService.createVenue(venueData)
+      }
+      
+      setShowWizard(false)
+      resetForm()
+      await loadVenues()
+    } catch (error) {
+      console.error('Error saving venue:', error)
+    }
+  }
+
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      streetAddress1: '',
+      streetAddress2: '',
+      city: 'Dallas',
+      state: 'TX',
+      zipCode: '75001',
+      latitude: 32.7767,
+      longitude: -96.7970,
+      capacity: 1000,
+      type: 'theater',
+      amenities: [],
+      parkingCapacity: 500,
+      images: [],
+      layouts: [],
+      defaultLayoutId: '',
+      contactEmail: '',
+      contactPhone: '',
+      website: '',
+      description: ''
+    })
+    setImageUrls([])
+    setEditingVenue(null)
+    setWizardStep(1)
+  }
+
+  const toggleAmenity = (amenity: string) => {
+    const amenities = formData.amenities.includes(amenity)
+      ? formData.amenities.filter(a => a !== amenity)
+      : [...formData.amenities, amenity]
+    setFormData({...formData, amenities})
   }
 
   return (
@@ -50,9 +202,15 @@ export default function VenuesManagement() {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold">Venues Management</h1>
-            <p className="text-gray-400">Configure venues and layouts</p>
+            <p className="text-gray-400">Configure venues and seating layouts</p>
           </div>
-          <button onClick={() => setShowWizard(true)} className="px-6 py-2 bg-purple-600 rounded-lg">
+          <button 
+            onClick={() => {
+              resetForm()
+              setShowWizard(true)
+            }}
+            className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg hover:from-purple-700 hover:to-pink-700"
+          >
             + Add Venue
           </button>
         </div>
@@ -61,16 +219,427 @@ export default function VenuesManagement() {
           <div className="flex justify-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-purple-500"/>
           </div>
+        ) : venues.length === 0 ? (
+          <div className="text-center py-12 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10">
+            <div className="text-6xl mb-4">🏛️</div>
+            <p className="text-gray-400 mb-4">No venues yet. Add your first venue!</p>
+            <button 
+              onClick={() => setShowWizard(true)}
+              className="px-6 py-2 bg-purple-600 rounded-lg hover:bg-purple-700"
+            >
+              Add First Venue
+            </button>
+          </div>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {venues.map(venue => (
-              <div key={venue.id} className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-6">
-                <h3 className="text-xl font-bold mb-2">{venue.name}</h3>
-                <p className="text-gray-400 mb-4">{venue.city}, {venue.state}</p>
-                <p className="text-sm text-gray-400">Capacity: {venue.capacity}</p>
+              <div key={venue.id} className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden group hover:scale-105 transition-transform">
+                {/* Venue Image */}
+                {venue.images && venue.images[0] && (
+                  <div className="h-48 overflow-hidden">
+                    <img 
+                      src={venue.images[0]} 
+                      alt={venue.name}
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                    />
+                  </div>
+                )}
+                
+                <div className="p-6">
+                  <h3 className="text-xl font-bold mb-2">{venue.name}</h3>
+                  <p className="text-gray-400 text-sm mb-4">
+                    {venue.city || venue.address?.city}, {venue.state || venue.address?.state}
+                  </p>
+                  
+                  <div className="space-y-2 mb-4">
+                    <div className="flex items-center gap-2 text-sm text-gray-400">
+                      <span>👥</span>
+                      <span>Capacity: {venue.capacity || 'N/A'}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-gray-400">
+                      <span>🎭</span>
+                      <span>Type: {venue.type || 'Theater'}</span>
+                    </div>
+                    {venue.layouts && venue.layouts.length > 0 && (
+                      <div className="flex items-center gap-2 text-sm text-gray-400">
+                        <span>📐</span>
+                        <span>{venue.layouts.length} Layout{venue.layouts.length !== 1 ? 's' : ''}</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Amenities */}
+                  {venue.amenities && venue.amenities.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {venue.amenities.slice(0, 3).map((amenity: string, idx: number) => (
+                        <span key={idx} className="px-2 py-1 bg-purple-600/20 text-purple-400 rounded text-xs">
+                          {amenity}
+                        </span>
+                      ))}
+                      {venue.amenities.length > 3 && (
+                        <span className="px-2 py-1 bg-gray-600/20 text-gray-400 rounded text-xs">
+                          +{venue.amenities.length - 3} more
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => handleEdit(venue)}
+                      className="flex-1 px-3 py-2 bg-blue-600/20 text-blue-400 rounded-lg hover:bg-blue-600/30 text-sm"
+                    >
+                      Edit
+                    </button>
+                    <button 
+                      onClick={() => handleOpenLayoutBuilder(venue)}
+                      className="flex-1 px-3 py-2 bg-purple-600/20 text-purple-400 rounded-lg hover:bg-purple-600/30 text-sm"
+                    >
+                      Layouts
+                    </button>
+                    <button 
+                      onClick={() => handleDelete(venue.id)}
+                      className="px-3 py-2 bg-red-600/20 text-red-400 rounded-lg hover:bg-red-600/30 text-sm"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
+        )}
+
+        {/* Venue Wizard Modal */}
+        {showWizard && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
+            <div className="bg-gray-900 rounded-xl p-6 w-full max-w-4xl my-8">
+              {/* Wizard Header */}
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold">
+                  {editingVenue ? 'Edit Venue' : 'Add New Venue'}
+                </h2>
+                <button 
+                  onClick={() => {
+                    setShowWizard(false)
+                    resetForm()
+                  }}
+                  className="text-gray-400 hover:text-white"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Progress Steps */}
+              <div className="flex justify-between mb-8">
+                {['Basic Info', 'Location', 'Features', 'Images'].map((step, idx) => (
+                  <div 
+                    key={idx}
+                    className={`flex-1 text-center ${idx + 1 <= wizardStep ? 'text-purple-400' : 'text-gray-600'}`}
+                  >
+                    <div className={`w-8 h-8 mx-auto mb-2 rounded-full flex items-center justify-center ${
+                      idx + 1 <= wizardStep ? 'bg-purple-600' : 'bg-gray-700'
+                    }`}>
+                      {idx + 1}
+                    </div>
+                    <span className="text-xs">{step}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Step 1: Basic Info */}
+              {wizardStep === 1 && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm mb-2">Venue Name</label>
+                    <input
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) => setFormData({...formData, name: e.target.value})}
+                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                      placeholder="Enter venue name"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm mb-2">Description</label>
+                    <textarea
+                      value={formData.description}
+                      onChange={(e) => setFormData({...formData, description: e.target.value})}
+                      className="w-full px-4 py-2 bg-white/10 rounded-lg h-32"
+                      placeholder="Enter venue description"
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm mb-2">Venue Type</label>
+                      <select
+                        value={formData.type}
+                        onChange={(e) => setFormData({...formData, type: e.target.value})}
+                        className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                      >
+                        <option value="theater">Theater</option>
+                        <option value="arena">Arena</option>
+                        <option value="stadium">Stadium</option>
+                        <option value="club">Club</option>
+                        <option value="hall">Hall</option>
+                        <option value="outdoor">Outdoor</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm mb-2">Capacity</label>
+                      <input
+                        type="number"
+                        value={formData.capacity}
+                        onChange={(e) => setFormData({...formData, capacity: parseInt(e.target.value)})}
+                        className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                        placeholder="1000"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-end gap-3">
+                    <button 
+                      onClick={() => setWizardStep(2)}
+                      className="px-6 py-2 bg-purple-600 rounded-lg"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 2: Location */}
+              {wizardStep === 2 && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm mb-2">Street Address</label>
+                    <input
+                      type="text"
+                      value={formData.streetAddress1}
+                      onChange={(e) => setFormData({...formData, streetAddress1: e.target.value})}
+                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                      placeholder="123 Main Street"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm mb-2">Address Line 2 (Optional)</label>
+                    <input
+                      type="text"
+                      value={formData.streetAddress2}
+                      onChange={(e) => setFormData({...formData, streetAddress2: e.target.value})}
+                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                      placeholder="Suite, Floor, etc."
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm mb-2">City</label>
+                      <input
+                        type="text"
+                        value={formData.city}
+                        onChange={(e) => setFormData({...formData, city: e.target.value})}
+                        className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm mb-2">State</label>
+                      <input
+                        type="text"
+                        value={formData.state}
+                        onChange={(e) => setFormData({...formData, state: e.target.value})}
+                        className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm mb-2">ZIP Code</label>
+                      <input
+                        type="text"
+                        value={formData.zipCode}
+                        onChange={(e) => setFormData({...formData, zipCode: e.target.value})}
+                        className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm mb-2">Contact Email</label>
+                      <input
+                        type="email"
+                        value={formData.contactEmail}
+                        onChange={(e) => setFormData({...formData, contactEmail: e.target.value})}
+                        className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                        placeholder="venue@example.com"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm mb-2">Contact Phone</label>
+                      <input
+                        type="tel"
+                        value={formData.contactPhone}
+                        onChange={(e) => setFormData({...formData, contactPhone: e.target.value})}
+                        className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                        placeholder="(555) 123-4567"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <button 
+                      onClick={() => setWizardStep(1)}
+                      className="px-6 py-2 bg-gray-700 rounded-lg"
+                    >
+                      Back
+                    </button>
+                    <button 
+                      onClick={() => setWizardStep(3)}
+                      className="px-6 py-2 bg-purple-600 rounded-lg"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 3: Features */}
+              {wizardStep === 3 && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm mb-2">Parking Capacity</label>
+                    <input
+                      type="number"
+                      value={formData.parkingCapacity}
+                      onChange={(e) => setFormData({...formData, parkingCapacity: parseInt(e.target.value)})}
+                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                      placeholder="500"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm mb-2">Website</label>
+                    <input
+                      type="url"
+                      value={formData.website}
+                      onChange={(e) => setFormData({...formData, website: e.target.value})}
+                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                      placeholder="https://venue-website.com"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm mb-4">Amenities</label>
+                    <div className="grid grid-cols-3 gap-3">
+                      {[
+                        'Parking', 'WiFi', 'Wheelchair Accessible', 
+                        'Food Service', 'Bar', 'VIP Boxes',
+                        'Coat Check', 'ATM', 'Merchandise Shop'
+                      ].map(amenity => (
+                        <label key={amenity} className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={formData.amenities.includes(amenity)}
+                            onChange={() => toggleAmenity(amenity)}
+                            className="rounded"
+                          />
+                          <span className="text-sm">{amenity}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <button 
+                      onClick={() => setWizardStep(2)}
+                      className="px-6 py-2 bg-gray-700 rounded-lg"
+                    >
+                      Back
+                    </button>
+                    <button 
+                      onClick={() => setWizardStep(4)}
+                      className="px-6 py-2 bg-purple-600 rounded-lg"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 4: Images */}
+              {wizardStep === 4 && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm mb-2">Venue Images</label>
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                      disabled={uploadingImages}
+                    />
+                    {uploadingImages && (
+                      <p className="text-xs text-purple-400 mt-2">Uploading images...</p>
+                    )}
+                  </div>
+                  
+                  {imageUrls.length > 0 && (
+                    <div className="grid grid-cols-4 gap-4">
+                      {imageUrls.map((url, index) => (
+                        <div key={index} className="relative">
+                          <img src={url} alt="" className="w-full h-24 object-cover rounded" />
+                          <button 
+                            onClick={() => {
+                              const newUrls = imageUrls.filter((_, i) => i !== index)
+                              setImageUrls(newUrls)
+                              setFormData({...formData, images: newUrls})
+                            }}
+                            className="absolute top-1 right-1 w-6 h-6 bg-red-600 rounded-full text-white text-xs"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  <div className="flex justify-between">
+                    <button 
+                      onClick={() => setWizardStep(3)}
+                      className="px-6 py-2 bg-gray-700 rounded-lg"
+                    >
+                      Back
+                    </button>
+                    <button 
+                      onClick={handleSubmit}
+                      className="px-6 py-2 bg-green-600 rounded-lg hover:bg-green-700"
+                    >
+                      {editingVenue ? 'Update Venue' : 'Add Venue'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Layout Builder Modal */}
+        {showLayoutBuilder && selectedVenue && (
+          <EnhancedLayoutBuilder
+            venue={selectedVenue}
+            onClose={() => {
+              setShowLayoutBuilder(false)
+              setSelectedVenue(null)
+              loadVenues()
+            }}
+          />
         )}
       </div>
     </AdminLayout>
