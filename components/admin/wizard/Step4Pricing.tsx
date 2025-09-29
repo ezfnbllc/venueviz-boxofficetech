@@ -251,41 +251,6 @@ export default function Step4Pricing() {
             )}
           </div>
           
-          {/* Group Discount */}
-          <div className="bg-black/20 rounded-lg p-4">
-            <label className="flex items-center gap-3 mb-3">
-              <input
-                type="checkbox"
-                checked={formData.pricing?.dynamicPricing.groupDiscount.enabled}
-                onChange={(e) => updateDynamicPricing('groupDiscount', 'enabled', e.target.checked)}
-                className="w-5 h-5"
-              />
-              <span className="font-semibold">Group Discount</span>
-            </label>
-            
-            {formData.pricing?.dynamicPricing.groupDiscount.enabled && (
-              <div className="grid grid-cols-2 gap-3 ml-8">
-                <div>
-                  <label className="block text-xs mb-1">Min Group Size</label>
-                  <input
-                    type="number"
-                    value={formData.pricing?.dynamicPricing.groupDiscount.minSize}
-                    onChange={(e) => updateDynamicPricing('groupDiscount', 'minSize', parseInt(e.target.value) || 0)}
-                    className="w-full px-3 py-2 bg-white/10 rounded"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs mb-1">Discount %</label>
-                  <input
-                    type="number"
-                    value={formData.pricing?.dynamicPricing.groupDiscount.discount}
-                    onChange={(e) => updateDynamicPricing('groupDiscount', 'discount', parseFloat(e.target.value) || 0)}
-                    className="w-full px-3 py-2 bg-white/10 rounded"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
         </div>
       </div>
       
