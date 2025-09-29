@@ -1,11 +1,10 @@
 'use client'
-import React from 'react'
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useEventWizardStore } from '@/lib/store/eventWizardStore'
 import { AdminService } from '@/lib/admin/adminService'
 import { Timestamp } from 'firebase/firestore'
 import { auth } from '@/lib/firebase'
-import { useRouter } from 'next/navigation'
 
 // Import step components
 import Step1Basics from './wizard/Step1Basics'
@@ -49,11 +48,14 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
     
     if (eventId && !isEditing) {
       loadExistingEvent(eventId)
+    }
     
     return () => {
       if (formData.basics.name) {
         handleAutoSave()
-  }, [eventId])
+      }
+    }
+  }, [eventId, isEditing])
   
   const loadExistingEvent = async (id: string) => {
     try {
@@ -61,14 +63,17 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
       if (event) {
         loadEventData(event)
         setEventId(id)
+      }
     } catch (error) {
       console.error('Error loading event:', error)
+    }
   }
   
   const handleAutoSave = async () => {
     if (!formData.basics.name) return
     
     setSaving(true)
+    try {
       const eventData = prepareEventData()
       
       if (isEditing && eventId) {
@@ -76,10 +81,14 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
       } else {
         const newEventId = await AdminService.createEvent(eventData)
         setEventId(newEventId)
+      }
       
       console.log('Auto-saved')
+    } catch (error) {
       console.error('Error auto-saving:', error)
+    }
     setSaving(false)
+  }
   
   const prepareEventData = () => {
     return {
@@ -102,6 +111,8 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
       status: userRole === 'promoter' ? 'pending_approval' : formData.basics.status,
       createdBy: auth.currentUser?.uid,
       updatedAt: Timestamp.now()
+    }
+  }
   
   const validateCurrentStep = () => {
     let isValid = true
@@ -115,47 +126,81 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
         }
         if (!formData.basics.description) {
           errors.push('Event description is required')
+          isValid = false
+        }
         break
       case 2:
         if (!formData.venue.venueId) {
           errors.push('Venue selection is required')
+          isValid = false
+        }
+        break
       case 3:
         if (formData.schedule.performances.length === 0) {
           errors.push('At least one performance date is required')
+          isValid = false
+        }
+        break
       case 4:
         if (formData.pricing.tiers.length === 0) {
           errors.push('At least one pricing tier is required')
+          isValid = false
+        }
+        break
+    }
     
     setValidation(currentStep, isValid, errors)
     return isValid
+  }
   
   const handleNext = async () => {
     if (validateCurrentStep()) {
       await handleAutoSave()
       nextStep()
+    }
+  }
   
   const handlePrev = () => {
     prevStep()
+  }
   
   const handleStepClick = (step: number) => {
     if (step <= currentStep) {
       setCurrentStep(step)
+    }
+  }
   
   const handlePublish = async () => {
+    setSaving(true)
+    try {
+      const eventData = prepareEventData()
       eventData.status = userRole === 'promoter' ? 'pending_approval' : 'published'
       
+      if (isEditing && eventId) {
+        await AdminService.updateEvent(eventId, eventData)
+      } else {
         await AdminService.createEvent(eventData)
+      }
       
       resetWizard()
       onClose()
+    } catch (error) {
       console.error('Error publishing event:', error)
+    }
+    setSaving(false)
+  }
   
   const handleSaveDraft = async () => {
     await handleAutoSave()
     onClose()
+  }
   
   const handleCancel = () => {
     if (confirm('Are you sure? Any unsaved changes will be lost.')) {
+      resetWizard()
+      onClose()
+    }
+  }
   
   const steps = [
     { number: 1, title: 'Event Basics', component: Step1Basics },
@@ -195,13 +240,14 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
             {saving && (
               <span className="text-sm text-gray-400 flex items-center">
                 <span className="animate-spin mr-2">⏳</span> Saving...
+              </span>
             )}
           </div>
           
           {/* Compact Progress Steps */}
           <div className="flex items-center gap-1">
             {steps.map((step, index) => (
-              <> key={step.number}>
+              <React.Fragment key={step.number}>
                 <button
                   onClick={() => handleStepClick(step.number)}
                   className={`
@@ -226,8 +272,9 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
                     }`}
                   />
                 )}
-              </>
+              </React.Fragment>
             ))}
+          </div>
         </div>
       </div>
       
@@ -245,26 +292,37 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
                   <li key={index}>{error}</li>
                 ))}
               </ul>
+            </div>
           )}
+        </div>
         
         {/* Navigation */}
         <div className="flex justify-between items-center mt-6">
           <div className="flex gap-3">
             {currentStep > 1 && (
+              <button
                 onClick={handlePrev}
                 className="px-6 py-2 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors"
+              >
                 Previous
+              </button>
+            )}
             <button
               onClick={handleSaveDraft}
               className="px-6 py-2 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors"
             >
               Save Draft
             </button>
+          </div>
           
+          <div className="flex gap-3">
             {currentStep < 9 ? (
+              <button
                 onClick={handleNext}
                 className="px-6 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors"
+              >
                 Next
+              </button>
             ) : (
               <>
                 {userRole === 'promoter' ? (
@@ -275,8 +333,18 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
                     Submit for Approval
                   </button>
                 ) : (
+                  <button
+                    onClick={handlePublish}
                     className="px-6 py-2 bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
+                  >
                     Publish Event
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
