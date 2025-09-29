@@ -758,4 +758,14 @@ export class AdminService {
       return null
     }
   }
+
+  static async deleteEvent(eventId: string) {
+    try {
+      await deleteDoc(doc(db, 'events', eventId))
+      return true
+    } catch (error) {
+      console.error('Error deleting event:', error)
+      throw error
+    }
+  }
 }
