@@ -53,7 +53,7 @@ export default function Step2Venue() {
   }
   
   const calculateSectionCapacity = (section: any) => {
-    // Calculate capacity from rows if they exist
+    // Calculate capacity from rows if they exist (for seating charts)
     if (section.rows && Array.isArray(section.rows)) {
       return section.rows.reduce((total: number, row: any) => {
         const seatCount = row.seats?.length || row.seatCount || 0
@@ -91,6 +91,24 @@ export default function Step2Venue() {
     }
   }
   
+  const calculateGACapacity = (level: any) => {
+    // GA levels can have different capacity configurations
+    if (level.type === 'standing') {
+      return level.standingCapacity || level.capacity || 0
+    } else if (level.type === 'seated') {
+      return level.seatedCapacity || level.capacity || 0
+    } else if (level.type === 'mixed') {
+      // For mixed, use total capacity or sum of standing + seated
+      if (level.capacity) {
+        return level.capacity
+      }
+      const standing = level.standingCapacity || 0
+      const seated = level.seatedCapacity || 0
+      return standing + seated || level.capacity || 0
+    }
+    return level.capacity || 0
+  }
+  
   const handleLayoutChange = (layoutId: string) => {
     const layout = layouts.find(l => l.id === layoutId)
     console.log('Selected layout:', layout)
@@ -121,14 +139,20 @@ export default function Step2Venue() {
           }
         })
       } else if (isGA && layout.gaLevels) {
-        // Process GA levels
-        availableSections = layout.gaLevels.map((level: any) => ({
-          sectionId: level.id || level.name,
-          sectionName: level.name,
-          available: true,
-          capacity: level.capacity || 0,
-          configurationType: level.type || 'mixed'
-        }))
+        // Process GA levels with proper capacity calculation
+        availableSections = layout.gaLevels.map((level: any) => {
+          const totalCapacity = calculateGACapacity(level)
+          
+          return {
+            sectionId: level.id || level.name,
+            sectionName: level.name,
+            available: true,
+            capacity: totalCapacity,
+            standingCapacity: level.standingCapacity || 0,
+            seatedCapacity: level.seatedCapacity || 0,
+            configurationType: level.type || 'mixed'
+          }
+        })
       }
       
       updateFormData('venue', { 
@@ -258,8 +282,12 @@ export default function Step2Venue() {
                               </>
                             ) : (
                               <>
-                                Capacity: {section.capacity}
-                                {section.configurationType && ` • ${section.configurationType}`}
+                                Total Capacity: {section.capacity}
+                                {section.configurationType === 'standing' && ` • Standing only`}
+                                {section.configurationType === 'seated' && ` • Seated only`}
+                                {section.configurationType === 'mixed' && section.standingCapacity > 0 && section.seatedCapacity > 0 && 
+                                  ` • Mixed (${section.standingCapacity} standing, ${section.seatedCapacity} seated)`
+                                }
                               </>
                             )}
                           </div>
@@ -277,7 +305,7 @@ export default function Step2Venue() {
               
               <div className="mt-4 p-3 bg-purple-600/30 rounded-lg text-center">
                 <p className="font-semibold">
-                  Total Available Capacity: {totalAvailableCapacity} seats
+                  Total Available Capacity: {totalAvailableCapacity} {selectedLayout.type === 'seating_chart' ? 'seats' : 'attendees'}
                 </p>
               </div>
             </div>
@@ -325,14 +353,19 @@ export default function Step2Venue() {
                               <div>
                                 <p className="font-bold text-lg">{level.sectionName}</p>
                                 <p className="text-sm text-gray-300 mt-1">
-                                  {level.configurationType === 'standing' ? '🚶 Standing Room' :
-                                   level.configurationType === 'seated' ? '🪑 Seated' :
-                                   '🎭 Mixed (Standing & Seated)'}
+                                  {level.configurationType === 'standing' ? '🚶 Standing Room Only' :
+                                   level.configurationType === 'seated' ? '🪑 Seated Only' :
+                                   '🎭 Mixed Configuration'}
                                 </p>
+                                {level.configurationType === 'mixed' && level.standingCapacity > 0 && level.seatedCapacity > 0 && (
+                                  <p className="text-xs text-gray-400 mt-1">
+                                    {level.standingCapacity} standing, {level.seatedCapacity} seated
+                                  </p>
+                                )}
                               </div>
                               <div className="text-right">
                                 <p className="text-2xl font-bold">{level.capacity}</p>
-                                <p className="text-xs text-gray-400">capacity</p>
+                                <p className="text-xs text-gray-400">total capacity</p>
                               </div>
                             </div>
                           </div>
