@@ -20,18 +20,7 @@ export default function Step2Venue() {
     }
   }, [formData.venue.venueId])
   
-  useEffect(() => {
-    if (formData.venue.layoutId && layouts.length > 0) {
-      const layout = layouts.find(l => l.id === formData.venue.layoutId)
-      if (layout) {
-        setSelectedLayout(layout)
-        processSections(layout)
-      }
-    }
-  }, [formData.venue.layoutId, layouts])
-  
   const loadVenues = async () => {
-    setLoading(true)
     try {
       const venuesData = await AdminService.getVenues()
       setVenues(venuesData)
@@ -45,115 +34,100 @@ export default function Step2Venue() {
     try {
       const layoutsData = await AdminService.getLayoutsByVenueId(venueId)
       setLayouts(layoutsData)
-      
-      // Auto-select first layout if available
-      if (layoutsData.length > 0 && !formData.venue.layoutId) {
-        updateFormData('venue', { layoutId: layoutsData[0].id })
-      }
     } catch (error) {
       console.error('Error loading layouts:', error)
     }
   }
   
-  const processSections = (layout: any) => {
-    const sections = layout.sections?.map((section: any) => {
-      // Calculate capacity safely
-      let capacity = section.capacity || 0
-      
-      // Only try to calculate from rows if rows is actually an array
-      if (!capacity && Array.isArray(section.rows)) {
-        capacity = section.rows.reduce((total: number, row: any) => 
-          total + (Array.isArray(row.seats) ? row.seats.length : 0), 0)
-      }
-      
-      return {
-        sectionId: section.id,
-        sectionName: section.name,
-        available: true,
-        capacity: capacity,
-        seatingType: formData.venue.seatingType === 'mixed' 
-          ? section.type || 'reserved' 
-          : formData.venue.seatingType
-      }
-    }) || []
-    
-    updateFormData('venue', { availableSections: sections })
-  }
-  
   const handleVenueChange = (venueId: string) => {
-    const venue = venues.find(v => v.id === venueId)
     updateFormData('venue', { 
-      venueId,
-      venueName: venue?.name || '',
+      venueId, 
       layoutId: '',
       availableSections: []
     })
-  }
-  
-  const handleLayoutChange = (layoutId: string) => {
-    updateFormData('venue', { layoutId })
-    const layout = layouts.find(l => l.id === layoutId)
-    setSelectedLayout(layout)
-    if (layout) {
-      processSections(layout)
+    setSelectedLayout(null)
+    if (venueId) {
+      loadLayouts(venueId)
     }
   }
   
-  const handleSeatingTypeChange = (type: string) => {
-    updateFormData('venue', { seatingType: type })
-    if (selectedLayout) {
-      processSections(selectedLayout)
+  const handleLayoutChange = (layoutId: string) => {
+    const layout = layouts.find(l => l.id === layoutId)
+    if (layout) {
+      setSelectedLayout(layout)
+      
+      // Use the layout's actual configuration
+      const layoutType = layout.layoutType || layout.type || 'general-admission'
+      const isSeatingChart = layoutType === 'seating-chart'
+      
+      let availableSections = []
+      
+      if (isSeatingChart && layout.sections) {
+        // Use sections from seating chart with their defined properties
+        availableSections = layout.sections.map((section: any) => ({
+          sectionId: section.id,
+          sectionName: section.name,
+          available: true,
+          capacity: section.totalSeats || section.capacity || 0,
+          priceCategory: section.priceCategory || section.category || 'Standard',
+          basePrice: section.basePrice || section.price || 0,
+          rows: section.rows || []
+        }))
+      } else if (layout.levels) {
+        // Use levels from GA layout with their defined properties
+        availableSections = layout.levels.map((level: any) => ({
+          sectionId: level.id || level.name,
+          sectionName: level.name,
+          available: true,
+          capacity: level.totalCapacity || level.capacity || 0,
+          standingCapacity: level.standingCapacity || 0,
+          seatedCapacity: level.seatedCapacity || 0,
+          configurationType: level.type || 'mixed' // standing, seated, or mixed
+        }))
+      }
+      
+      updateFormData('venue', { 
+        layoutId,
+        layoutType: layoutType,
+        seatingType: isSeatingChart ? 'reserved' : 'general',
+        availableSections,
+        totalCapacity: layout.totalCapacity || layout.capacity || 0
+      })
     }
   }
   
   const toggleSectionAvailability = (sectionId: string) => {
-    const sections = formData.venue?.availableSections?.map(section =>
-      section.sectionId === sectionId
+    const sections = formData.venue.availableSections.map(section =>
+      section.sectionId === sectionId 
         ? { ...section, available: !section.available }
         : section
     )
     updateFormData('venue', { availableSections: sections })
   }
   
-  const updateSectionType = (sectionId: string, type: string) => {
-    const sections = formData.venue?.availableSections?.map(section =>
-      section.sectionId === sectionId
-        ? { ...section, seatingType: type }
-        : section
-    )
-    updateFormData('venue', { availableSections: sections })
-  }
-  
-  const getTotalCapacity = () => {
-    return formData.venue.availableSections
-      .filter(s => s.available)
-      .reduce((total, section) => total + section.capacity, 0)
-  }
-  
-  if (loading) {
-    return (
-      <div className="flex justify-center py-12">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-purple-500"/>
-      </div>
-    )
-  }
+  const totalAvailableCapacity = formData.venue.availableSections
+    ?.filter((s: any) => s.available)
+    ?.reduce((sum: number, s: any) => sum + (s.capacity || 0), 0) || 0
   
   return (
-    <div className="space-y-6">
+    <div>
+      <h3 className="text-xl font-bold mb-4">Venue & Layout Selection</h3>
+      
       {/* Venue Selection */}
-      <div>
+      <div className="mb-6">
         <label className="block text-sm font-medium mb-2">
-          Select Venue <span className="text-red-400">*</span>
+          Select Venue *
         </label>
         <select
           value={formData.venue.venueId}
           onChange={(e) => handleVenueChange(e.target.value)}
           className="w-full px-4 py-2 bg-white/10 rounded-lg focus:bg-white/20 outline-none"
+          required
         >
           <option value="">Select a venue</option>
           {venues.map(venue => (
             <option key={venue.id} value={venue.id}>
-              {venue.name} - Capacity: {venue.capacity || 'N/A'}
+              {venue.name} - Capacity: {venue.capacity}
             </option>
           ))}
         </select>
@@ -161,20 +135,21 @@ export default function Step2Venue() {
       
       {/* Layout Selection */}
       {formData.venue.venueId && (
-        <div>
+        <div className="mb-6">
           <label className="block text-sm font-medium mb-2">
-            Select Layout <span className="text-red-400">*</span>
+            Select Layout *
           </label>
           {layouts.length > 0 ? (
             <select
               value={formData.venue.layoutId}
               onChange={(e) => handleLayoutChange(e.target.value)}
               className="w-full px-4 py-2 bg-white/10 rounded-lg focus:bg-white/20 outline-none"
+              required
             >
               <option value="">Select a layout</option>
               {layouts.map(layout => (
                 <option key={layout.id} value={layout.id}>
-                  {layout.name} - Capacity: {layout.totalCapacity || 'N/A'}
+                  {layout.name} - Capacity: {layout.totalCapacity || layout.capacity}
                 </option>
               ))}
             </select>
@@ -184,119 +159,140 @@ export default function Step2Venue() {
         </div>
       )}
       
-      {/* Seating Type */}
-      <div>
-        <label className="block text-sm font-medium mb-2">Seating Type</label>
-        <div className="grid grid-cols-3 gap-3">
-          <button
-            type="button"
-            onClick={() => handleSeatingTypeChange('reserved')}
-            className={`px-4 py-2 rounded-lg border ${
-              formData.venue.seatingType === 'reserved'
-                ? 'bg-purple-600 border-purple-600'
-                : 'bg-white/10 border-white/20'
-            }`}
-          >
-            Reserved Seating
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSeatingTypeChange('general')}
-            className={`px-4 py-2 rounded-lg border ${
-              formData.venue.seatingType === 'general'
-                ? 'bg-purple-600 border-purple-600'
-                : 'bg-white/10 border-white/20'
-            }`}
-          >
-            General Admission
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSeatingTypeChange('mixed')}
-            className={`px-4 py-2 rounded-lg border ${
-              formData.venue.seatingType === 'mixed'
-                ? 'bg-purple-600 border-purple-600'
-                : 'bg-white/10 border-white/20'
-            }`}
-          >
-            Mixed
-          </button>
-        </div>
-        <p className="text-xs text-gray-400 mt-2">
-          Reserved: Specific seat assignments | General: First come, first served | Mixed: Both options
-        </p>
-      </div>
-      
-      {/* Section Configuration */}
-      {selectedLayout && formData.venue?.availableSections?.length > 0 && (
-        <div>
-          <label className="block text-sm font-medium mb-2">Section Configuration</label>
-          <div className="bg-black/20 rounded-lg p-4">
-            <div className="space-y-3">
-              {formData.venue?.availableSections?.map(section => (
-                <div key={section.sectionId} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      checked={section.available}
-                      onChange={() => toggleSectionAvailability(section.sectionId)}
-                      className="w-5 h-5 rounded"
-                    />
-                    <div>
-                      <p className="font-semibold">{section.sectionName}</p>
-                      <p className="text-sm text-gray-400">
-                        Capacity: {section.capacity} seats
-                      </p>
+      {/* Show layout details if selected */}
+      {selectedLayout && (
+        <>
+          {/* Layout Type - Automatically determined from layout */}
+          <div className="mb-6 p-4 bg-purple-600/20 rounded-lg">
+            <p className="text-sm text-gray-300">
+              <span className="font-semibold">Seating Type:</span> {
+                selectedLayout.layoutType === 'seating-chart' 
+                  ? 'Reserved Seating (Specific seat assignments)' 
+                  : 'General Admission (First come, first served)'
+              }
+            </p>
+          </div>
+          
+          {/* Section/Level Configuration - From Layout */}
+          {formData.venue.availableSections.length > 0 && (
+            <div className="mb-6">
+              <h4 className="font-semibold mb-3">
+                {selectedLayout.layoutType === 'seating-chart' ? 'Sections' : 'Levels'} Configuration
+              </h4>
+              <p className="text-sm text-gray-400 mb-4">
+                Select which {selectedLayout.layoutType === 'seating-chart' ? 'sections' : 'levels'} to make available for this event
+              </p>
+              
+              <div className="space-y-3">
+                {formData.venue.availableSections.map((section: any) => (
+                  <div
+                    key={section.sectionId}
+                    className={`p-4 rounded-lg border transition-all ${
+                      section.available
+                        ? 'bg-purple-600/20 border-purple-600'
+                        : 'bg-gray-800 border-gray-700 opacity-60'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={section.available}
+                          onChange={() => toggleSectionAvailability(section.sectionId)}
+                          className="w-5 h-5 accent-purple-600"
+                        />
+                        <div>
+                          <p className="font-semibold">{section.sectionName}</p>
+                          <div className="text-sm text-gray-400 mt-1">
+                            {selectedLayout.layoutType === 'seating-chart' ? (
+                              <>
+                                Capacity: {section.capacity} seats
+                                {section.priceCategory && ` • ${section.priceCategory}`}
+                                {section.basePrice > 0 && ` • Base: $${section.basePrice}`}
+                              </>
+                            ) : (
+                              <>
+                                {section.configurationType === 'standing' && `Standing: ${section.standingCapacity || section.capacity}`}
+                                {section.configurationType === 'seated' && `Seated: ${section.seatedCapacity || section.capacity}`}
+                                {section.configurationType === 'mixed' && (
+                                  <>
+                                    Total: {section.capacity}
+                                    {section.standingCapacity > 0 && ` (${section.standingCapacity} standing`}
+                                    {section.seatedCapacity > 0 && `, ${section.seatedCapacity} seated)`}
+                                  </>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  
-                  {formData.venue.seatingType === 'mixed' && section.available && (
-                    <select
-                      value={section.seatingType}
-                      onChange={(e) => updateSectionType(section.sectionId, e.target.value)}
-                      className="px-3 py-1 bg-white/10 rounded text-sm"
-                    >
-                      <option value="reserved">Reserved</option>
-                      <option value="general">General</option>
-                    </select>
-                  )}
-                </div>
-              ))}
+                ))}
+              </div>
+              
+              <div className="mt-4 p-3 bg-purple-600/30 rounded-lg text-center">
+                <p className="font-semibold">
+                  Total Available Capacity: {totalAvailableCapacity} {selectedLayout.layoutType === 'seating-chart' ? 'seats' : 'attendees'}
+                </p>
+              </div>
             </div>
-            
-            <div className="mt-4 p-3 bg-purple-600/20 rounded-lg">
-              <p className="text-sm">
-                <span className="font-semibold">Total Event Capacity:</span> {getTotalCapacity()} seats
-              </p>
+          )}
+          
+          {/* Layout Preview */}
+          <div>
+            <h4 className="font-semibold mb-3">Layout Preview</h4>
+            <div className="bg-gray-900 rounded-lg p-6 min-h-[250px]">
+              {selectedLayout.layoutType === 'seating-chart' ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {formData.venue.availableSections
+                    .filter((s: any) => s.available)
+                    .map((section: any) => (
+                      <div
+                        key={section.sectionId}
+                        className="bg-purple-600/30 border border-purple-500 rounded-lg p-4 text-center"
+                      >
+                        <p className="font-bold text-lg">{section.sectionName}</p>
+                        <p className="text-sm mt-1">{section.capacity} seats</p>
+                        {section.priceCategory && (
+                          <p className="text-xs text-purple-300 mt-2">{section.priceCategory}</p>
+                        )}
+                        {section.rows && section.rows.length > 0 && (
+                          <p className="text-xs text-gray-400 mt-1">{section.rows.length} rows</p>
+                        )}
+                      </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {formData.venue.availableSections
+                    .filter((s: any) => s.available)
+                    .map((section: any, index: number) => (
+                      <div
+                        key={section.sectionId}
+                        className="bg-purple-600/30 border border-purple-500 rounded-lg p-4"
+                      >
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="font-bold text-lg">{section.sectionName}</p>
+                            <p className="text-sm text-gray-300 mt-1">
+                              {section.configurationType === 'standing' ? '🚶 Standing Room' :
+                               section.configurationType === 'seated' ? '🪑 Seated' :
+                               '🎭 Mixed (Standing & Seated)'}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-2xl font-bold">{section.capacity}</p>
+                            <p className="text-xs text-gray-400">capacity</p>
+                          </div>
+                        </div>
+                      </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
-        </div>
-      )}
-      
-      {/* Layout Preview */}
-      {selectedLayout && (
-        <div>
-          <label className="block text-sm font-medium mb-2">Layout Preview</label>
-          <div className="bg-black/20 rounded-lg p-4">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {selectedLayout.sections?.map((section: any) => (
-                <div
-                  key={section.id}
-                  className={`p-3 rounded-lg border ${
-                    formData.venue?.availableSections?.find(s => s.sectionId === section.id)?.available
-                      ? 'bg-purple-600/20 border-purple-600'
-                      : 'bg-gray-600/20 border-gray-600'
-                  }`}
-                >
-                  <p className="font-semibold">{section.name}</p>
-                  <p className="text-xs text-gray-400">
-                    {section.rows?.length || 0} rows
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        </>
       )}
     </div>
   )
