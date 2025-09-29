@@ -53,30 +53,22 @@ export default function EventsPage() {
   })
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white p-8">
-      {/* Page Header */}
+    <div className="p-8">
+      {/* Page Header - Matching venues style */}
       <div className="mb-8">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">Events Management</h1>
-            <p className="text-gray-400">Create and manage events, tickets, and performances</p>
-          </div>
-          <button
-            onClick={handleCreateNew}
-            className="px-6 py-3 bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors"
-          >
-            + Create Event
-          </button>
-        </div>
+        <h1 className="text-3xl font-bold mb-2">Events Management</h1>
+        <p className="text-gray-400">Create and manage events</p>
+      </div>
 
-        {/* Filters */}
+      {/* Actions Bar */}
+      <div className="flex justify-between items-center mb-6">
         <div className="flex gap-4">
           <input
             type="text"
             placeholder="Search events..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="px-4 py-2 bg-white/10 rounded-lg flex-1 max-w-md focus:bg-white/20 outline-none"
+            className="px-4 py-2 bg-white/10 rounded-lg w-64 focus:bg-white/20 outline-none"
           />
           <select
             value={filter}
@@ -90,6 +82,12 @@ export default function EventsPage() {
             <option value="cancelled">Cancelled</option>
           </select>
         </div>
+        <button
+          onClick={handleCreateNew}
+          className="px-6 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors"
+        >
+          + Create Event
+        </button>
       </div>
 
       {/* Events Grid */}
