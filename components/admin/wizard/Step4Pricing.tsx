@@ -53,11 +53,16 @@ export default function Step4Pricing() {
   }
   
   const updateDynamicPricing = (type: string, field: string, value: any) => {
+    const currentDynamicPricing = formData.pricing?.dynamicPricing || {
+      earlyBird: { enabled: false, discount: 10, endDate: '' },
+      lastMinute: { enabled: false, markup: 20, startDate: '' }
+    }
+    
     updateFormData('pricing', {
       dynamicPricing: {
-        ...formData.pricing?.dynamicPricing,
+        ...currentDynamicPricing,
         [type]: {
-          ...formData.pricing?.dynamicPricing[type as keyof typeof formData.pricing?.dynamicPricing],
+          ...currentDynamicPricing[type as keyof typeof currentDynamicPricing],
           [field]: value
         }
       }
