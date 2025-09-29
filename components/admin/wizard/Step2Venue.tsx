@@ -56,16 +56,26 @@ export default function Step2Venue() {
   }
   
   const processSections = (layout: any) => {
-    const sections = layout.sections?.map((section: any) => ({
-      sectionId: section.id,
-      sectionName: section.name,
-      available: true,
-      capacity: section.capacity || section.rows?.reduce((total: number, row: any) => 
-        total + (row.seats?.length || 0), 0) || 0,
-      seatingType: formData.venue.seatingType === 'mixed' 
-        ? section.type || 'reserved' 
-        : formData.venue.seatingType
-    })) || []
+    const sections = layout.sections?.map((section: any) => {
+      // Calculate capacity safely
+      let capacity = section.capacity || 0
+      
+      // Only try to calculate from rows if rows is actually an array
+      if (!capacity && Array.isArray(section.rows)) {
+        capacity = section.rows.reduce((total: number, row: any) => 
+          total + (Array.isArray(row.seats) ? row.seats.length : 0), 0)
+      }
+      
+      return {
+        sectionId: section.id,
+        sectionName: section.name,
+        available: true,
+        capacity: capacity,
+        seatingType: formData.venue.seatingType === 'mixed' 
+          ? section.type || 'reserved' 
+          : formData.venue.seatingType
+      }
+    }) || []
     
     updateFormData('venue', { availableSections: sections })
   }
