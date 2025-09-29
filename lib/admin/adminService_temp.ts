@@ -1,3 +1,4 @@
+import {db} from '@/lib/firebase'
 import {
   collection,
   doc,
@@ -743,7 +744,6 @@ export class AdminService {
       }
     }
   }
-
   static async getEvent(eventId: string) {
     try {
       const eventRef = doc(db, "events", eventId)
@@ -757,4 +757,3 @@ export class AdminService {
       return null
     }
   }
-}
