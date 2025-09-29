@@ -55,9 +55,9 @@ export default function Step4Pricing() {
   const updateDynamicPricing = (type: string, field: string, value: any) => {
     updateFormData('pricing', {
       dynamicPricing: {
-        ...formData.pricing.dynamicPricing,
+        ...formData.pricing?.dynamicPricing,
         [type]: {
-          ...formData.pricing.dynamicPricing[type as keyof typeof formData.pricing.dynamicPricing],
+          ...formData.pricing?.dynamicPricing[type as keyof typeof formData.pricing?.dynamicPricing],
           [field]: value
         }
       }
@@ -67,7 +67,7 @@ export default function Step4Pricing() {
   const updateFees = (field: string, value: number) => {
     updateFormData('pricing', {
       fees: {
-        ...formData.pricing.fees,
+        ...formData.pricing?.fees,
         [field]: value
       }
     })
@@ -179,20 +179,20 @@ export default function Step4Pricing() {
             <label className="flex items-center gap-3 mb-3">
               <input
                 type="checkbox"
-                checked={formData.pricing.dynamicPricing.earlyBird.enabled}
+                checked={formData.pricing?.dynamicPricing?.earlyBird.enabled}
                 onChange={(e) => updateDynamicPricing('earlyBird', 'enabled', e.target.checked)}
                 className="w-5 h-5"
               />
               <span className="font-semibold">Early Bird Discount</span>
             </label>
             
-            {formData.pricing.dynamicPricing.earlyBird.enabled && (
+            {formData.pricing?.dynamicPricing?.earlyBird.enabled && (
               <div className="grid grid-cols-2 gap-3 ml-8">
                 <div>
                   <label className="block text-xs mb-1">Discount %</label>
                   <input
                     type="number"
-                    value={formData.pricing.dynamicPricing.earlyBird.discount}
+                    value={formData.pricing?.dynamicPricing?.earlyBird.discount}
                     onChange={(e) => updateDynamicPricing('earlyBird', 'discount', parseFloat(e.target.value) || 0)}
                     className="w-full px-3 py-2 bg-white/10 rounded"
                   />
@@ -201,7 +201,7 @@ export default function Step4Pricing() {
                   <label className="block text-xs mb-1">End Date</label>
                   <input
                     type="date"
-                    value={formData.pricing.dynamicPricing.earlyBird.endDate}
+                    value={formData.pricing?.dynamicPricing?.earlyBird.endDate}
                     onChange={(e) => updateDynamicPricing('earlyBird', 'endDate', e.target.value)}
                     className="w-full px-3 py-2 bg-white/10 rounded"
                   />
@@ -215,20 +215,20 @@ export default function Step4Pricing() {
             <label className="flex items-center gap-3 mb-3">
               <input
                 type="checkbox"
-                checked={formData.pricing.dynamicPricing.lastMinute.enabled}
+                checked={formData.pricing?.dynamicPricing?.lastMinute.enabled}
                 onChange={(e) => updateDynamicPricing('lastMinute', 'enabled', e.target.checked)}
                 className="w-5 h-5"
               />
               <span className="font-semibold">Last Minute Markup</span>
             </label>
             
-            {formData.pricing.dynamicPricing.lastMinute.enabled && (
+            {formData.pricing?.dynamicPricing?.lastMinute.enabled && (
               <div className="grid grid-cols-2 gap-3 ml-8">
                 <div>
                   <label className="block text-xs mb-1">Markup %</label>
                   <input
                     type="number"
-                    value={formData.pricing.dynamicPricing.lastMinute.markup}
+                    value={formData.pricing?.dynamicPricing?.lastMinute.markup}
                     onChange={(e) => updateDynamicPricing('lastMinute', 'markup', parseFloat(e.target.value) || 0)}
                     className="w-full px-3 py-2 bg-white/10 rounded"
                   />
@@ -237,7 +237,7 @@ export default function Step4Pricing() {
                   <label className="block text-xs mb-1">Days Before Event</label>
                   <input
                     type="number"
-                    value={formData.pricing.dynamicPricing.lastMinute.daysBeforeEvent}
+                    value={formData.pricing?.dynamicPricing?.lastMinute.daysBeforeEvent}
                     onChange={(e) => updateDynamicPricing('lastMinute', 'daysBeforeEvent', parseInt(e.target.value) || 0)}
                     className="w-full px-3 py-2 bg-white/10 rounded"
                   />
@@ -251,20 +251,20 @@ export default function Step4Pricing() {
             <label className="flex items-center gap-3 mb-3">
               <input
                 type="checkbox"
-                checked={formData.pricing.dynamicPricing.groupDiscount.enabled}
+                checked={formData.pricing?.dynamicPricing.groupDiscount.enabled}
                 onChange={(e) => updateDynamicPricing('groupDiscount', 'enabled', e.target.checked)}
                 className="w-5 h-5"
               />
               <span className="font-semibold">Group Discount</span>
             </label>
             
-            {formData.pricing.dynamicPricing.groupDiscount.enabled && (
+            {formData.pricing?.dynamicPricing.groupDiscount.enabled && (
               <div className="grid grid-cols-2 gap-3 ml-8">
                 <div>
                   <label className="block text-xs mb-1">Min Group Size</label>
                   <input
                     type="number"
-                    value={formData.pricing.dynamicPricing.groupDiscount.minSize}
+                    value={formData.pricing?.dynamicPricing.groupDiscount.minSize}
                     onChange={(e) => updateDynamicPricing('groupDiscount', 'minSize', parseInt(e.target.value) || 0)}
                     className="w-full px-3 py-2 bg-white/10 rounded"
                   />
@@ -273,7 +273,7 @@ export default function Step4Pricing() {
                   <label className="block text-xs mb-1">Discount %</label>
                   <input
                     type="number"
-                    value={formData.pricing.dynamicPricing.groupDiscount.discount}
+                    value={formData.pricing?.dynamicPricing.groupDiscount.discount}
                     onChange={(e) => updateDynamicPricing('groupDiscount', 'discount', parseFloat(e.target.value) || 0)}
                     className="w-full px-3 py-2 bg-white/10 rounded"
                   />
@@ -293,7 +293,7 @@ export default function Step4Pricing() {
               <label className="block text-xs mb-1">Processing Fee (%)</label>
               <input
                 type="number"
-                value={formData.pricing.fees.processingFee}
+                value={formData.pricing?.fees.processingFee}
                 onChange={(e) => updateFees('processingFee', parseFloat(e.target.value) || 0)}
                 className="w-full px-3 py-2 bg-white/10 rounded"
                 step="0.1"
@@ -303,7 +303,7 @@ export default function Step4Pricing() {
               <label className="block text-xs mb-1">Platform Fee (%)</label>
               <input
                 type="number"
-                value={formData.pricing.fees.platformFee}
+                value={formData.pricing?.fees.platformFee}
                 onChange={(e) => updateFees('platformFee', parseFloat(e.target.value) || 0)}
                 className="w-full px-3 py-2 bg-white/10 rounded"
                 step="0.1"
@@ -313,7 +313,7 @@ export default function Step4Pricing() {
               <label className="block text-xs mb-1">Tax Rate (%)</label>
               <input
                 type="number"
-                value={formData.pricing.fees.taxRate}
+                value={formData.pricing?.fees.taxRate}
                 onChange={(e) => updateFees('taxRate', parseFloat(e.target.value) || 0)}
                 className="w-full px-3 py-2 bg-white/10 rounded"
                 step="0.1"
