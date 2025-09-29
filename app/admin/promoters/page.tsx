@@ -4,7 +4,7 @@ import {useRouter} from 'next/navigation'
 import {AdminService} from '@/lib/admin/adminService'
 import {StorageService} from '@/lib/storage/storageService'
 import {db, auth} from '@/lib/firebase'
-import {collection, getDocs, query, where, Timestamp} from 'firebase/firestore'
+import {collection, getDocs, query, where, Timestamp, doc, updateDoc} from 'firebase/firestore'
 import {createUserWithEmailAndPassword, onAuthStateChanged} from 'firebase/auth'
 import AdminLayout from '@/components/AdminLayout'
 
@@ -18,6 +18,7 @@ export default function PromotersManagement() {
   const [showUsersModal, setShowUsersModal] = useState(false)
   const [selectedPromoter, setSelectedPromoter] = useState<any>(null)
   const [editingPromoter, setEditingPromoter] = useState<any>(null)
+  const [editingUser, setEditingUser] = useState<any>(null)
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const [logoUrl, setLogoUrl] = useState('')
   
@@ -42,7 +43,7 @@ export default function PromotersManagement() {
     description: ''
   })
 
-  const [newUserData, setNewUserData] = useState({
+  const [userFormData, setUserFormData] = useState({
     email: '',
     password: '',
     name: '',
@@ -197,62 +198,139 @@ export default function PromotersManagement() {
   const handleShowUsers = (promoter: any) => {
     setSelectedPromoter(promoter)
     setShowUsersModal(true)
+    // Reset user form when opening modal
+    setEditingUser(null)
+    setUserFormData({ email: '', password: '', name: '', phone: '', title: '' })
   }
 
-  const handleAddUser = async () => {
-    if (!selectedPromoter || !newUserData.email || !newUserData.password) {
-      alert('Please fill in email and password')
-      return
-    }
+  const handleEditUser = (user: any) => {
+    const userInfo = getUserDisplay(user)
+    setEditingUser(user)
+    setUserFormData({
+      email: userInfo.email,
+      password: '', // Don't show existing password
+      name: userInfo.name,
+      phone: userInfo.phone,
+      title: userInfo.title
+    })
+  }
+
+  const handleCancelEditUser = () => {
+    setEditingUser(null)
+    setUserFormData({ email: '', password: '', name: '', phone: '', title: '' })
+  }
+
+  const handleSaveUser = async () => {
+    if (!selectedPromoter) return
     
     try {
-      // Create user in Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(
-        auth, 
-        newUserData.email, 
-        newUserData.password
-      )
-      
-      // Create user object
-      const newUser = {
-        id: userCredential.user.uid,
-        email: newUserData.email,
-        name: newUserData.name || newUserData.email.split('@')[0],
-        phone: newUserData.phone || '',
-        title: newUserData.title || 'Promoter Staff'
+      if (editingUser) {
+        // Update existing user
+        const userId = typeof editingUser === 'string' ? editingUser : editingUser.id
+        
+        // Update user in promoter's users array
+        const updatedUsers = selectedPromoter.users.map((user: any) => {
+          const userIdToCheck = typeof user === 'string' ? user : user.id
+          if (userIdToCheck === userId) {
+            return {
+              id: userId,
+              email: userFormData.email,
+              name: userFormData.name,
+              phone: userFormData.phone,
+              title: userFormData.title
+            }
+          }
+          return user
+        })
+        
+        // Update promoter document
+        await AdminService.updatePromoter(selectedPromoter.id, {
+          users: updatedUsers
+        })
+        
+        // Update user in users collection if it exists
+        try {
+          const userRef = doc(db, 'users', userId)
+          await updateDoc(userRef, {
+            email: userFormData.email,
+            name: userFormData.name,
+            phone: userFormData.phone,
+            title: userFormData.title,
+            updatedAt: Timestamp.now()
+          })
+        } catch (error) {
+          console.log('User document may not exist in users collection')
+        }
+        
+        alert('User updated successfully!')
+        
+        // Update selected promoter with new user data
+        setSelectedPromoter({
+          ...selectedPromoter,
+          users: updatedUsers
+        })
+        
+        // Reset form
+        handleCancelEditUser()
+        
+      } else {
+        // Add new user (existing logic)
+        if (!userFormData.email || !userFormData.password) {
+          alert('Please fill in email and password')
+          return
+        }
+        
+        // Create user in Firebase Auth
+        const userCredential = await createUserWithEmailAndPassword(
+          auth, 
+          userFormData.email, 
+          userFormData.password
+        )
+        
+        // Create user object
+        const newUser = {
+          id: userCredential.user.uid,
+          email: userFormData.email,
+          name: userFormData.name || userFormData.email.split('@')[0],
+          phone: userFormData.phone || '',
+          title: userFormData.title || 'Promoter Staff'
+        }
+        
+        // Update promoter's users array
+        const updatedUsers = [...(selectedPromoter.users || []), newUser]
+        await AdminService.updatePromoter(selectedPromoter.id, {
+          users: updatedUsers
+        })
+        
+        // Store user details in users collection
+        await AdminService.createUser({
+          uid: userCredential.user.uid,
+          email: userFormData.email,
+          name: userFormData.name,
+          phone: userFormData.phone,
+          title: userFormData.title,
+          role: 'promoter',
+          promoterId: selectedPromoter.id,
+          createdAt: Timestamp.now()
+        })
+        
+        alert('User created successfully!')
+        
+        // Update selected promoter with new user
+        setSelectedPromoter({
+          ...selectedPromoter,
+          users: updatedUsers
+        })
+        
+        // Reset form
+        setUserFormData({ email: '', password: '', name: '', phone: '', title: '' })
       }
       
-      // Update promoter's users array
-      const updatedUsers = [...(selectedPromoter.users || []), newUser]
-      await AdminService.updatePromoter(selectedPromoter.id, {
-        users: updatedUsers
-      })
-      
-      // Store user details in users collection
-      await AdminService.createUser({
-        uid: userCredential.user.uid,
-        email: newUserData.email,
-        name: newUserData.name,
-        phone: newUserData.phone,
-        title: newUserData.title,
-        role: 'promoter',
-        promoterId: selectedPromoter.id,
-        createdAt: Timestamp.now()
-      })
-      
-      alert('User created successfully!')
-      setNewUserData({ email: '', password: '', name: '', phone: '', title: '' })
       await loadData()
       
-      // Update selected promoter with new user
-      setSelectedPromoter({
-        ...selectedPromoter,
-        users: updatedUsers
-      })
-      
     } catch (error: any) {
-      console.error('Error creating user:', error)
-      alert(error.message || 'Error creating user')
+      console.error('Error saving user:', error)
+      alert(error.message || 'Error saving user')
     }
   }
 
@@ -263,7 +341,6 @@ export default function PromotersManagement() {
       try {
         // Filter out the user
         const updatedUsers = selectedPromoter.users.filter((user: any) => {
-          // Handle both string IDs and user objects
           const userIdToCheck = typeof user === 'string' ? user : user.id
           return userIdToCheck !== userId
         })
@@ -560,6 +637,7 @@ export default function PromotersManagement() {
         {showForm && (
           <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
             <div className="bg-gray-900 rounded-xl p-6 w-full max-w-3xl my-8">
+              {/* Form content remains the same */}
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold">
                   {editingPromoter ? 'Edit Promoter' : 'Add New Promoter'}
@@ -576,7 +654,7 @@ export default function PromotersManagement() {
               </div>
               
               <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Form fields same as before */}
+                {/* All form fields remain the same */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm mb-2">Name *</label>
@@ -814,7 +892,7 @@ export default function PromotersManagement() {
           </div>
         )}
 
-        {/* Fixed Users Management Modal */}
+        {/* Enhanced Users Management Modal with Edit Feature */}
         {showUsersModal && selectedPromoter && (
           <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
             <div className="bg-gray-900 rounded-xl p-6 w-full max-w-3xl my-8 max-h-[80vh] overflow-y-auto">
@@ -826,7 +904,8 @@ export default function PromotersManagement() {
                   onClick={() => {
                     setShowUsersModal(false)
                     setSelectedPromoter(null)
-                    setNewUserData({ email: '', password: '', name: '', phone: '', title: '' })
+                    setEditingUser(null)
+                    setUserFormData({ email: '', password: '', name: '', phone: '', title: '' })
                   }}
                   className="text-gray-400 hover:text-white"
                 >
@@ -840,31 +919,104 @@ export default function PromotersManagement() {
                   <div className="space-y-3">
                     {selectedPromoter.users.map((user: any, index: number) => {
                       const userInfo = getUserDisplay(user)
+                      const isEditing = editingUser && (
+                        typeof editingUser === 'string' ? editingUser === userInfo.id : editingUser.id === userInfo.id
+                      )
+                      
                       return (
-                        <div key={userInfo.id || index} className="bg-black/40 rounded-lg p-4 flex justify-between items-center">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-bold">
-                                {userInfo.name.charAt(0).toUpperCase()}
+                        <div key={userInfo.id || index} className="bg-black/40 rounded-lg p-4">
+                          {isEditing ? (
+                            // Edit Mode
+                            <div className="space-y-3">
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <input
+                                    type="text"
+                                    value={userFormData.name}
+                                    onChange={(e) => setUserFormData({...userFormData, name: e.target.value})}
+                                    className="w-full px-3 py-2 bg-white/10 rounded-lg text-sm"
+                                    placeholder="Name"
+                                  />
+                                </div>
+                                <div>
+                                  <input
+                                    type="text"
+                                    value={userFormData.title}
+                                    onChange={(e) => setUserFormData({...userFormData, title: e.target.value})}
+                                    className="w-full px-3 py-2 bg-white/10 rounded-lg text-sm"
+                                    placeholder="Title"
+                                  />
+                                </div>
                               </div>
-                              <div>
-                                <p className="font-semibold">{userInfo.name}</p>
-                                <p className="text-sm text-gray-400">{userInfo.email}</p>
-                                {userInfo.title && (
-                                  <p className="text-xs text-purple-400">{userInfo.title}</p>
-                                )}
-                                {userInfo.phone && (
-                                  <p className="text-xs text-gray-400">📱 {userInfo.phone}</p>
-                                )}
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <input
+                                    type="email"
+                                    value={userFormData.email}
+                                    onChange={(e) => setUserFormData({...userFormData, email: e.target.value})}
+                                    className="w-full px-3 py-2 bg-white/10 rounded-lg text-sm"
+                                    placeholder="Email"
+                                  />
+                                </div>
+                                <div>
+                                  <input
+                                    type="tel"
+                                    value={userFormData.phone}
+                                    onChange={(e) => setUserFormData({...userFormData, phone: e.target.value})}
+                                    className="w-full px-3 py-2 bg-white/10 rounded-lg text-sm"
+                                    placeholder="Phone"
+                                  />
+                                </div>
+                              </div>
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  onClick={handleCancelEditUser}
+                                  className="px-3 py-1.5 bg-gray-600 rounded-lg text-sm"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={handleSaveUser}
+                                  className="px-3 py-1.5 bg-green-600 rounded-lg text-sm"
+                                >
+                                  Save
+                                </button>
                               </div>
                             </div>
-                          </div>
-                          <button
-                            onClick={() => handleRemoveUser(userInfo.id)}
-                            className="px-3 py-1 bg-red-600/20 text-red-400 rounded-lg hover:bg-red-600/30 text-sm"
-                          >
-                            Remove
-                          </button>
+                          ) : (
+                            // Display Mode
+                            <div className="flex justify-between items-center">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-bold">
+                                  {userInfo.name.charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                  <p className="font-semibold">{userInfo.name}</p>
+                                  <p className="text-sm text-gray-400">{userInfo.email}</p>
+                                  {userInfo.title && (
+                                    <p className="text-xs text-purple-400">{userInfo.title}</p>
+                                  )}
+                                  {userInfo.phone && (
+                                    <p className="text-xs text-gray-400">📱 {userInfo.phone}</p>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => handleEditUser(user)}
+                                  className="px-3 py-1 bg-blue-600/20 text-blue-400 rounded-lg hover:bg-blue-600/30 text-sm"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => handleRemoveUser(userInfo.id)}
+                                  className="px-3 py-1 bg-red-600/20 text-red-400 rounded-lg hover:bg-red-600/30 text-sm"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )
                     })}
@@ -876,79 +1028,82 @@ export default function PromotersManagement() {
                 )}
               </div>
               
-              <div className="border-t border-white/10 pt-6">
-                <h3 className="text-lg font-semibold mb-3">Add New User</h3>
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm mb-2">Name</label>
-                      <input
-                        type="text"
-                        value={newUserData.name}
-                        onChange={(e) => setNewUserData({...newUserData, name: e.target.value})}
-                        className="w-full px-4 py-2 bg-white/10 rounded-lg"
-                        placeholder="John Doe"
-                      />
+              {/* Add New User Form - Only show if not editing */}
+              {!editingUser && (
+                <div className="border-t border-white/10 pt-6">
+                  <h3 className="text-lg font-semibold mb-3">Add New User</h3>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm mb-2">Name</label>
+                        <input
+                          type="text"
+                          value={userFormData.name}
+                          onChange={(e) => setUserFormData({...userFormData, name: e.target.value})}
+                          className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                          placeholder="John Doe"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm mb-2">Title/Role</label>
+                        <input
+                          type="text"
+                          value={userFormData.title}
+                          onChange={(e) => setUserFormData({...userFormData, title: e.target.value})}
+                          className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                          placeholder="Sales Manager"
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-sm mb-2">Title/Role</label>
-                      <input
-                        type="text"
-                        value={newUserData.title}
-                        onChange={(e) => setNewUserData({...newUserData, title: e.target.value})}
-                        className="w-full px-4 py-2 bg-white/10 rounded-lg"
-                        placeholder="Sales Manager"
-                      />
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm mb-2">Email *</label>
+                        <input
+                          type="email"
+                          value={userFormData.email}
+                          onChange={(e) => setUserFormData({...userFormData, email: e.target.value})}
+                          className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                          placeholder="user@example.com"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm mb-2">Phone</label>
+                        <input
+                          type="tel"
+                          value={userFormData.phone}
+                          onChange={(e) => setUserFormData({...userFormData, phone: e.target.value})}
+                          className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                          placeholder="(555) 123-4567"
+                        />
+                      </div>
                     </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-3">
+                    
                     <div>
-                      <label className="block text-sm mb-2">Email *</label>
+                      <label className="block text-sm mb-2">Password *</label>
                       <input
-                        type="email"
-                        value={newUserData.email}
-                        onChange={(e) => setNewUserData({...newUserData, email: e.target.value})}
+                        type="password"
+                        value={userFormData.password}
+                        onChange={(e) => setUserFormData({...userFormData, password: e.target.value})}
                         className="w-full px-4 py-2 bg-white/10 rounded-lg"
-                        placeholder="user@example.com"
+                        placeholder="••••••••"
                         required
                       />
+                      <p className="text-xs text-gray-400 mt-1">
+                        User will be able to login with this email and password
+                      </p>
                     </div>
-                    <div>
-                      <label className="block text-sm mb-2">Phone</label>
-                      <input
-                        type="tel"
-                        value={newUserData.phone}
-                        onChange={(e) => setNewUserData({...newUserData, phone: e.target.value})}
-                        className="w-full px-4 py-2 bg-white/10 rounded-lg"
-                        placeholder="(555) 123-4567"
-                      />
-                    </div>
+                    
+                    <button
+                      onClick={handleSaveUser}
+                      className="w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg hover:from-purple-700 hover:to-pink-700"
+                    >
+                      Create User
+                    </button>
                   </div>
-                  
-                  <div>
-                    <label className="block text-sm mb-2">Password *</label>
-                    <input
-                      type="password"
-                      value={newUserData.password}
-                      onChange={(e) => setNewUserData({...newUserData, password: e.target.value})}
-                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
-                      placeholder="••••••••"
-                      required
-                    />
-                    <p className="text-xs text-gray-400 mt-1">
-                      User will be able to login with this email and password
-                    </p>
-                  </div>
-                  
-                  <button
-                    onClick={handleAddUser}
-                    className="w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg hover:from-purple-700 hover:to-pink-700"
-                  >
-                    Create User
-                  </button>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         )}
