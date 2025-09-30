@@ -91,23 +91,22 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
     setSaving(false)
   }
   
-  const prepareEventData = () => {
-    console.log("Preparing event data for save:", formData)
+    const prepareEventData = () => {
+    console.log('Preparing event data for save:', formData)
     
     return {
       // Basic Information
       ...formData.basics,
       
       // Venue Configuration
-      venueId: formData.venue?.venueId || "",
-      venueName: formData.venue?.venueName || "",
-      layoutId: formData.venue?.layoutId || "",
-      layoutType: formData.venue?.layoutType || "",
-      seatingType: formData.venue?.seatingType || "general",
+      venueId: formData.venue?.venueId || '',
+      layoutId: formData.venue?.layoutId || '',
+      layoutType: formData.venue?.layoutType || '',
+      seatingType: formData.venue?.seatingType || 'general',
       availableSections: formData.venue?.availableSections || [],
       
       // Schedule
-      schedule: formData.schedule || { performances: [], timezone: "America/Chicago" },
+      schedule: formData.schedule || { performances: [], timezone: 'America/Chicago' },
       
       // Pricing - COMPLETE STRUCTURE
       pricing: {
@@ -118,10 +117,10 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
       
       // Promoter - COMPLETE STRUCTURE
       promoter: {
-        promoterId: formData.promoter?.promoterId || "",
-        promoterName: formData.promoter?.promoterName || "",
+        promoterId: formData.promoter?.promoterId || '',
+        promoterName: formData.promoter?.promoterName || '',
         commission: formData.promoter?.commission || 0,
-        paymentTerms: formData.promoter?.paymentTerms || "net-30",
+        paymentTerms: formData.promoter?.paymentTerms || 'net-30',
         responsibilities: formData.promoter?.responsibilities || []
       },
       
@@ -133,19 +132,7 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
       },
       
       // Sales - COMPLETE STRUCTURE
-      sales: {
-        maxTicketsPerOrder: formData.sales?.maxTicketsPerOrder || 10,
-        allowWillCall: formData.sales?.allowWillCall || false,
-        allowMobileTickets: formData.sales?.allowMobileTickets !== false,
-        allowPrintAtHome: formData.sales?.allowPrintAtHome || false,
-        refundPolicy: formData.sales?.refundPolicy || "no-refunds",
-        customRefundPolicy: formData.sales?.customRefundPolicy || "",
-        salesStartDate: formData.sales?.salesStartDate || "",
-        salesEndDate: formData.sales?.salesEndDate || "",
-        requireAccountCreation: formData.sales?.requireAccountCreation || false,
-        enableWaitlist: formData.sales?.enableWaitlist || false,
-        showRemainingTickets: formData.sales?.showRemainingTickets !== false
-      },
+      sales: formData.sales || {},
       
       // Communications
       communications: formData.communications || {}
