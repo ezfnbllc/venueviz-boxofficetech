@@ -120,7 +120,6 @@ export const useEventWizardStore = create<EventWizardStore>()(
         set((state) => {
           const currentSection = state.formData[section as keyof typeof state.formData] || {}
           
-          // Deep merge for objects, replace for primitives/arrays
           let mergedData
           if (typeof currentSection === 'object' && !Array.isArray(currentSection) && currentSection !== null) {
             mergedData = { ...currentSection, ...data }
@@ -157,25 +156,24 @@ export const useEventWizardStore = create<EventWizardStore>()(
         console.log("Loading event data:", eventData)
         const completeData = getCompleteInitialData()
         
-        // Handle both old and new data structures
         const mergedData = {
           basics: {
             ...completeData.basics,
-            name: eventData.name || "",
-            description: eventData.description || "",
-            category: eventData.category || "concert",
+            name: eventData.name || '',
+            description: eventData.description || '',
+            category: eventData.category || 'concert',
             tags: eventData.tags || [],
             images: eventData.images || completeData.basics.images,
-            status: eventData.status || "draft",
+            status: eventData.status || 'draft',
             featured: eventData.featured || false,
             performers: eventData.performers || []
           },
           venue: {
             ...completeData.venue,
-            venueId: eventData.venueId || "",
-            layoutId: eventData.layoutId || "",
-            layoutType: eventData.layoutType || "",
-            seatingType: eventData.seatingType || "general",
+            venueId: eventData.venueId || '',
+            layoutId: eventData.layoutId || '',
+            layoutType: eventData.layoutType || '',
+            seatingType: eventData.seatingType || 'general',
             availableSections: eventData.availableSections || []
           },
           schedule: { ...completeData.schedule, ...(eventData.schedule || {}) },
@@ -196,30 +194,6 @@ export const useEventWizardStore = create<EventWizardStore>()(
         }
         
         console.log("Merged event data:", mergedData)
-        set({
-          formData: mergedData,
-          eventId: eventData.id || null,
-          isEditing: true,
-          currentStep: 1
-        })
-      },
-          venue: { ...completeData.venue, ...(eventData.venue || {}) },
-          schedule: { ...completeData.schedule, ...(eventData.schedule || {}) },
-          pricing: {
-            tiers: eventData.pricing?.tiers || [],
-            fees: { ...completeData.pricing.fees, ...(eventData.pricing?.fees || {}) },
-            dynamicPricing: { ...completeData.pricing.dynamicPricing, ...(eventData.pricing?.dynamicPricing || {}) }
-          },
-          promoter: { ...completeData.promoter, ...(eventData.promoter || {}) },
-          promotions: { 
-            ...completeData.promotions, 
-            ...(eventData.promotions || {}),
-            groupDiscount: { ...completeData.promotions.groupDiscount, ...(eventData.promotions?.groupDiscount || {}) }
-          },
-          sales: { ...completeData.sales, ...(eventData.sales || {}) },
-          communications: { ...completeData.communications, ...(eventData.communications || {}) }
-        }
-        
         set({
           formData: mergedData,
           eventId: eventData.id || null,
