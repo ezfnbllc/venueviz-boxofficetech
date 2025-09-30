@@ -7,11 +7,7 @@ const getCompleteInitialData = () => ({
     description: '',
     category: 'concert',
     tags: [],
-    images: {
-      cover: '',
-      thumbnail: '',
-      gallery: []
-    },
+    images: { cover: '', thumbnail: '', gallery: [] },
     status: 'draft',
     featured: false,
     performers: []
@@ -84,6 +80,7 @@ interface EventWizardStore {
   validation: Record<number, { isValid: boolean; errors: string[] }>
   eventId: string | null
   isEditing: boolean
+  activeEventId: string | null // CRITICAL: Track which event we're actually editing
   
   setCurrentStep: (step: number) => void
   nextStep: () => void
@@ -91,9 +88,10 @@ interface EventWizardStore {
   updateFormData: (section: string, data: any) => void
   setValidation: (step: number, isValid: boolean, errors: string[]) => void
   resetWizard: () => void
-  loadEventData: (eventData: any) => void
+  loadEventData: (eventData: any, forceEventId?: string) => void
   setEventId: (id: string) => void
   setIsEditing: (editing: boolean) => void
+  forceReset: () => void
 }
 
 export const useEventWizardStore = create<EventWizardStore>()(
@@ -104,6 +102,7 @@ export const useEventWizardStore = create<EventWizardStore>()(
       validation: {},
       eventId: null,
       isEditing: false,
+      activeEventId: null,
       
       setCurrentStep: (step) => set({ currentStep: step }),
       
@@ -116,7 +115,17 @@ export const useEventWizardStore = create<EventWizardStore>()(
       })),
       
       updateFormData: (section, data) => {
-        console.log(`Updating ${section}:`, data)
+        const state = get()
+        
+        // CRITICAL VALIDATION: Ensure we're updating the right event
+        console.log(`[UPDATE VALIDATION] Updating ${section} for active event: ${state.activeEventId}`)
+        
+        if (state.isEditing && !state.activeEventId) {
+          console.error('[CRITICAL ERROR] Attempting to update event data without activeEventId!')
+          alert('Critical Error: No active event ID. Please refresh and try again.')
+          return
+        }
+        
         set((state) => {
           const currentSection = state.formData[section as keyof typeof state.formData] || {}
           
@@ -132,7 +141,7 @@ export const useEventWizardStore = create<EventWizardStore>()(
             [section]: mergedData
           }
           
-          console.log(`Updated formData.${section}:`, newFormData[section as keyof typeof newFormData])
+          console.log(`[SAFE UPDATE] Updated ${section} for event ${state.activeEventId}:`, mergedData)
           return { formData: newFormData }
         })
       },
@@ -144,16 +153,57 @@ export const useEventWizardStore = create<EventWizardStore>()(
         }
       })),
       
-      resetWizard: () => set({
-        currentStep: 1,
-        formData: getCompleteInitialData(),
-        validation: {},
-        eventId: null,
-        isEditing: false
-      }),
+      resetWizard: () => {
+        console.log('[RESET] Resetting wizard - clearing all data')
+        set({
+          currentStep: 1,
+          formData: getCompleteInitialData(),
+          validation: {},
+          eventId: null,
+          isEditing: false,
+          activeEventId: null
+        })
+      },
       
-      loadEventData: (eventData) => {
-        console.log("Loading event data:", eventData)
+      forceReset: () => {
+        console.log('[FORCE RESET] Emergency store reset')
+        set({
+          currentStep: 1,
+          formData: getCompleteInitialData(),
+          validation: {},
+          eventId: null,
+          isEditing: false,
+          activeEventId: null
+        })
+      },
+      
+      loadEventData: (eventData, forceEventId) => {
+        const targetEventId = forceEventId || eventData.id
+        const state = get()
+        
+        console.log(`[LOAD EVENT] Loading event ${targetEventId}`)
+        console.log(`[LOAD EVENT] Current active event: ${state.activeEventId}`)
+        
+        // CRITICAL: If switching events, force reset first
+        if (state.activeEventId && state.activeEventId !== targetEventId) {
+          console.log(`[LOAD EVENT] Switching from ${state.activeEventId} to ${targetEventId} - forcing reset`)
+          set({
+            currentStep: 1,
+            formData: getCompleteInitialData(),
+            validation: {},
+            eventId: null,
+            isEditing: false,
+            activeEventId: null
+          })
+        }
+        
+        // Validate event ID exists
+        if (!targetEventId) {
+          console.error('[CRITICAL ERROR] Cannot load event without valid ID')
+          alert('Critical Error: Invalid event ID')
+          return
+        }
+        
         const completeData = getCompleteInitialData()
         
         const mergedData = {
@@ -193,25 +243,32 @@ export const useEventWizardStore = create<EventWizardStore>()(
           communications: { ...completeData.communications, ...(eventData.communications || {}) }
         }
         
-        console.log("Merged event data:", mergedData)
+        console.log(`[LOAD EVENT] Successfully loaded data for event ${targetEventId}`)
         set({
           formData: mergedData,
-          eventId: eventData.id || null,
+          eventId: targetEventId,
           isEditing: true,
-          currentStep: 1
+          currentStep: 1,
+          activeEventId: targetEventId
         })
       },
       
-      setEventId: (id) => set({ eventId: id, isEditing: true }),
+      setEventId: (id) => {
+        console.log(`[SET EVENT ID] Setting event ID to: ${id}`)
+        set({ eventId: id, isEditing: true, activeEventId: id })
+      },
+      
       setIsEditing: (editing) => set({ isEditing: editing })
     }),
     {
       name: 'event-wizard-storage',
+      // CRITICAL: Don't persist activeEventId to prevent cross-session contamination
       partialize: (state) => ({ 
         formData: state.formData,
         eventId: state.eventId,
         isEditing: state.isEditing,
         currentStep: state.currentStep
+        // activeEventId intentionally excluded
       })
     }
   )
