@@ -1,0 +1,38 @@
+// Add this useEffect to EventWizard.tsx after the existing useEffect:
+
+useEffect(() => {
+  const initializeEventWizard = async () => {
+    if (eventId) {
+      console.log(`[EVENT WIZARD] Initializing for event: ${eventId}`)
+      
+      // CRITICAL: Force reset if activeEventId doesn't match
+      const currentState = useEventWizardStore.getState()
+      if (currentState.activeEventId && currentState.activeEventId !== eventId) {
+        console.log(`[EVENT WIZARD] Event ID mismatch - forcing reset`)
+        currentState.forceReset()
+      }
+      
+      try {
+        const eventData = await AdminService.getEvent(eventId)
+        if (eventData) {
+          loadEventData(eventData, eventId) // Pass eventId explicitly
+          setEventId(eventId)
+        } else {
+          console.error(`[EVENT WIZARD] Event not found: ${eventId}`)
+          alert('Event not found')
+          onClose()
+        }
+      } catch (error) {
+        console.error(`[EVENT WIZARD] Error loading event:`, error)
+        alert('Error loading event')
+        onClose()
+      }
+    } else {
+      // New event - ensure clean state
+      console.log(`[EVENT WIZARD] New event - ensuring clean state`)
+      resetWizard()
+    }
+  }
+  
+  initializeEventWizard()
+}, [eventId])
