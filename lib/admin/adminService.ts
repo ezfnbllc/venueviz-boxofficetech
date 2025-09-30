@@ -267,73 +267,6 @@ export class AdminService {
     }
   }
 
-  static async getDashboardStats() {
-    try {
-      const [events, venues, orders, customers, promoters] = await Promise.all([
-        this.getEvents(),
-        this.getVenues(),
-        this.getOrders(),
-        this.getCustomers(),
-        this.getPromoters()
-      ])
-      
-      const now = new Date()
-      const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-      
-      let monthlyRevenue = 0
-      let lastMonthRevenue = 0
-      
-      orders.forEach(order => {
-        const orderDate = order.purchaseDate?.toDate?.() || order.createdAt?.toDate?.() || new Date(0)
-        const amount = order.pricing?.total || order.totalAmount || order.total || 0
-        
-        if (orderDate >= thisMonth) {
-          monthlyRevenue += amount
-        } else if (orderDate >= lastMonth && orderDate < thisMonth) {
-          lastMonthRevenue += amount
-        }
-      })
-
-      const revenueGrowth = lastMonthRevenue > 0 
-        ? ((monthlyRevenue - lastMonthRevenue) / lastMonthRevenue) * 100 
-        : 0
-
-      return {
-        totalEvents: events.length,
-        activeEvents: events.filter(e => e.status === 'published').length,
-        totalVenues: venues.length,
-        totalOrders: orders.length,
-        totalCustomers: customers.length,
-        totalPromoters: promoters.length,
-        monthlyRevenue,
-        revenueGrowth: Math.round(revenueGrowth * 100) / 100,
-        recentEvents: events
-          .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
-          .slice(0, 5),
-        recentOrders: orders
-          .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
-          .slice(0, 5)
-      }
-    } catch (error) {
-      console.error('Error fetching dashboard stats:', error)
-      return {
-        totalEvents: 0,
-        activeEvents: 0,
-        totalVenues: 0,
-        totalOrders: 0,
-        totalCustomers: 0,
-        totalPromoters: 0,
-        monthlyRevenue: 0,
-        revenueGrowth: 0,
-        recentEvents: [],
-        recentOrders: []
-      }
-    }
-  }
-}
-
-  // Missing methods that dashboard and orders pages need
   static async getOrderStats() {
     try {
       const orders = await this.getOrders()
@@ -445,7 +378,72 @@ export class AdminService {
     }
   }
 
-  // Alternative method name that might be called
+  static async getDashboardStats() {
+    try {
+      const [events, venues, orders, customers, promoters] = await Promise.all([
+        this.getEvents(),
+        this.getVenues(),
+        this.getOrders(),
+        this.getCustomers(),
+        this.getPromoters()
+      ])
+      
+      const now = new Date()
+      const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      
+      let monthlyRevenue = 0
+      let lastMonthRevenue = 0
+      
+      orders.forEach(order => {
+        const orderDate = order.purchaseDate?.toDate?.() || order.createdAt?.toDate?.() || new Date(0)
+        const amount = order.pricing?.total || order.totalAmount || order.total || 0
+        
+        if (orderDate >= thisMonth) {
+          monthlyRevenue += amount
+        } else if (orderDate >= lastMonth && orderDate < thisMonth) {
+          lastMonthRevenue += amount
+        }
+      })
+
+      const revenueGrowth = lastMonthRevenue > 0 
+        ? ((monthlyRevenue - lastMonthRevenue) / lastMonthRevenue) * 100 
+        : 0
+
+      return {
+        totalEvents: events.length,
+        activeEvents: events.filter(e => e.status === 'published').length,
+        totalVenues: venues.length,
+        totalOrders: orders.length,
+        totalCustomers: customers.length,
+        totalPromoters: promoters.length,
+        monthlyRevenue,
+        revenueGrowth: Math.round(revenueGrowth * 100) / 100,
+        recentEvents: events
+          .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+          .slice(0, 5),
+        recentOrders: orders
+          .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+          .slice(0, 5)
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error)
+      return {
+        totalEvents: 0,
+        activeEvents: 0,
+        totalVenues: 0,
+        totalOrders: 0,
+        totalCustomers: 0,
+        totalPromoters: 0,
+        monthlyRevenue: 0,
+        revenueGrowth: 0,
+        recentEvents: [],
+        recentOrders: []
+      }
+    }
+  }
+
   static async getStats() {
     return this.getDashboardStats()
+  }
 }
