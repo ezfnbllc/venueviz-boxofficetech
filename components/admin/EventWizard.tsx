@@ -143,7 +143,7 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
       },
       
       // Sales
-      sales: formData.sales || {},
+      sales: formData.sales || { maxTicketsPerOrder: 10, allowWillCall: true, refundPolicy: "no-refunds", salesStartDate: "", salesEndDate: "" },
       
       // Communications
       communications: formData.communications || {}

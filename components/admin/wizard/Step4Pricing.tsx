@@ -8,7 +8,7 @@ export default function Step4Pricing() {
   // Initialize pricing tiers from venue configuration
   useEffect(() => {
     if (formData.venue?.availableSections?.length > 0 && (!formData.pricing?.tiers || formData.pricing.tiers.length === 0)) {
-      const availableSections = formData.venue.availableSections.filter((s: any) => s.available)
+      const availableSections = formData.venue.availableSections?.filter((s: any) => s.available).filter((s: any) => s.available)
       
       if (availableSections.length > 0) {
         const newTiers = availableSections.map((section: any) => ({
