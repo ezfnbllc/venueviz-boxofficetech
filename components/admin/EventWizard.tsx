@@ -34,6 +34,7 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
   } = useEventWizardStore()
   
   const [saving, setSaving] = useState(false)
+  const [loading, setLoading] = useState(false)
   const [userRole, setUserRole] = useState<'admin' | 'promoter'>('admin')
   
   useEffect(() => {
@@ -49,15 +50,10 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
     if (eventId && !isEditing) {
       loadExistingEvent(eventId)
     }
-    
-    return () => {
-      if (formData.basics.name) {
-        handleAutoSave()
-      }
-    }
-  }, [eventId, isEditing])
+  }, [eventId])
   
   const loadExistingEvent = async (id: string) => {
+    setLoading(true)
     try {
       const event = await AdminService.getEvent(id)
       if (event) {
@@ -67,15 +63,15 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
     } catch (error) {
       console.error('Error loading event:', error)
     }
+    setLoading(false)
   }
   
   const handleAutoSave = async () => {
-    if (!formData.basics.name) return
+    if (!formData.basics?.name) return
     
     setSaving(true)
     try {
       const eventData = prepareEventData()
-      console.log("Prepared event data for Firebase:", eventData)
       
       if (isEditing && eventId) {
         await AdminService.updateEvent(eventId, eventData)
@@ -91,9 +87,7 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
     setSaving(false)
   }
   
-    const prepareEventData = () => {
-    console.log('Preparing event data for save:', formData)
-    
+  const prepareEventData = () => {
     return {
       // Basic Information
       ...formData.basics,
@@ -140,6 +134,9 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
   }
   
   const validateCurrentStep = () => {
+    // Don't validate while loading
+    if (loading) return true
+    
     let isValid = true
     let errors: string[] = []
     
@@ -161,13 +158,17 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
         }
         break
       case 3:
-        if (!formData.schedule?.performances || formData.schedule.performances.length === 0) {
+        // Safe check for performances array
+        const performances = formData.schedule?.performances || []
+        if (performances.length === 0) {
           errors.push('At least one performance date is required')
           isValid = false
         }
         break
       case 4:
-        if (!formData.pricing?.tiers || formData.pricing.tiers.length === 0) {
+        // Safe check for pricing tiers array
+        const tiers = formData.pricing?.tiers || []
+        if (tiers.length === 0) {
           errors.push('At least one pricing tier is required')
           isValid = false
         }
@@ -196,11 +197,9 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
   }
   
   const handlePublish = async () => {
-    console.log("Publishing event with data:", formData)
     setSaving(true)
     try {
       const eventData = prepareEventData()
-      console.log("Prepared event data for Firebase:", eventData)
       eventData.status = userRole === 'promoter' ? 'pending_approval' : 'published'
       
       if (isEditing && eventId) {
@@ -236,138 +235,129 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
     { number: 4, title: 'Pricing', component: Step4Pricing },
     { number: 5, title: 'Promoter', component: Step5Promoter },
     { number: 6, title: 'Promotions', component: Step6Promotions },
-    { number: 7, title: 'Sales Settings', component: Step7Sales },
+    { number: 7, title: 'Sales', component: Step7Sales },
     { number: 8, title: 'Communications', component: Step8Communications },
-    { number: 9, title: 'Review & Publish', component: Step9Review }
+    { number: 9, title: 'Review & Publish', component: Step9Review },
   ]
   
-  const CurrentStepComponent = steps[currentStep - 1].component
+  const currentStepData = steps.find(s => s.number === currentStep)
+  const CurrentStepComponent = currentStepData?.component || Step1Basics
   
-  return (
-    <div className="min-h-screen bg-gray-950">
-      {/* Compact Header */}
-      <div className="bg-gray-900 border-b border-white/10 py-3 px-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleCancel}
-                className="text-gray-400 hover:text-white transition-colors"
-                title="Back to Events"
-              >
-                ← Back
-              </button>
-              <h2 className="text-xl font-bold">
-                {isEditing ? 'Edit Event' : 'Create New Event'}
-              </h2>
-              <span className="text-sm text-gray-400">
-                Step {currentStep} of 9: {steps[currentStep - 1].title}
-              </span>
-            </div>
-            {saving && (
-              <span className="text-sm text-gray-400 flex items-center">
-                <span className="animate-spin mr-2">⏳</span> Saving...
-              </span>
-            )}
-          </div>
-          
-          {/* Compact Progress Steps */}
-          <div className="flex items-center gap-1">
-            {steps.map((step, index) => (
-              <React.Fragment key={step.number}>
-                <button
-                  onClick={() => handleStepClick(step.number)}
-                  className={`
-                    w-8 h-8 rounded-full text-xs font-semibold flex items-center justify-center
-                    ${currentStep === step.number 
-                      ? 'bg-purple-600 text-white' 
-                      : currentStep > step.number 
-                      ? 'bg-green-600 text-white' 
-                      : 'bg-gray-700 text-gray-400'}
-                    ${step.number <= currentStep ? 'cursor-pointer hover:opacity-80' : 'cursor-not-allowed'}
-                    transition-all
-                  `}
-                  disabled={step.number > currentStep}
-                  title={step.title}
-                >
-                  {currentStep > step.number ? '✓' : step.number}
-                </button>
-                {index < steps.length - 1 && (
-                  <div 
-                    className={`flex-1 h-0.5 ${
-                      currentStep > step.number ? 'bg-green-600' : 'bg-gray-700'
-                    }`}
-                  />
-                )}
-              </React.Fragment>
-            ))}
+  if (loading) {
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="bg-gray-800 rounded-lg p-6">
+          <div className="flex items-center gap-3">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600"></div>
+            <span>Loading event...</span>
           </div>
         </div>
       </div>
-      
-      {/* Content */}
-      <div className="max-w-4xl mx-auto p-6">
-        <div className="bg-gray-900 rounded-xl p-6">
+    )
+  }
+  
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 overflow-y-auto">
+      <div className="bg-gray-800 rounded-lg w-full max-w-6xl mx-4 my-4 max-h-[95vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-700">
+          <h2 className="text-2xl font-bold">
+            {isEditing ? 'Edit Event' : 'Create New Event'}
+          </h2>
+          <button
+            onClick={handleCancel}
+            className="text-gray-400 hover:text-white"
+          >
+            ✕
+          </button>
+        </div>
+        
+        {/* Progress Steps */}
+        <div className="px-6 py-4 border-b border-gray-700">
+          <div className="flex items-center justify-between">
+            {steps.map((step, index) => (
+              <div key={step.number} className="flex items-center">
+                <button
+                  onClick={() => handleStepClick(step.number)}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
+                    step.number === currentStep
+                      ? 'bg-purple-600 text-white'
+                      : step.number < currentStep
+                      ? 'bg-green-600 text-white cursor-pointer'
+                      : 'bg-gray-600 text-gray-300'
+                  }`}
+                >
+                  {step.number < currentStep ? '✓' : step.number}
+                </button>
+                <span className={`ml-2 text-sm ${
+                  step.number === currentStep ? 'text-purple-400' : 'text-gray-400'
+                }`}>
+                  {step.title}
+                </span>
+                {index < steps.length - 1 && (
+                  <div className={`mx-4 h-0.5 w-8 ${
+                    step.number < currentStep ? 'bg-green-600' : 'bg-gray-600'
+                  }`} />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+        
+        {/* Step Content */}
+        <div className="flex-1 overflow-y-auto p-6">
           <CurrentStepComponent />
           
           {/* Validation Errors */}
           {validation[currentStep] && !validation[currentStep].isValid && (
-            <div className="mt-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
-              <p className="text-red-400 font-semibold mb-2">Please fix the following errors:</p>
-              <ul className="list-disc list-inside text-red-400 text-sm">
+            <div className="mt-4 p-4 bg-red-600/20 border border-red-600/40 rounded-lg">
+              <h4 className="font-semibold text-red-400 mb-2">Please fix the following:</h4>
+              <ul className="list-disc list-inside space-y-1">
                 {validation[currentStep].errors.map((error, index) => (
-                  <li key={index}>{error}</li>
+                  <li key={index} className="text-red-300 text-sm">{error}</li>
                 ))}
               </ul>
             </div>
           )}
         </div>
         
-        {/* Navigation */}
-        <div className="flex justify-between items-center mt-6">
+        {/* Footer */}
+        <div className="flex items-center justify-between p-6 border-t border-gray-700">
           <div className="flex gap-3">
             {currentStep > 1 && (
               <button
                 onClick={handlePrev}
-                className="px-6 py-2 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors"
+                className="px-4 py-2 bg-gray-600 rounded hover:bg-gray-700 transition-colors"
               >
                 Previous
               </button>
             )}
-            <button
-              onClick={handleSaveDraft}
-              className="px-6 py-2 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors"
-            >
-              Save Draft
-            </button>
           </div>
           
           <div className="flex gap-3">
+            <button
+              onClick={handleSaveDraft}
+              className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
+              disabled={saving}
+            >
+              {saving ? 'Saving...' : 'Save Draft'}
+            </button>
+            
             {currentStep < 9 ? (
               <button
                 onClick={handleNext}
-                className="px-6 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors"
+                className="px-4 py-2 bg-purple-600 rounded hover:bg-purple-700 transition-colors"
               >
                 Next
               </button>
             ) : (
-              <>
-                {userRole === 'promoter' ? (
-                  <button
-                    onClick={handlePublish}
-                    className="px-6 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors"
-                  >
-                    Submit for Approval
-                  </button>
-                ) : (
-                  <button
-                    onClick={handlePublish}
-                    className="px-6 py-2 bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
-                  >
-                    Publish Event
-                  </button>
-                )}
-              </>
+              <button
+                onClick={handlePublish}
+                className="px-4 py-2 bg-green-600 rounded hover:bg-green-700 transition-colors disabled:opacity-50"
+                disabled={saving}
+              >
+                {saving ? 'Publishing...' : 'Publish Event'}
+              </button>
             )}
           </div>
         </div>
