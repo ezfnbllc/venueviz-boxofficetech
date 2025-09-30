@@ -16,7 +16,6 @@ import { db } from '@/lib/firebase/config'
 
 export class AdminService {
   
-  // Venues
   static async getVenues() {
     try {
       const venuesRef = collection(db, 'venues')
@@ -45,7 +44,6 @@ export class AdminService {
     }
   }
 
-  // Layouts
   static async getLayouts() {
     try {
       const layoutsRef = collection(db, 'layouts')
@@ -75,7 +73,6 @@ export class AdminService {
     }
   }
 
-  // Events
   static async getEvents() {
     try {
       const eventsRef = collection(db, 'events')
@@ -128,7 +125,6 @@ export class AdminService {
   static async updateEvent(eventId: string, eventData: any) {
     console.log(`[ADMIN SERVICE] Attempting to update event ${eventId}`)
     
-    // CRITICAL VALIDATION
     if (!eventId || eventId.length < 10) {
       throw new Error(`[CRITICAL] Invalid event ID: ${eventId}`)
     }
@@ -137,7 +133,6 @@ export class AdminService {
       throw new Error(`[CRITICAL] Event ID mismatch! URL: ${eventId}, Data: ${eventData.id}`)
     }
     
-    // SAFETY: Remove any ID fields from data to prevent corruption
     const safeEventData = { ...eventData }
     delete safeEventData.id
     delete safeEventData.eventId
@@ -158,7 +153,6 @@ export class AdminService {
     }
   }
 
-  // Delete Event Methods
   static async checkEventOrders(eventId: string) {
     try {
       const ordersRef = collection(db, 'orders')
@@ -175,42 +169,24 @@ export class AdminService {
     }
   }
 
-  static async hardDeleteEvent(eventId: string) {
-    try {
-      const eventRef = doc(db, 'events', eventId)
-      await deleteDoc(eventRef)
-      console.log('Event hard deleted:', eventId)
-    } catch (error) {
-      console.error('Error hard deleting event:', error)
-      throw new Error('Failed to delete event')
-    }
-  }
-
-  static async softDeleteEvent(eventId: string, deletedBy: string) {
-    try {
-      const eventRef = doc(db, 'events', eventId)
-      await updateDoc(eventRef, {
-        status: 'deleted',
-        deletedAt: Timestamp.now(),
-        deletedBy: deletedBy,
-        updatedAt: Timestamp.now()
-      })
-      console.log('Event soft deleted:', eventId)
-    } catch (error) {
-      console.error('Error soft deleting event:', error)
-      throw new Error('Failed to soft delete event')
-    }
-  }
-
-  static async deleteEvent(eventId: string, userId: string) {
+  static async deleteEvent(eventId: string, userId?: string) {
     try {
       const { hasOrders, orderCount } = await this.checkEventOrders(eventId)
       
       if (hasOrders) {
-        await this.softDeleteEvent(eventId, userId)
+        const eventRef = doc(db, 'events', eventId)
+        await updateDoc(eventRef, {
+          status: 'deleted',
+          deletedAt: Timestamp.now(),
+          deletedBy: userId || 'unknown',
+          updatedAt: Timestamp.now()
+        })
+        console.log('Event soft deleted:', eventId)
         return { deleted: true, type: 'soft' as const, orderCount }
       } else {
-        await this.hardDeleteEvent(eventId)
+        const eventRef = doc(db, 'events', eventId)
+        await deleteDoc(eventRef)
+        console.log('Event hard deleted:', eventId)
         return { deleted: true, type: 'hard' as const }
       }
     } catch (error) {
@@ -235,7 +211,6 @@ export class AdminService {
     }
   }
 
-  // Promoters
   static async getPromoters() {
     try {
       const promotersRef = collection(db, 'promoters')
@@ -250,7 +225,6 @@ export class AdminService {
     }
   }
 
-  // Promotions
   static async getPromotions() {
     try {
       const promotionsRef = collection(db, 'promotions')
@@ -265,7 +239,6 @@ export class AdminService {
     }
   }
 
-  // Orders
   static async getOrders() {
     try {
       const ordersRef = collection(db, 'orders')
@@ -280,7 +253,6 @@ export class AdminService {
     }
   }
 
-  // Customers
   static async getCustomers() {
     try {
       const customersRef = collection(db, 'customers')
@@ -295,7 +267,6 @@ export class AdminService {
     }
   }
 
-  // Dashboard Stats
   static async getDashboardStats() {
     try {
       const [events, venues, orders, customers, promoters] = await Promise.all([
