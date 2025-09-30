@@ -332,3 +332,120 @@ export class AdminService {
     }
   }
 }
+
+  // Missing methods that dashboard and orders pages need
+  static async getOrderStats() {
+    try {
+      const orders = await this.getOrders()
+      
+      const now = new Date()
+      const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      
+      let totalRevenue = 0
+      let monthlyRevenue = 0
+      let lastMonthRevenue = 0
+      
+      orders.forEach(order => {
+        const orderDate = order.purchaseDate?.toDate?.() || order.createdAt?.toDate?.() || new Date(0)
+        const amount = order.pricing?.total || order.totalAmount || order.total || 0
+        
+        totalRevenue += amount
+        
+        if (orderDate >= thisMonth) {
+          monthlyRevenue += amount
+        } else if (orderDate >= lastMonth && orderDate < thisMonth) {
+          lastMonthRevenue += amount
+        }
+      })
+      
+      const revenueGrowth = lastMonthRevenue > 0 
+        ? ((monthlyRevenue - lastMonthRevenue) / lastMonthRevenue) * 100 
+        : 0
+      
+      return {
+        totalOrders: orders.length,
+        totalRevenue,
+        monthlyRevenue,
+        lastMonthRevenue,
+        revenueGrowth: Math.round(revenueGrowth * 100) / 100,
+        recentOrders: orders
+          .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+          .slice(0, 10)
+      }
+    } catch (error) {
+      console.error('Error getting order stats:', error)
+      return {
+        totalOrders: 0,
+        totalRevenue: 0,
+        monthlyRevenue: 0,
+        lastMonthRevenue: 0,
+        revenueGrowth: 0,
+        recentOrders: []
+      }
+    }
+  }
+
+  static async getEventStats() {
+    try {
+      const events = await this.getEvents()
+      
+      return {
+        totalEvents: events.length,
+        publishedEvents: events.filter(e => e.status === 'published').length,
+        draftEvents: events.filter(e => e.status === 'draft').length,
+        recentEvents: events
+          .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+          .slice(0, 5)
+      }
+    } catch (error) {
+      console.error('Error getting event stats:', error)
+      return {
+        totalEvents: 0,
+        publishedEvents: 0,
+        draftEvents: 0,
+        recentEvents: []
+      }
+    }
+  }
+
+  static async getVenueStats() {
+    try {
+      const venues = await this.getVenues()
+      
+      return {
+        totalVenues: venues.length,
+        activeVenues: venues.filter(v => v.active !== false).length
+      }
+    } catch (error) {
+      console.error('Error getting venue stats:', error)
+      return {
+        totalVenues: 0,
+        activeVenues: 0
+      }
+    }
+  }
+
+  static async getCustomerStats() {
+    try {
+      const customers = await this.getCustomers()
+      
+      return {
+        totalCustomers: customers.length,
+        recentCustomers: customers
+          .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+          .slice(0, 5)
+      }
+    } catch (error) {
+      console.error('Error getting customer stats:', error)
+      return {
+        totalCustomers: 0,
+        recentCustomers: []
+      }
+    }
+  }
+
+  // Alternative method name that might be called
+  static async getStats() {
+    return this.getDashboardStats()
+}
