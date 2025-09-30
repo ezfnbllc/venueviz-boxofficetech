@@ -1,3 +1,4 @@
+import { DeleteEventService } from "./deleteEventService"
 import {
   collection,
   doc,
@@ -769,3 +770,16 @@ export class AdminService {
     }
   }
 }
+
+  // Delete Event Methods
+  static async checkEventOrders(eventId: string) {
+    return DeleteEventService.checkEventOrders(eventId)
+  }
+  
+  static async deleteEvent(eventId: string, userId: string) {
+    return DeleteEventService.deleteEvent(eventId, userId)
+  }
+  
+  static async restoreEvent(eventId: string) {
+    return DeleteEventService.restoreEvent(eventId)
+  }
