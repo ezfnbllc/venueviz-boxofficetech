@@ -1,256 +1,142 @@
-const getCompleteInitialFormData = () => ({
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+
+const getCompleteInitialData = () => ({
   basics: {
-    name: "",
-    description: "",
-    category: "concert",
+    name: '',
+    description: '',
+    category: 'concert',
     tags: [],
-    images: { cover: "", thumbnail: "", gallery: [] },
-    status: "draft",
+    images: {
+      cover: '',
+      thumbnail: '',
+      gallery: []
+    },
+    status: 'draft',
     featured: false,
     performers: []
   },
   venue: {
-    venueId: "",
-    layoutId: "",
-    seatingType: "general",
+    venueId: '',
+    layoutId: '',
+    layoutType: '',
+    seatingType: 'general',
     availableSections: []
   },
   schedule: {
     performances: [],
-    timezone: "America/Chicago"
+    timezone: 'America/Chicago'
   },
   pricing: {
     tiers: [],
-    dynamicPricing: {
-      earlyBird: { enabled: false, discount: 10, endDate: "" },
-      lastMinute: { enabled: false, markup: 20, startDate: "" }
+    fees: {
+      serviceFee: 4,
+      serviceFeeType: 'percentage',
+      serviceFeePer: 'ticket',
+      processingFee: 2.5,
+      processingFeeType: 'percentage',
+      processingFeePer: 'transaction',
+      facilityFee: 0,
+      facilityFeeType: 'fixed',
+      facilityFeePer: 'ticket',
+      salesTax: 8.25
     },
-    fees: { serviceFee: 0, processingFee: 0, facilityFee: 0 }
+    dynamicPricing: {
+      earlyBird: { enabled: false, discount: 10, endDate: '' },
+      lastMinute: { enabled: false, markup: 20, startDate: '', daysBeforeEvent: 2 }
+    }
   },
   promoter: {
-    promoterId: "",
+    promoterId: '',
+    promoterName: '',
     commission: 10,
-    paymentTerms: "net-30",
+    paymentTerms: 'net-30',
     responsibilities: []
   },
   promotions: {
-    groupDiscount: { enabled: false, minTickets: 10, discountPercentage: 15 },
-    promoCodes: [],
-    eventPromotions: []
+    linkedPromotions: [],
+    eventPromotions: [],
+    groupDiscount: { enabled: false, minTickets: 10, discountPercentage: 15 }
   },
   sales: {
     maxTicketsPerOrder: 10,
     allowWillCall: true,
-    refundPolicy: "no-refunds",
-    salesStartDate: "",
-    salesEndDate: ""
+    allowMobileTickets: true,
+    allowPrintAtHome: false,
+    refundPolicy: 'no-refunds',
+    customRefundPolicy: '',
+    salesStartDate: '',
+    salesEndDate: '',
+    requireAccountCreation: false,
+    enableWaitlist: false,
+    showRemainingTickets: true
   },
   communications: {
-    confirmationEmail: { enabled: true, template: "default", customMessage: "" },
-    reminderEmail: { enabled: true, daysBefore: 1, template: "default", customMessage: "" },
-    seo: { metaTitle: "", metaDescription: "", keywords: [] }
+    confirmationEmail: { enabled: true, template: 'default', customMessage: '' },
+    reminderEmail: { enabled: true, daysBefore: 1, template: 'default', customMessage: '' },
+    seo: { metaTitle: '', metaDescription: '', keywords: [] }
   }
 })
 
-import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
-
-interface EventWizardState {
+interface EventWizardStore {
   currentStep: number
+  formData: ReturnType<typeof getCompleteInitialData>
+  validation: Record<number, { isValid: boolean; errors: string[] }>
   eventId: string | null
-  isDraft: boolean
-  lastSaved: Date | null
   isEditing: boolean
   
-  formData: {
-    basics: {
-      name: string
-      description: string
-      type: 'concert' | 'theater' | 'sports' | 'comedy' | 'other'
-      performers: string[]
-      images: {
-        cover: string
-        gallery: string[]
-      }
-      status: 'draft' | 'pending_approval' | 'published' | 'cancelled'
-      maxTicketsPerCustomer: number
-    }
-    venue: {
-      venueId: string
-      layoutId: string
-      seatingType: 'reserved' | 'general' | 'mixed'
-      availableSections: {
-        sectionId: string
-        sectionName: string
-        available: boolean
-        capacity: number
-        seatingType: 'reserved' | 'general'
-      }[]
-    }
-    schedule: {
-      performances: {
-        date: string
-        doorsOpen: string
-        startTime: string
-        endTime: string
-        pricingModifier?: number
-        capacity?: number
-      }[]
-      timezone: string
-    }
-    pricing: {
-      tiers: {
-        id: string
-        name: string
-        basePrice: number
-        sections: string[]
-        inventory: number
-        serviceFee: number
-      }[]
-      dynamicPricing: {
-        earlyBird: {
-          enabled: boolean
-          discount: number
-          endDate: string
-        }
-        lastMinute: {
-          enabled: boolean
-          markup: number
-          daysBeforeEvent: number
-        }
-        groupDiscount: {
-          enabled: boolean
-          minSize: number
-          discount: number
-        }
-      }
-      fees: {
-        processingFee: number
-        platformFee: number
-        taxRate: number
-      }
-    }
-    promoter: {
-      promoterId: string
-      commission: number
-      approvalRequired: boolean
-      portalCustomization: {
-        usePromoterBranding: boolean
-        customSlug: string
-      }
-      restrictions: {
-        canEditAfterPublish: boolean
-        canAccessCustomerData: boolean
-        canIssueRefunds: boolean
-      }
-    }
-    promotions: {
-      linkedPromotions: string[]
-      eventPromotions: {
-        code: string
-        type: 'percentage' | 'fixed'
-        value: number
-        maxUses: number
-        validFrom: string
-        validTo: string
-        applicableToTiers: string[]
-      }[]
-      automaticDiscounts: {
-        student: boolean
-        senior: boolean
-        military: boolean
-      }
-    }
-    sales: {
-      salesPeriod: {
-        startDate: string
-        endDate: string
-        autoCloseBeforeEvent: number
-      }
-      distribution: {
-        online: number
-        boxOffice: number
-      }
-      waitlist: {
-        enabled: boolean
-        autoRelease: boolean
-      }
-      transferPolicy: 'allowed' | 'restricted' | 'prohibited'
-    }
-    communications: {
-      seo: {
-        metaTitle: string
-        metaDescription: string
-        keywords: string[]
-        urlSlug: string
-        ogImage: string
-      }
-      emailAutomation: {
-        confirmationEmail: boolean
-        reminderEmail: boolean
-        reminderDays: number
-        postEventSurvey: boolean
-      }
-      smsNotifications: {
-        enabled: boolean
-        confirmationSMS: boolean
-        reminderSMS: boolean
-      }
-      calendarSync: {
-        googleCalendar: boolean
-        appleCalendar: boolean
-        outlookCalendar: boolean
-      }
-    }
-  }
-  
-  validation: {
-    [step: number]: {
-      isValid: boolean
-      errors: string[]
-    }
-  }
-  
-  // Actions
   setCurrentStep: (step: number) => void
   nextStep: () => void
   prevStep: () => void
-  setEventId: (id: string | null) => void
   updateFormData: (section: string, data: any) => void
   setValidation: (step: number, isValid: boolean, errors: string[]) => void
   resetWizard: () => void
   loadEventData: (eventData: any) => void
-  setIsEditing: (isEditing: boolean) => void
+  setEventId: (id: string) => void
+  setIsEditing: (editing: boolean) => void
 }
 
-const initialFormData = getCompleteInitialFormData()
-
-export const useEventWizardStore = create<EventWizardState>()(
+export const useEventWizardStore = create<EventWizardStore>()(
   persist(
     (set, get) => ({
       currentStep: 1,
-      eventId: null,
-      isDraft: true,
-      lastSaved: null,
-      isEditing: false,
-      formData: initialFormData,
+      formData: getCompleteInitialData(),
       validation: {},
+      eventId: null,
+      isEditing: false,
       
       setCurrentStep: (step) => set({ currentStep: step }),
-      nextStep: () => set((state) => ({ currentStep: Math.min(state.currentStep + 1, 9) })),
-      prevStep: () => set((state) => ({ currentStep: Math.max(state.currentStep - 1, 1) })),
-      setEventId: (id) => set({ eventId: id }),
       
-      updateFormData: (section, data) => set((state) => ({
-        formData: {
-          ...state.formData,
-          [section]: {
-            ...state.formData[section as keyof typeof state.formData],
-            ...data
-          }
-        },
-        lastSaved: new Date()
+      nextStep: () => set((state) => ({ 
+        currentStep: Math.min(state.currentStep + 1, 9) 
       })),
+      
+      prevStep: () => set((state) => ({ 
+        currentStep: Math.max(state.currentStep - 1, 1) 
+      })),
+      
+      updateFormData: (section, data) => {
+        console.log(`Updating ${section}:`, data)
+        set((state) => {
+          const currentSection = state.formData[section as keyof typeof state.formData] || {}
+          
+          // Deep merge for objects, replace for primitives/arrays
+          let mergedData
+          if (typeof currentSection === 'object' && !Array.isArray(currentSection) && currentSection !== null) {
+            mergedData = { ...currentSection, ...data }
+          } else {
+            mergedData = data
+          }
+          
+          const newFormData = {
+            ...state.formData,
+            [section]: mergedData
+          }
+          
+          console.log(`Updated formData.${section}:`, newFormData[section as keyof typeof newFormData])
+          return { formData: newFormData }
+        })
+      },
       
       setValidation: (step, isValid, errors) => set((state) => ({
         validation: {
@@ -261,65 +147,53 @@ export const useEventWizardStore = create<EventWizardState>()(
       
       resetWizard: () => set({
         currentStep: 1,
+        formData: getCompleteInitialData(),
+        validation: {},
         eventId: null,
-        isDraft: true,
-        lastSaved: null,
-        isEditing: false,
-        formData: initialFormData,
-        validation: {}
+        isEditing: false
       }),
       
       loadEventData: (eventData) => {
-        const formData = {
-          basics: {
-            name: eventData.name || '',
-            description: eventData.description || '',
-            type: eventData.type || 'concert',
-            performers: eventData.performers || [],
-            images: eventData.images || { cover: '', gallery: [] },
-            status: eventData.status || 'draft',
-            maxTicketsPerCustomer: eventData.maxTicketsPerCustomer || 10
+        const completeData = getCompleteInitialData()
+        
+        // Deep merge with defaults to prevent undefined values
+        const mergedData = {
+          basics: { ...completeData.basics, ...(eventData.basics || eventData) },
+          venue: { ...completeData.venue, ...(eventData.venue || {}) },
+          schedule: { ...completeData.schedule, ...(eventData.schedule || {}) },
+          pricing: {
+            tiers: eventData.pricing?.tiers || [],
+            fees: { ...completeData.pricing.fees, ...(eventData.pricing?.fees || {}) },
+            dynamicPricing: { ...completeData.pricing.dynamicPricing, ...(eventData.pricing?.dynamicPricing || {}) }
           },
-          venue: {
-            venueId: eventData.venueId || '',
-            layoutId: eventData.layoutId || '',
-            seatingType: eventData.seatingType || 'reserved',
-            availableSections: eventData.availableSections || []
+          promoter: { ...completeData.promoter, ...(eventData.promoter || {}) },
+          promotions: { 
+            ...completeData.promotions, 
+            ...(eventData.promotions || {}),
+            groupDiscount: { ...completeData.promotions.groupDiscount, ...(eventData.promotions?.groupDiscount || {}) }
           },
-          schedule: eventData.schedule || {
-            performances: [{
-              date: '',
-              doorsOpen: '',
-              startTime: '',
-              endTime: '',
-              pricingModifier: 0,
-              capacity: 0
-            }],
-            timezone: 'America/Chicago'
-          },
-          pricing: eventData.pricing || initialFormData.pricing,
-          promoter: eventData.promoter || initialFormData.promoter,
-          promotions: eventData.promotions || initialFormData.promotions,
-          sales: eventData.sales || initialFormData.sales,
-          communications: eventData.communications || initialFormData.communications
+          sales: { ...completeData.sales, ...(eventData.sales || {}) },
+          communications: { ...completeData.communications, ...(eventData.communications || {}) }
         }
         
         set({
-          formData,
-          eventId: eventData.id,
+          formData: mergedData,
+          eventId: eventData.id || null,
           isEditing: true,
-          isDraft: eventData.status === 'draft'
+          currentStep: 1
         })
       },
       
-      setIsEditing: (isEditing) => set({ isEditing })
+      setEventId: (id) => set({ eventId: id, isEditing: true }),
+      setIsEditing: (editing) => set({ isEditing: editing })
     }),
     {
       name: 'event-wizard-storage',
-      partialize: (state) => ({
+      partialize: (state) => ({ 
         formData: state.formData,
-        currentStep: state.currentStep,
-        eventId: state.eventId
+        eventId: state.eventId,
+        isEditing: state.isEditing,
+        currentStep: state.currentStep
       })
     }
   )
