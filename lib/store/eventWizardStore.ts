@@ -154,11 +154,55 @@ export const useEventWizardStore = create<EventWizardStore>()(
       }),
       
       loadEventData: (eventData) => {
+        console.log("Loading event data:", eventData)
         const completeData = getCompleteInitialData()
         
-        // Deep merge with defaults to prevent undefined values
+        // Handle both old and new data structures
         const mergedData = {
-          basics: { ...completeData.basics, ...(eventData.basics || eventData) },
+          basics: {
+            ...completeData.basics,
+            name: eventData.name || "",
+            description: eventData.description || "",
+            category: eventData.category || "concert",
+            tags: eventData.tags || [],
+            images: eventData.images || completeData.basics.images,
+            status: eventData.status || "draft",
+            featured: eventData.featured || false,
+            performers: eventData.performers || []
+          },
+          venue: {
+            ...completeData.venue,
+            venueId: eventData.venueId || "",
+            layoutId: eventData.layoutId || "",
+            layoutType: eventData.layoutType || "",
+            seatingType: eventData.seatingType || "general",
+            availableSections: eventData.availableSections || []
+          },
+          schedule: { ...completeData.schedule, ...(eventData.schedule || {}) },
+          pricing: {
+            tiers: eventData.pricing?.tiers || [],
+            fees: { ...completeData.pricing.fees, ...(eventData.pricing?.fees || {}) },
+            dynamicPricing: { ...completeData.pricing.dynamicPricing, ...(eventData.pricing?.dynamicPricing || {}) }
+          },
+          promoter: { ...completeData.promoter, ...(eventData.promoter || {}) },
+          promotions: {
+            ...completeData.promotions,
+            linkedPromotions: eventData.promotions?.linkedPromotions || [],
+            eventPromotions: eventData.promotions?.eventPromotions || [],
+            groupDiscount: { ...completeData.promotions.groupDiscount, ...(eventData.promotions?.groupDiscount || {}) }
+          },
+          sales: { ...completeData.sales, ...(eventData.sales || {}) },
+          communications: { ...completeData.communications, ...(eventData.communications || {}) }
+        }
+        
+        console.log("Merged event data:", mergedData)
+        set({
+          formData: mergedData,
+          eventId: eventData.id || null,
+          isEditing: true,
+          currentStep: 1
+        })
+      },
           venue: { ...completeData.venue, ...(eventData.venue || {}) },
           schedule: { ...completeData.schedule, ...(eventData.schedule || {}) },
           pricing: {

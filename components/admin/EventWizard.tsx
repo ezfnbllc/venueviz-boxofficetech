@@ -75,6 +75,7 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
     setSaving(true)
     try {
       const eventData = prepareEventData()
+      console.log("Prepared event data for Firebase:", eventData)
       
       if (isEditing && eventId) {
         await AdminService.updateEvent(eventId, eventData)
@@ -91,12 +92,15 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
   }
   
   const prepareEventData = () => {
+    console.log("Preparing event data for save:", formData)
+    
     return {
+      // Basic Information
       ...formData.basics,
       
-      // Venue configuration
+      // Venue Configuration
       venueId: formData.venue?.venueId || "",
-      venueName: formData.venue?.availableSections?.[0]?.sectionName || "",
+      venueName: formData.venue?.venueName || "",
       layoutId: formData.venue?.layoutId || "",
       layoutType: formData.venue?.layoutType || "",
       seatingType: formData.venue?.seatingType || "general",
@@ -105,28 +109,14 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
       // Schedule
       schedule: formData.schedule || { performances: [], timezone: "America/Chicago" },
       
-      // Pricing - PROPERLY STRUCTURED
+      // Pricing - COMPLETE STRUCTURE
       pricing: {
         tiers: formData.pricing?.tiers || [],
-        fees: formData.pricing?.fees || {
-          serviceFee: 0,
-          processingFee: 0,
-          facilityFee: 0,
-          salesTax: 8.25,
-          serviceFeeType: "percentage",
-          processingFeeType: "percentage",
-          facilityFeeType: "fixed",
-          serviceFeePer: "ticket",
-          processingFeePer: "transaction",
-          facilityFeePer: "ticket"
-        },
-        dynamicPricing: formData.pricing?.dynamicPricing || {
-          earlyBird: { enabled: false, discount: 10, endDate: "" },
-          lastMinute: { enabled: false, markup: 20, startDate: "" }
-        }
+        fees: formData.pricing?.fees || {},
+        dynamicPricing: formData.pricing?.dynamicPricing || {}
       },
       
-      // Promoter - ALL FIELDS
+      // Promoter - COMPLETE STRUCTURE
       promoter: {
         promoterId: formData.promoter?.promoterId || "",
         promoterName: formData.promoter?.promoterName || "",
@@ -135,15 +125,27 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
         responsibilities: formData.promoter?.responsibilities || []
       },
       
-      // Promotions - WAS MISSING!
+      // Promotions - COMPLETE STRUCTURE
       promotions: {
         linkedPromotions: formData.promotions?.linkedPromotions || [],
         eventPromotions: formData.promotions?.eventPromotions || [],
         groupDiscount: formData.promotions?.groupDiscount || {}
       },
       
-      // Sales
-      sales: formData.sales || { maxTicketsPerOrder: 10, allowWillCall: true, refundPolicy: "no-refunds", salesStartDate: "", salesEndDate: "" },
+      // Sales - COMPLETE STRUCTURE
+      sales: {
+        maxTicketsPerOrder: formData.sales?.maxTicketsPerOrder || 10,
+        allowWillCall: formData.sales?.allowWillCall || false,
+        allowMobileTickets: formData.sales?.allowMobileTickets !== false,
+        allowPrintAtHome: formData.sales?.allowPrintAtHome || false,
+        refundPolicy: formData.sales?.refundPolicy || "no-refunds",
+        customRefundPolicy: formData.sales?.customRefundPolicy || "",
+        salesStartDate: formData.sales?.salesStartDate || "",
+        salesEndDate: formData.sales?.salesEndDate || "",
+        requireAccountCreation: formData.sales?.requireAccountCreation || false,
+        enableWaitlist: formData.sales?.enableWaitlist || false,
+        showRemainingTickets: formData.sales?.showRemainingTickets !== false
+      },
       
       // Communications
       communications: formData.communications || {}
@@ -207,9 +209,11 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
   }
   
   const handlePublish = async () => {
+    console.log("Publishing event with data:", formData)
     setSaving(true)
     try {
       const eventData = prepareEventData()
+      console.log("Prepared event data for Firebase:", eventData)
       eventData.status = userRole === 'promoter' ? 'pending_approval' : 'published'
       
       if (isEditing && eventId) {
