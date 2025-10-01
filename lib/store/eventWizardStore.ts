@@ -6,9 +6,10 @@ const getCompleteInitialData = () => ({
     name: '',
     description: '',
     category: 'concert',
+    type: 'concert',
     tags: [],
     images: {
-      hero: '',
+      cover: '',
       thumbnail: '',
       gallery: []
     },
@@ -75,7 +76,7 @@ interface EventWizardStore {
   nextStep: () => void
   prevStep: () => void
   updateFormData: (section: string, data: any) => void
-  setValidation: (step: number, isValid: boolean, errors?: any) => void
+  setValidation: (validation: any) => void
   resetWizard: () => void
   loadEventData: (eventData: any) => void
   setEventId: (id: string | null) => void
@@ -121,12 +122,7 @@ export const useEventWizardStore = create<EventWizardStore>()(
         })
       },
       
-      setValidation: (step, isValid, errors) => set((state) => ({
-        validation: {
-          ...state.validation,
-          [step]: { isValid, errors }
-        }
-      })),
+      setValidation: (validation) => set({ validation }),
       
       resetWizard: () => {
         console.log('[RESET] Resetting wizard')
@@ -150,16 +146,25 @@ export const useEventWizardStore = create<EventWizardStore>()(
         
         const completeData = getCompleteInitialData()
         
+        // Helper to safely get arrays
         const safeArray = (arr: any) => Array.isArray(arr) ? arr : []
+        
+        // Helper to merge images object properly
+        const mergedImages = {
+          cover: eventData.images?.cover || eventData.cover || '',
+          thumbnail: eventData.images?.thumbnail || eventData.thumbnail || '',
+          gallery: safeArray(eventData.images?.gallery || eventData.gallery)
+        }
         
         const mergedData = {
           basics: {
             ...completeData.basics,
             name: eventData.name || '',
             description: eventData.description || '',
-            category: eventData.category || 'concert',
+            category: eventData.category || eventData.type || 'concert',
+            type: eventData.type || eventData.category || 'concert',
             tags: safeArray(eventData.tags),
-            images: eventData.images || completeData.basics.images,
+            images: mergedImages,
             status: eventData.status || 'draft',
             featured: eventData.featured || false,
             performers: safeArray(eventData.performers)
@@ -179,7 +184,6 @@ export const useEventWizardStore = create<EventWizardStore>()(
           },
           pricing: {
             ...completeData.pricing,
-            ...(eventData.pricing || {}),
             tiers: safeArray(eventData.pricing?.tiers),
             fees: {
               ...completeData.pricing.fees,
@@ -197,7 +201,6 @@ export const useEventWizardStore = create<EventWizardStore>()(
           },
           promotions: {
             ...completeData.promotions,
-            ...(eventData.promotions || {}),
             linkedPromotions: safeArray(eventData.promotions?.linkedPromotions),
             eventPromotions: safeArray(eventData.promotions?.eventPromotions),
             groupDiscount: eventData.promotions?.groupDiscount || {}

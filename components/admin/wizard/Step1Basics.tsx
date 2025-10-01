@@ -9,19 +9,24 @@ export default function Step1Basics() {
   const [uploadingGallery, setUploadingGallery] = useState(false)
   const [performerInput, setPerformerInput] = useState('')
   
+  // Ensure arrays are always defined
+  const gallery = formData.basics?.images?.gallery || []
+  const performers = formData.basics?.performers || []
+  
   const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     
     setUploadingCover(true)
     try {
-      // Use event name if available, otherwise use a temporary name
-      const eventName = formData.basics.name || 'temp-event'
+      const eventName = formData.basics?.name || 'temp-event'
       const url = await StorageService.uploadEventImage(file, eventName)
       updateFormData('basics', {
         images: {
-          ...formData.basics.images,
-          cover: url
+          ...formData.basics?.images,
+          cover: url,
+          thumbnail: formData.basics?.images?.thumbnail || '',
+          gallery: gallery
         }
       })
     } catch (error) {
@@ -36,8 +41,7 @@ export default function Step1Basics() {
     
     setUploadingGallery(true)
     try {
-      // Use event name if available, otherwise use a temporary name
-      const eventName = formData.basics.name || 'temp-event'
+      const eventName = formData.basics?.name || 'temp-event'
       const uploadPromises = Array.from(files).map(file => 
         StorageService.uploadEventImage(file, eventName)
       )
@@ -45,8 +49,10 @@ export default function Step1Basics() {
       
       updateFormData('basics', {
         images: {
-          ...formData.basics.images,
-          gallery: [...formData.basics?.images?.gallery, ...urls]
+          ...formData.basics?.images,
+          cover: formData.basics?.images?.cover || '',
+          thumbnail: formData.basics?.images?.thumbnail || '',
+          gallery: [...gallery, ...urls]
         }
       })
     } catch (error) {
@@ -58,7 +64,7 @@ export default function Step1Basics() {
   const handleAddPerformer = () => {
     if (performerInput.trim()) {
       updateFormData('basics', {
-        performers: [...formData.basics.performers, performerInput.trim()]
+        performers: [...performers, performerInput.trim()]
       })
       setPerformerInput('')
     }
@@ -66,15 +72,17 @@ export default function Step1Basics() {
   
   const handleRemovePerformer = (index: number) => {
     updateFormData('basics', {
-      performers: formData.basics?.performers?.filter((_, i) => i !== index)
+      performers: performers.filter((_, i) => i !== index)
     })
   }
   
   const handleRemoveGalleryImage = (index: number) => {
     updateFormData('basics', {
       images: {
-        ...formData.basics.images,
-        gallery: formData.basics?.images?.gallery.filter((_, i) => i !== index)
+        ...formData.basics?.images,
+        cover: formData.basics?.images?.cover || '',
+        thumbnail: formData.basics?.images?.thumbnail || '',
+        gallery: gallery.filter((_, i) => i !== index)
       }
     })
   }
@@ -88,7 +96,7 @@ export default function Step1Basics() {
         </label>
         <input
           type="text"
-          value={formData.basics.name}
+          value={formData.basics?.name || ''}
           onChange={(e) => updateFormData('basics', { name: e.target.value })}
           className="w-full px-4 py-2 bg-white/10 rounded-lg focus:bg-white/20 outline-none"
           placeholder="Enter event name"
@@ -101,8 +109,8 @@ export default function Step1Basics() {
           Event Type <span className="text-red-400">*</span>
         </label>
         <select
-          value={formData.basics.type}
-          onChange={(e) => updateFormData('basics', { type: e.target.value })}
+          value={formData.basics?.type || formData.basics?.category || 'concert'}
+          onChange={(e) => updateFormData('basics', { type: e.target.value, category: e.target.value })}
           className="w-full px-4 py-2 bg-white/10 rounded-lg focus:bg-white/20 outline-none"
         >
           <option value="concert">Concert</option>
@@ -119,7 +127,7 @@ export default function Step1Basics() {
           Description <span className="text-red-400">*</span>
         </label>
         <textarea
-          value={formData.basics.description}
+          value={formData.basics?.description || ''}
           onChange={(e) => updateFormData('basics', { description: e.target.value })}
           className="w-full px-4 py-2 bg-white/10 rounded-lg focus:bg-white/20 outline-none h-32"
           placeholder="Describe your event..."
@@ -150,7 +158,7 @@ export default function Step1Basics() {
           </button>
         </div>
         <div className="flex flex-wrap gap-2">
-          {formData.basics?.performers?.map((performer, index) => (
+          {performers.map((performer, index) => (
             <span
               key={index}
               className="px-3 py-1 bg-purple-600/20 text-purple-400 rounded-full flex items-center gap-2"
@@ -185,7 +193,7 @@ export default function Step1Basics() {
         {formData.basics?.images?.cover && (
           <div className="mt-3">
             <img
-              src={formData.basics?.images?.cover}
+              src={formData.basics.images.cover}
               alt="Cover"
               className="w-full max-w-md h-48 object-cover rounded-lg"
             />
@@ -210,9 +218,9 @@ export default function Step1Basics() {
         {uploadingGallery && (
           <p className="text-xs text-purple-400 mt-2">Uploading gallery images...</p>
         )}
-        {formData.basics?.images?.gallery.length > 0 && (
+        {gallery.length > 0 && (
           <div className="grid grid-cols-4 gap-3 mt-3">
-            {formData.basics?.images?.gallery.map((image, index) => (
+            {gallery.map((image, index) => (
               <div key={index} className="relative group">
                 <img
                   src={image}
@@ -221,7 +229,7 @@ export default function Step1Basics() {
                 />
                 <button
                   onClick={() => handleRemoveGalleryImage(index)}
-                  className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-6 h-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 opacity-0 group-hover:opacity-100 transition-opacity"
                 >
                   ✕
                 </button>
@@ -231,39 +239,32 @@ export default function Step1Basics() {
         )}
       </div>
       
-      {/* Max Tickets Per Customer */}
-      <div>
-        <label className="block text-sm font-medium mb-2">
-          Max Tickets Per Customer
-        </label>
-        <input
-          type="number"
-          value={formData.basics.maxTicketsPerCustomer}
-          onChange={(e) => updateFormData('basics', { 
-            maxTicketsPerCustomer: parseInt(e.target.value) || 10 
-          })}
-          className="w-full px-4 py-2 bg-white/10 rounded-lg focus:bg-white/20 outline-none"
-          min="1"
-          max="50"
-        />
-        <p className="text-xs text-gray-400 mt-1">
-          Limit the number of tickets a single customer can purchase
-        </p>
-      </div>
-      
-      {/* Status (Admin Only) */}
+      {/* Status */}
       <div>
         <label className="block text-sm font-medium mb-2">Status</label>
         <select
-          value={formData.basics.status}
+          value={formData.basics?.status || 'draft'}
           onChange={(e) => updateFormData('basics', { status: e.target.value })}
           className="w-full px-4 py-2 bg-white/10 rounded-lg focus:bg-white/20 outline-none"
         >
           <option value="draft">Draft</option>
-          <option value="pending_approval">Pending Approval</option>
-          <option value="published">Published</option>
-          <option value="cancelled">Cancelled</option>
+          <option value="active">Active</option>
+          <option value="paused">Paused</option>
+          <option value="completed">Completed</option>
         </select>
+      </div>
+      
+      {/* Featured Event */}
+      <div>
+        <label className="flex items-center gap-3">
+          <input
+            type="checkbox"
+            checked={formData.basics?.featured || false}
+            onChange={(e) => updateFormData('basics', { featured: e.target.checked })}
+            className="w-4 h-4"
+          />
+          <span className="text-sm">Feature this event on homepage</span>
+        </label>
       </div>
     </div>
   )
