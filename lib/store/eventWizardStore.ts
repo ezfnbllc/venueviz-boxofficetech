@@ -80,7 +80,6 @@ interface EventWizardStore {
   validation: Record<number, { isValid: boolean; errors: string[] }>
   eventId: string | null
   isEditing: boolean
-  activeEventId: string | null // CRITICAL: Track which event we're actually editing
   
   setCurrentStep: (step: number) => void
   nextStep: () => void
@@ -88,10 +87,9 @@ interface EventWizardStore {
   updateFormData: (section: string, data: any) => void
   setValidation: (step: number, isValid: boolean, errors: string[]) => void
   resetWizard: () => void
-  loadEventData: (eventData: any, forceEventId?: string) => void
+  loadEventData: (eventData: any, forceEventId: string) => void
   setEventId: (id: string) => void
   setIsEditing: (editing: boolean) => void
-  forceReset: () => void
 }
 
 export const useEventWizardStore = create<EventWizardStore>()(
@@ -102,7 +100,6 @@ export const useEventWizardStore = create<EventWizardStore>()(
       validation: {},
       eventId: null,
       isEditing: false,
-      activeEventId: null,
       
       setCurrentStep: (step) => set({ currentStep: step }),
       
@@ -115,16 +112,7 @@ export const useEventWizardStore = create<EventWizardStore>()(
       })),
       
       updateFormData: (section, data) => {
-        const state = get()
-        
-        // CRITICAL VALIDATION: Ensure we're updating the right event
-        console.log(`[UPDATE VALIDATION] Updating ${section} for active event: ${state.activeEventId}`)
-        
-        if (state.isEditing && !state.activeEventId) {
-          console.error('[CRITICAL ERROR] Attempting to update event data without activeEventId!')
-          alert('Critical Error: No active event ID. Please refresh and try again.')
-          return
-        }
+        console.log(`[UPDATE] Updating ${section} for event ${get().eventId}:`, data)
         
         set((state) => {
           const currentSection = state.formData[section as keyof typeof state.formData] || {}
@@ -141,7 +129,6 @@ export const useEventWizardStore = create<EventWizardStore>()(
             [section]: mergedData
           }
           
-          console.log(`[SAFE UPDATE] Updated ${section} for event ${state.activeEventId}:`, mergedData)
           return { formData: newFormData }
         })
       },
@@ -154,56 +141,21 @@ export const useEventWizardStore = create<EventWizardStore>()(
       })),
       
       resetWizard: () => {
-        console.log('[RESET] Resetting wizard - clearing all data')
+        console.log('[RESET] Resetting wizard completely')
         set({
           currentStep: 1,
           formData: getCompleteInitialData(),
           validation: {},
           eventId: null,
-          isEditing: false,
-          activeEventId: null
-        })
-      },
-      
-      forceReset: () => {
-        console.log('[FORCE RESET] Emergency store reset')
-        set({
-          currentStep: 1,
-          formData: getCompleteInitialData(),
-          validation: {},
-          eventId: null,
-          isEditing: false,
-          activeEventId: null
+          isEditing: false
         })
       },
       
       loadEventData: (eventData, forceEventId) => {
-        const targetEventId = forceEventId || eventData.id
-        const state = get()
+        const targetEventId = forceEventId
+        console.log(`[LOAD EVENT] Loading event ${targetEventId} with data:`, eventData.name)
         
-        console.log(`[LOAD EVENT] Loading event ${targetEventId}`)
-        console.log(`[LOAD EVENT] Current active event: ${state.activeEventId}`)
-        
-        // CRITICAL: If switching events, force reset first
-        if (state.activeEventId && state.activeEventId !== targetEventId) {
-          console.log(`[LOAD EVENT] Switching from ${state.activeEventId} to ${targetEventId} - forcing reset`)
-          set({
-            currentStep: 1,
-            formData: getCompleteInitialData(),
-            validation: {},
-            eventId: null,
-            isEditing: false,
-            activeEventId: null
-          })
-        }
-        
-        // Validate event ID exists
-        if (!targetEventId) {
-          console.error('[CRITICAL ERROR] Cannot load event without valid ID')
-          alert('Critical Error: Invalid event ID')
-          return
-        }
-        
+        // CRITICAL: Always clear and reload for the correct event
         const completeData = getCompleteInitialData()
         
         const mergedData = {
@@ -243,32 +195,29 @@ export const useEventWizardStore = create<EventWizardStore>()(
           communications: { ...completeData.communications, ...(eventData.communications || {}) }
         }
         
-        console.log(`[LOAD EVENT] Successfully loaded data for event ${targetEventId}`)
+        console.log(`[LOAD EVENT] Successfully loaded event ${targetEventId}`)
         set({
           formData: mergedData,
           eventId: targetEventId,
           isEditing: true,
-          currentStep: 1,
-          activeEventId: targetEventId
+          currentStep: 1
         })
       },
       
       setEventId: (id) => {
         console.log(`[SET EVENT ID] Setting event ID to: ${id}`)
-        set({ eventId: id, isEditing: true, activeEventId: id })
+        set({ eventId: id, isEditing: true })
       },
       
       setIsEditing: (editing) => set({ isEditing: editing })
     }),
     {
       name: 'event-wizard-storage',
-      // CRITICAL: Don't persist activeEventId to prevent cross-session contamination
+      // CRITICAL: Only persist form data for drafts, not event state
       partialize: (state) => ({ 
-        formData: state.formData,
-        eventId: state.eventId,
-        isEditing: state.isEditing,
-        currentStep: state.currentStep
-        // activeEventId intentionally excluded
+        formData: state.isEditing ? {} : state.formData, // Only persist if not editing existing event
+        currentStep: state.isEditing ? 1 : state.currentStep
+        // Don't persist eventId or isEditing - these must always come from URL
       })
     }
   )

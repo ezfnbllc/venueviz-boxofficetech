@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useEventWizardStore } from '@/lib/store/eventWizardStore'
 import { AdminService } from '@/lib/admin/adminService'
-import { Timestamp } from 'firebase/firestore'
 import { auth } from '@/lib/firebase'
 
 // Import step components
@@ -46,25 +45,39 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
       }
     }
     checkUserRole()
-    
-    if (eventId && !isEditing) {
-      loadExistingEvent(eventId)
-    }
-  }, [eventId])
+  }, [])
   
-  const loadExistingEvent = async (id: string) => {
-    setLoading(true)
-    try {
-      const event = await AdminService.getEvent(id)
-      if (event) {
-        loadEventData(event)
-        setEventId(id)
+  // CRITICAL: Always load event based on URL parameter, ignore store state
+  useEffect(() => {
+    const initializeWizard = async () => {
+      if (eventId) {
+        console.log(`[WIZARD INIT] Loading event from URL: ${eventId}`)
+        setLoading(true)
+        try {
+          const eventData = await AdminService.getEvent(eventId)
+          if (eventData) {
+            console.log(`[WIZARD INIT] Found event: ${eventData.name}`)
+            loadEventData(eventData, eventId) // Force load with URL eventId
+            setEventId(eventId)
+          } else {
+            console.error(`[WIZARD INIT] Event not found: ${eventId}`)
+            alert('Event not found')
+            onClose()
+          }
+        } catch (error) {
+          console.error(`[WIZARD INIT] Error loading event:`, error)
+          alert('Error loading event')
+          onClose()
+        }
+        setLoading(false)
+      } else {
+        console.log(`[WIZARD INIT] New event - resetting wizard`)
+        resetWizard()
       }
-    } catch (error) {
-      console.error('Error loading event:', error)
     }
-    setLoading(false)
-  }
+    
+    initializeWizard()
+  }, [eventId]) // Only depend on eventId from URL
   
   const handleAutoSave = async () => {
     if (!formData.basics?.name) return
@@ -74,8 +87,10 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
       const eventData = prepareEventData()
       
       if (isEditing && eventId) {
+        console.log(`[AUTO SAVE] Updating event ${eventId}`)
         await AdminService.updateEvent(eventId, eventData)
       } else {
+        console.log(`[AUTO SAVE] Creating new event`)
         const newEventId = await AdminService.createEvent(eventData)
         setEventId(newEventId)
       }
@@ -134,7 +149,6 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
   }
   
   const validateCurrentStep = () => {
-    // Don't validate while loading
     if (loading) return true
     
     let isValid = true
@@ -158,7 +172,6 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
         }
         break
       case 3:
-        // Safe check for performances array
         const performances = formData.schedule?.performances || []
         if (performances.length === 0) {
           errors.push('At least one performance date is required')
@@ -166,7 +179,6 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
         }
         break
       case 4:
-        // Safe check for pricing tiers array
         const tiers = formData.pricing?.tiers || []
         if (tiers.length === 0) {
           errors.push('At least one pricing tier is required')
@@ -203,8 +215,10 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
       eventData.status = userRole === 'promoter' ? 'pending_approval' : 'published'
       
       if (isEditing && eventId) {
+        console.log(`[PUBLISH] Updating event ${eventId}`)
         await AdminService.updateEvent(eventId, eventData)
       } else {
+        console.log(`[PUBLISH] Creating new event`)
         await AdminService.createEvent(eventData)
       }
       
@@ -249,7 +263,7 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
         <div className="bg-gray-800 rounded-lg p-6">
           <div className="flex items-center gap-3">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600"></div>
-            <span>Loading event...</span>
+            <span>Loading event {eventId}...</span>
           </div>
         </div>
       </div>
@@ -262,7 +276,7 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-700">
           <h2 className="text-2xl font-bold">
-            {isEditing ? 'Edit Event' : 'Create New Event'}
+            {isEditing ? `Edit Event: ${formData.basics?.name || eventId}` : 'Create New Event'}
           </h2>
           <button
             onClick={handleCancel}
