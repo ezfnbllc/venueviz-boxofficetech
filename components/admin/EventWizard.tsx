@@ -1,5 +1,5 @@
 'use client'
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useEventWizardStore } from '@/lib/store/eventWizardStore'
 import { AdminService } from '@/lib/admin/adminService'
@@ -35,10 +35,11 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const [userRole, setUserRole] = useState<'admin' | 'promoter'>('admin')
+  const loadedEventRef = useRef<string | null>(null)
   
   useEffect(() => {
     const initializeWizard = async () => {
-      console.log('[WIZARD INIT] Loading event from URL:', eventId)
+      console.log('[WIZARD INIT] Starting initialization')
       setLoading(true)
       
       try {
@@ -49,79 +50,44 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
         }
         
         if (eventId) {
-          const currentState = useEventWizardStore.getState()
-          if (currentState.eventId !== eventId) {
-            console.log('[WIZARD INIT] Found event:', eventId)
-            await loadExistingEvent(eventId)
+          // Prevent duplicate loads
+          if (loadedEventRef.current === eventId) {
+            console.log('[WIZARD INIT] Event already loaded:', eventId)
+            setLoading(false)
+            return
+          }
+          
+          console.log('[WIZARD INIT] Loading event:', eventId)
+          const event = await AdminService.getEvent(eventId)
+          
+          if (event) {
+            console.log('[WIZARD INIT] Event data retrieved:', event.name)
+            loadedEventRef.current = eventId
+            
+            // Pass the event with its ID
+            loadEventData({ ...event, id: eventId })
+            setEventId(eventId)
+          } else {
+            console.error('[WIZARD INIT] Event not found:', eventId)
+            alert('Event not found')
+            onClose()
           }
         } else {
           console.log('[WIZARD INIT] New event mode')
+          loadedEventRef.current = null
           resetWizard()
         }
       } catch (error) {
         console.error('[WIZARD INIT] Error:', error)
+        alert('Error loading event')
+        onClose()
       } finally {
         setLoading(false)
       }
     }
     
     initializeWizard()
-    
-    return () => {
-      if (!eventId && formData.basics?.name) {
-        handleAutoSave()
-      }
-    }
   }, [eventId])
-  
-  const loadExistingEvent = async (id: string) => {
-    console.log('[LOAD EVENT] Loading event', id)
-    try {
-      const event = await AdminService.getEvent(id)
-      if (event) {
-        console.log('[LOAD EVENT] Successfully loaded event', id)
-        const safeEventData = {
-          ...event,
-          availableSections: Array.isArray(event.availableSections) ? event.availableSections : [],
-          pricing: {
-            tiers: Array.isArray(event.pricing?.tiers) ? event.pricing.tiers : [],
-            fees: event.pricing?.fees || {
-              serviceFee: 0,
-              processingFee: 0,
-              facilityFee: 0,
-              salesTax: 8.25
-            },
-            dynamicPricing: event.pricing?.dynamicPricing || {
-              earlyBird: { enabled: false, discount: 10, endDate: '' },
-              lastMinute: { enabled: false, markup: 20, startDate: '' }
-            }
-          },
-          schedule: event.schedule || { performances: [], timezone: 'America/Chicago' },
-          promoter: event.promoter || {
-            promoterId: '',
-            promoterName: '',
-            commission: 0,
-            paymentTerms: 'net-30',
-            responsibilities: []
-          },
-          promotions: event.promotions || {
-            linkedPromotions: [],
-            eventPromotions: [],
-            groupDiscount: {}
-          },
-          sales: event.sales || {},
-          communications: event.communications || {}
-        }
-        loadEventData(safeEventData)
-        setEventId(id)
-        console.log('[SET EVENT ID] Setting event ID to:', id)
-      }
-    } catch (error) {
-      console.error('[LOAD EVENT] Error loading event:', error)
-      alert('Error loading event. Please try again.')
-      onClose()
-    }
-  }
   
   const handleAutoSave = async () => {
     if (!formData.basics?.name) return
@@ -132,9 +98,12 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
       
       if (isEditing && eventId) {
         await AdminService.updateEvent(eventId, eventData)
-      } else {
+        console.log('Auto-saved existing event')
+      } else if (!isEditing) {
         const newEventId = await AdminService.createEvent(eventData)
         setEventId(newEventId)
+        loadedEventRef.current = newEventId
+        console.log('Created new event:', newEventId)
       }
     } catch (error) {
       console.error('Error auto-saving:', error)
@@ -143,16 +112,21 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
   }
   
   const prepareEventData = () => {
+    const safeArray = (arr: any) => Array.isArray(arr) ? arr : []
+    
     return {
       ...formData.basics,
       venueId: formData.venue?.venueId || '',
       layoutId: formData.venue?.layoutId || '',
       layoutType: formData.venue?.layoutType || '',
       seatingType: formData.venue?.seatingType || 'general',
-      availableSections: Array.isArray(formData.venue?.availableSections) ? formData.venue.availableSections : [],
-      schedule: formData.schedule || { performances: [], timezone: 'America/Chicago' },
+      availableSections: safeArray(formData.venue?.availableSections),
+      schedule: {
+        performances: safeArray(formData.schedule?.performances),
+        timezone: formData.schedule?.timezone || 'America/Chicago'
+      },
       pricing: {
-        tiers: Array.isArray(formData.pricing?.tiers) ? formData.pricing.tiers : [],
+        tiers: safeArray(formData.pricing?.tiers),
         fees: formData.pricing?.fees || {
           serviceFee: 0,
           processingFee: 0,
@@ -164,20 +138,29 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
           lastMinute: { enabled: false, markup: 20, startDate: '' }
         }
       },
-      promoter: formData.promoter || {
-        promoterId: '',
-        promoterName: '',
-        commission: 0,
-        paymentTerms: 'net-30',
-        responsibilities: []
+      promoter: {
+        promoterId: formData.promoter?.promoterId || '',
+        promoterName: formData.promoter?.promoterName || '',
+        commission: formData.promoter?.commission || 0,
+        paymentTerms: formData.promoter?.paymentTerms || 'net-30',
+        responsibilities: safeArray(formData.promoter?.responsibilities)
       },
-      promotions: formData.promotions || {
-        linkedPromotions: [],
-        eventPromotions: [],
-        groupDiscount: {}
+      promotions: {
+        linkedPromotions: safeArray(formData.promotions?.linkedPromotions),
+        eventPromotions: safeArray(formData.promotions?.eventPromotions),
+        groupDiscount: formData.promotions?.groupDiscount || {}
       },
-      sales: formData.sales || {},
-      communications: formData.communications || {}
+      sales: formData.sales || {
+        salesChannels: [],
+        presaleSettings: {},
+        purchaseLimits: {},
+        refundPolicy: 'standard'
+      },
+      communications: formData.communications || {
+        emailTemplates: {},
+        socialMedia: {},
+        notifications: {}
+      }
     }
   }
   
@@ -214,13 +197,14 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
         await AdminService.updateEvent(eventId, eventData)
       } else {
         const newEventId = await AdminService.createEvent(eventData)
-        setEventId(newEventId)
+        loadedEventRef.current = newEventId
       }
       
       router.push('/admin/events')
       onClose()
     } catch (error) {
       console.error('Error publishing:', error)
+      alert('Error publishing event')
     }
     setSaving(false)
   }
@@ -228,7 +212,7 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center">
-        <div className="text-white">Loading...</div>
+        <div className="text-white">Loading event...</div>
       </div>
     )
   }
@@ -250,19 +234,22 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
       <div className="bg-gray-900 border-b border-gray-800 p-4">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-bold text-white">
-            {isEditing ? 'Edit Event' : 'Create New Event'}
+            {isEditing ? `Edit Event: ${formData.basics?.name || 'Loading...'}` : 'Create New Event'}
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white">
-            <span className="text-2xl">×</span>
+          <button 
+            onClick={onClose} 
+            className="text-gray-400 hover:text-white text-3xl leading-none"
+          >
+            ×
           </button>
         </div>
         
-        <div className="flex space-x-2">
+        <div className="flex space-x-2 overflow-x-auto">
           {steps.map((step) => (
             <button
               key={step.number}
               onClick={() => setCurrentStep(step.number)}
-              className={`px-4 py-2 rounded ${
+              className={`px-4 py-2 rounded whitespace-nowrap ${
                 currentStep === step.number
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
@@ -286,7 +273,7 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
         {currentStep === 9 && <Step9Review />}
       </div>
       
-      <div className="bg-gray-900 border-t border-gray-800 p-4 flex justify-between">
+      <div className="bg-gray-900 border-t border-gray-800 p-4 flex justify-between items-center">
         <button
           onClick={prevStep}
           disabled={currentStep === 1}
@@ -295,13 +282,15 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
           Previous
         </button>
         
-        {validation && Object.keys(validation).length > 0 && (
-          <div className="text-red-500 text-sm">
-            {Object.values(validation)[0]}
-          </div>
-        )}
-        
-        {saving && <span className="text-yellow-500">Auto-saving...</span>}
+        <div className="flex items-center gap-4">
+          {validation && Object.keys(validation).length > 0 && (
+            <div className="text-red-500 text-sm">
+              {Object.values(validation)[0] as string}
+            </div>
+          )}
+          
+          {saving && <span className="text-yellow-500">Saving...</span>}
+        </div>
         
         {currentStep < 9 ? (
           <button
@@ -313,7 +302,8 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
         ) : (
           <button
             onClick={handleSaveAndPublish}
-            className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+            disabled={saving}
+            className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
           >
             {isEditing ? 'Update Event' : 'Save & Publish'}
           </button>

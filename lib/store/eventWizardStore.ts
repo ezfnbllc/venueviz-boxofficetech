@@ -7,7 +7,11 @@ const getCompleteInitialData = () => ({
     description: '',
     category: 'concert',
     tags: [],
-    images: { cover: '', thumbnail: '', gallery: [] },
+    images: {
+      hero: '',
+      thumbnail: '',
+      gallery: []
+    },
     status: 'draft',
     featured: false,
     performers: []
@@ -26,69 +30,55 @@ const getCompleteInitialData = () => ({
   pricing: {
     tiers: [],
     fees: {
-      serviceFee: 4,
-      serviceFeeType: 'percentage',
-      serviceFeePer: 'ticket',
-      processingFee: 2.5,
-      processingFeeType: 'percentage',
-      processingFeePer: 'transaction',
+      serviceFee: 0,
+      processingFee: 0,
       facilityFee: 0,
-      facilityFeeType: 'fixed',
-      facilityFeePer: 'ticket',
       salesTax: 8.25
     },
     dynamicPricing: {
       earlyBird: { enabled: false, discount: 10, endDate: '' },
-      lastMinute: { enabled: false, markup: 20, startDate: '', daysBeforeEvent: 2 }
+      lastMinute: { enabled: false, markup: 20, startDate: '' }
     }
   },
   promoter: {
     promoterId: '',
     promoterName: '',
-    commission: 10,
+    commission: 0,
     paymentTerms: 'net-30',
     responsibilities: []
   },
   promotions: {
     linkedPromotions: [],
     eventPromotions: [],
-    groupDiscount: { enabled: false, minTickets: 10, discountPercentage: 15 }
+    groupDiscount: {}
   },
   sales: {
-    maxTicketsPerOrder: 10,
-    allowWillCall: true,
-    allowMobileTickets: true,
-    allowPrintAtHome: false,
-    refundPolicy: 'no-refunds',
-    customRefundPolicy: '',
-    salesStartDate: '',
-    salesEndDate: '',
-    requireAccountCreation: false,
-    enableWaitlist: false,
-    showRemainingTickets: true
+    salesChannels: [],
+    presaleSettings: {},
+    purchaseLimits: {},
+    refundPolicy: 'standard'
   },
   communications: {
-    confirmationEmail: { enabled: true, template: 'default', customMessage: '' },
-    reminderEmail: { enabled: true, daysBefore: 1, template: 'default', customMessage: '' },
-    seo: { metaTitle: '', metaDescription: '', keywords: [] }
+    emailTemplates: {},
+    socialMedia: {},
+    notifications: {}
   }
 })
 
 interface EventWizardStore {
   currentStep: number
   formData: ReturnType<typeof getCompleteInitialData>
-  validation: Record<number, { isValid: boolean; errors: string[] }>
+  validation: any
   eventId: string | null
   isEditing: boolean
-  
   setCurrentStep: (step: number) => void
   nextStep: () => void
   prevStep: () => void
   updateFormData: (section: string, data: any) => void
-  setValidation: (step: number, isValid: boolean, errors: string[]) => void
+  setValidation: (step: number, isValid: boolean, errors?: any) => void
   resetWizard: () => void
-  loadEventData: (eventData: any, forceEventId: string) => void
-  setEventId: (id: string) => void
+  loadEventData: (eventData: any) => void
+  setEventId: (id: string | null) => void
   setIsEditing: (editing: boolean) => void
 }
 
@@ -112,8 +102,6 @@ export const useEventWizardStore = create<EventWizardStore>()(
       })),
       
       updateFormData: (section, data) => {
-        console.log(`[UPDATE] Updating ${section} for event ${get().eventId}:`, data)
-        
         set((state) => {
           const currentSection = state.formData[section as keyof typeof state.formData] || {}
           
@@ -124,12 +112,12 @@ export const useEventWizardStore = create<EventWizardStore>()(
             mergedData = data
           }
           
-          const newFormData = {
-            ...state.formData,
-            [section]: mergedData
+          return {
+            formData: {
+              ...state.formData,
+              [section]: mergedData
+            }
           }
-          
-          return { formData: newFormData }
         })
       },
       
@@ -141,7 +129,7 @@ export const useEventWizardStore = create<EventWizardStore>()(
       })),
       
       resetWizard: () => {
-        console.log('[RESET] Resetting wizard completely')
+        console.log('[RESET] Resetting wizard')
         set({
           currentStep: 1,
           formData: getCompleteInitialData(),
@@ -151,12 +139,18 @@ export const useEventWizardStore = create<EventWizardStore>()(
         })
       },
       
-      loadEventData: (eventData, forceEventId) => {
-        const targetEventId = forceEventId
-        console.log(`[LOAD EVENT] Loading event ${targetEventId} with data:`, eventData.name)
+      loadEventData: (eventData) => {
+        if (!eventData) {
+          console.error('[LOAD EVENT DATA] No event data provided')
+          return
+        }
         
-        // CRITICAL: Always clear and reload for the correct event
+        const eventIdToUse = eventData.id || get().eventId
+        console.log('[LOAD EVENT DATA] Loading event:', eventIdToUse)
+        
         const completeData = getCompleteInitialData()
+        
+        const safeArray = (arr: any) => Array.isArray(arr) ? arr : []
         
         const mergedData = {
           basics: {
@@ -164,11 +158,11 @@ export const useEventWizardStore = create<EventWizardStore>()(
             name: eventData.name || '',
             description: eventData.description || '',
             category: eventData.category || 'concert',
-            tags: eventData.tags || [],
+            tags: safeArray(eventData.tags),
             images: eventData.images || completeData.basics.images,
             status: eventData.status || 'draft',
             featured: eventData.featured || false,
-            performers: eventData.performers || []
+            performers: safeArray(eventData.performers)
           },
           venue: {
             ...completeData.venue,
@@ -176,48 +170,70 @@ export const useEventWizardStore = create<EventWizardStore>()(
             layoutId: eventData.layoutId || '',
             layoutType: eventData.layoutType || '',
             seatingType: eventData.seatingType || 'general',
-            availableSections: eventData.availableSections || []
+            availableSections: safeArray(eventData.availableSections)
           },
-          schedule: { ...completeData.schedule, ...(eventData.schedule || {}) },
+          schedule: {
+            ...completeData.schedule,
+            ...(eventData.schedule || {}),
+            performances: safeArray(eventData.schedule?.performances)
+          },
           pricing: {
-            tiers: eventData.pricing?.tiers || [],
-            fees: { ...completeData.pricing.fees, ...(eventData.pricing?.fees || {}) },
-            dynamicPricing: { ...completeData.pricing.dynamicPricing, ...(eventData.pricing?.dynamicPricing || {}) }
+            ...completeData.pricing,
+            ...(eventData.pricing || {}),
+            tiers: safeArray(eventData.pricing?.tiers),
+            fees: {
+              ...completeData.pricing.fees,
+              ...(eventData.pricing?.fees || {})
+            },
+            dynamicPricing: {
+              ...completeData.pricing.dynamicPricing,
+              ...(eventData.pricing?.dynamicPricing || {})
+            }
           },
-          promoter: { ...completeData.promoter, ...(eventData.promoter || {}) },
+          promoter: {
+            ...completeData.promoter,
+            ...(eventData.promoter || {}),
+            responsibilities: safeArray(eventData.promoter?.responsibilities)
+          },
           promotions: {
             ...completeData.promotions,
-            linkedPromotions: eventData.promotions?.linkedPromotions || [],
-            eventPromotions: eventData.promotions?.eventPromotions || [],
-            groupDiscount: { ...completeData.promotions.groupDiscount, ...(eventData.promotions?.groupDiscount || {}) }
+            ...(eventData.promotions || {}),
+            linkedPromotions: safeArray(eventData.promotions?.linkedPromotions),
+            eventPromotions: safeArray(eventData.promotions?.eventPromotions),
+            groupDiscount: eventData.promotions?.groupDiscount || {}
           },
-          sales: { ...completeData.sales, ...(eventData.sales || {}) },
-          communications: { ...completeData.communications, ...(eventData.communications || {}) }
+          sales: {
+            ...completeData.sales,
+            ...(eventData.sales || {})
+          },
+          communications: {
+            ...completeData.communications,
+            ...(eventData.communications || {})
+          }
         }
         
-        console.log(`[LOAD EVENT] Successfully loaded event ${targetEventId}`)
         set({
           formData: mergedData,
-          eventId: targetEventId,
+          eventId: eventIdToUse,
           isEditing: true,
           currentStep: 1
         })
       },
       
       setEventId: (id) => {
-        console.log(`[SET EVENT ID] Setting event ID to: ${id}`)
-        set({ eventId: id, isEditing: true })
+        console.log('[SET EVENT ID] Setting to:', id)
+        set({ eventId: id, isEditing: !!id })
       },
       
       setIsEditing: (editing) => set({ isEditing: editing })
     }),
     {
       name: 'event-wizard-storage',
-      // CRITICAL: Only persist form data for drafts, not event state
       partialize: (state) => ({ 
-        formData: state.isEditing ? {} : state.formData, // Only persist if not editing existing event
-        currentStep: state.isEditing ? 1 : state.currentStep
-        // Don't persist eventId or isEditing - these must always come from URL
+        formData: state.formData,
+        eventId: state.eventId,
+        isEditing: state.isEditing,
+        currentStep: state.currentStep
       })
     }
   )
