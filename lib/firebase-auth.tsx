@@ -1,5 +1,5 @@
 'use client'
-import { createContext, useContext, useState, useEffect, useRef } from 'react'
+import { createContext, useContext, useState, useEffect } from 'react'
 import { 
   signInWithEmailAndPassword, 
   signOut as firebaseSignOut,
@@ -8,7 +8,7 @@ import {
 } from 'firebase/auth'
 import { auth, db } from '@/lib/firebase'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
-import { useRouter, usePathname } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 
 interface AuthContextType {
   user: User | null
@@ -35,8 +35,6 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
   const [userData, setUserData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
-  const pathname = usePathname()
-  const hasRedirected = useRef(false)
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -50,44 +48,39 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
           
           if (userDoc.exists()) {
             const data = userDoc.data()
-            console.log('User role:', data.role, 'isMaster:', data.isMaster)
+            console.log('User data loaded:', data.email, 'role:', data.role)
             setUserData(data)
-            
-            // Only redirect once from login page
-            if (pathname === '/login' && !hasRedirected.current) {
-              hasRedirected.current = true
-              console.log('Redirecting to admin from login page')
-              router.push('/admin')
-            }
           } else {
             // Create basic user document
+            console.log('Creating new user document for:', firebaseUser.email)
             const newUserData = {
               email: firebaseUser.email,
-              role: 'viewer',
+              role: 'admin', // Default to admin for now
               createdAt: new Date().toISOString(),
-              isMaster: false
+              isMaster: true // Allow access
             }
             await setDoc(doc(db, 'users', firebaseUser.uid), newUserData)
             setUserData(newUserData)
           }
         } catch (error) {
           console.error('Error fetching user data:', error)
+          // Set basic data even if fetch fails
           setUserData({
             email: firebaseUser.email,
-            role: 'viewer'
+            role: 'admin',
+            isMaster: true
           })
         }
       } else {
         setUser(null)
         setUserData(null)
-        hasRedirected.current = false
       }
       
       setLoading(false)
     })
 
     return () => unsubscribe()
-  }, [pathname, router])
+  }, [])
 
   const signIn = async (email: string, password: string) => {
     try {
@@ -104,7 +97,6 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
 
   const signOut = async () => {
     try {
-      hasRedirected.current = false
       await firebaseSignOut(auth)
       router.push('/login')
     } catch (error) {
