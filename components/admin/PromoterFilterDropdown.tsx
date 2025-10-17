@@ -1,195 +1,121 @@
 'use client'
-
-import { useState, useEffect, useRef } from 'react'
-import { usePromoterFilter } from '@/lib/store/promoterFilterStore'
+import { usePromoterFilterStore } from '@/lib/store/promoterFilterStore'
+import { useState, useEffect } from 'react'
 import { collection, getDocs, query, where } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 
-const MASTER_PROMOTER_ID = 'PAqFLcCQwxUYKr7i8g5t'
-
-interface PromoterFilterDropdownProps {
-  isMasterAdmin: boolean
-  currentPromoterId?: string
-  onFilterChange?: (promoterIds: string[]) => void
-}
-
-export default function PromoterFilterDropdown({ 
-  isMasterAdmin, 
-  currentPromoterId,
-  onFilterChange 
-}: PromoterFilterDropdownProps) {
-  const [isOpen, setIsOpen] = useState(false)
-  const [searchTerm, setSearchTerm] = useState('')
+export default function PromoterFilterDropdown() {
+  const { selectedPromoterId, setSelectedPromoterId } = usePromoterFilterStore()
+  const [promoters, setPromoters] = useState<any[]>([])
+  const [showDropdown, setShowDropdown] = useState(false)
   const [loading, setLoading] = useState(true)
-  const dropdownRef = useRef<HTMLDivElement>(null)
-
-  const {
-    selectedPromoterIds,
-    isAllSelected,
-    availablePromoters,
-    setAvailablePromoters,
-    selectAll,
-    clearAll,
-    togglePromoter
-  } = usePromoterFilter()
 
   useEffect(() => {
     const loadPromoters = async () => {
-      if (!isMasterAdmin) {
-        setLoading(false)
-        return
-      }
-
       try {
         const promotersRef = collection(db, 'promoters')
         const q = query(promotersRef, where('active', '==', true))
         const snapshot = await getDocs(q)
         
-        const promoters = snapshot.docs.map(doc => ({
+        const promotersList = snapshot.docs.map(doc => ({
           id: doc.id,
-          companyName: doc.data().companyName || doc.data().name || 'Unnamed Promoter',
-          active: doc.data().active,
-          isMaster: doc.id === MASTER_PROMOTER_ID
+          ...doc.data()
         }))
-
-        promoters.sort((a, b) => {
-          if (a.isMaster) return -1
-          if (b.isMaster) return 1
-          return a.companyName.localeCompare(b.companyName)
-        })
-
-        setAvailablePromoters(promoters)
+        
+        setPromoters(promotersList)
       } catch (error) {
         console.error('Error loading promoters:', error)
       } finally {
         setLoading(false)
       }
     }
-
+    
     loadPromoters()
-  }, [isMasterAdmin, setAvailablePromoters])
-
-  useEffect(() => {
-    if (onFilterChange) {
-      onFilterChange(selectedPromoterIds)
-    }
-  }, [selectedPromoterIds, onFilterChange])
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false)
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  if (!isMasterAdmin) {
-    return null
-  }
-
-  const filteredPromoters = availablePromoters.filter(p =>
-    p.companyName.toLowerCase().includes(searchTerm.toLowerCase())
-  )
-
-  const selectedCount = selectedPromoterIds.length
-  const totalCount = availablePromoters.length
+  const selectedPromoter = promoters.find(p => p.id === selectedPromoterId)
 
   return (
-    <div className="relative" ref={dropdownRef}>
-      {/* Trigger Button - Compact */}
+    <div className="relative">
       <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg border border-gray-700 transition-all"
-        title={isAllSelected ? 'All Promoters' : `${selectedCount} Promoters`}
+        onClick={() => setShowDropdown(!showDropdown)}
+        className="flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg transition-all border border-white/10 text-sm"
+        disabled={loading}
       >
-        <span className="text-xs font-medium">
-          🎯 {isAllSelected ? 'All' : selectedCount}
+        <span>
+          {loading ? '⏳ Loading...' :
+           selectedPromoterId === 'all' 
+            ? '🌐 All Promoters' 
+            : selectedPromoter?.name || 'Select Promoter'}
         </span>
-        <svg
-          className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
 
-      {/* Dropdown Menu - Compact */}
-      {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 max-h-96 overflow-hidden flex flex-col">
-          <div className="p-3 border-b border-gray-800">
-            <h3 className="font-semibold text-white text-sm mb-2">Filter by Promoter</h3>
-            <input
-              type="text"
-              placeholder="Search..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-3 py-1.5 bg-white/10 border border-gray-700 rounded text-white text-xs focus:outline-none focus:ring-2 focus:ring-purple-500"
-            />
-          </div>
-
-          <div className="p-2 border-b border-gray-800 flex items-center justify-between">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isAllSelected}
-                onChange={(e) => e.target.checked ? selectAll() : clearAll()}
-                className="w-3 h-3 rounded"
-              />
-              <span className="text-xs font-medium text-white">Select All</span>
-            </label>
-            <button
-              onClick={clearAll}
-              className="text-xs text-red-400 hover:text-red-300"
-            >
-              Clear
-            </button>
-          </div>
-
-          <div className="overflow-y-auto flex-1">
-            {loading ? (
-              <div className="p-4 text-center text-gray-400 text-xs">Loading...</div>
-            ) : filteredPromoters.length === 0 ? (
-              <div className="p-4 text-center text-gray-400 text-xs">No promoters found</div>
-            ) : (
-              <div className="p-1">
-                {filteredPromoters.map(promoter => (
-                  <label
-                    key={promoter.id}
-                    className="flex items-center gap-2 p-2 hover:bg-white/5 rounded cursor-pointer group"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedPromoterIds.includes(promoter.id)}
-                      onChange={() => togglePromoter(promoter.id)}
-                      className="w-3 h-3 rounded"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-white group-hover:text-purple-400 truncate">
-                        {promoter.companyName}
-                        {promoter.isMaster && (
-                          <span className="ml-1 text-[10px] bg-purple-600/20 text-purple-400 px-1.5 py-0.5 rounded-full">
-                            ⭐
-                          </span>
+      {showDropdown && (
+        <>
+          <div 
+            className="fixed inset-0 z-40" 
+            onClick={() => setShowDropdown(false)}
+          />
+          <div className="absolute right-0 mt-2 w-72 bg-gray-800 border border-white/10 rounded-lg shadow-2xl z-50 max-h-96 overflow-y-auto">
+            <div className="p-2">
+              <button
+                onClick={() => {
+                  setSelectedPromoterId('all')
+                  setShowDropdown(false)
+                }}
+                className={`w-full text-left px-3 py-2 rounded-lg transition-all ${
+                  selectedPromoterId === 'all'
+                    ? 'bg-purple-600 text-white'
+                    : 'hover:bg-white/10 text-gray-300'
+                }`}
+              >
+                🌐 All Promoters
+              </button>
+              
+              {promoters.length > 0 && (
+                <>
+                  <div className="border-t border-white/10 my-2"></div>
+                  {promoters.map((promoter) => (
+                    <button
+                      key={promoter.id}
+                      onClick={() => {
+                        setSelectedPromoterId(promoter.id)
+                        setShowDropdown(false)
+                      }}
+                      className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center gap-3 ${
+                        selectedPromoterId === promoter.id
+                          ? 'bg-purple-600 text-white'
+                          : 'hover:bg-white/10 text-gray-300'
+                      }`}
+                    >
+                      {promoter.logo ? (
+                        <img src={promoter.logo} alt="" className="w-8 h-8 rounded object-cover" />
+                      ) : (
+                        <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded flex items-center justify-center text-sm font-bold">
+                          {promoter.name?.charAt(0)?.toUpperCase() || '?'}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="truncate font-medium">{promoter.name}</p>
+                        {promoter.company && (
+                          <p className="text-xs text-gray-400 truncate">{promoter.company}</p>
                         )}
-                      </p>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            )}
+                      </div>
+                      {promoter.brandingType === 'advanced' && (
+                        <span className="text-xs bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded">
+                          Premium
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
           </div>
-
-          <div className="p-2 border-t border-gray-800 bg-gray-800/50">
-            <p className="text-[10px] text-gray-400 text-center">
-              {selectedCount} of {totalCount} selected
-            </p>
-          </div>
-        </div>
+        </>
       )}
     </div>
   )
