@@ -21,23 +21,18 @@ export default function Step2Venue() {
   }, [formData.venue.venueId])
   
   useEffect(() => {
-    if (layouts.length > 0) {
-      if (!formData.venue.layoutId) {
-        // Auto-select first layout for new events
-        handleLayoutChange(layouts[0].id)
-      } else {
-        // Re-process existing layout selection for editing
-        const existingLayout = layouts.find(l => l.id === formData.venue.layoutId)
-        if (existingLayout) {
-          setSelectedLayout(existingLayout)
-          // Ensure sections and pricing are loaded when editing
-          if (!formData.venue.availableSections || formData.venue.availableSections.length === 0) {
-            handleLayoutChange(formData.venue.layoutId)
-          }
+    if (layouts.length > 0 && !formData.venue.layoutId) {
+      handleLayoutChange(layouts[0].id)
+    } else if (layouts.length > 0 && formData.venue.layoutId) {
+      const existingLayout = layouts.find(l => l.id === formData.venue.layoutId)
+      if (existingLayout) {
+        setSelectedLayout(existingLayout)
+        if (!formData.venue.availableSections || formData.venue.availableSections.length === 0) {
+          handleLayoutChange(formData.venue.layoutId)
         }
       }
     }
-  }, [layouts])
+  }, [layouts, formData.venue.layoutId])
   
   const loadVenues = async () => {
     try {
@@ -71,15 +66,17 @@ export default function Step2Venue() {
   }
   
   const calculateSectionCapacity = (section: any) => {
-    // Check multiple possible capacity properties
+    // First check if section has a direct capacity property
     if (section.capacity && typeof section.capacity === 'number') {
       return section.capacity
     }
     
+    // If section has seats array, count them
     if (section.seats && Array.isArray(section.seats)) {
       return section.seats.length
     }
     
+    // If section has rows with seats
     if (section.rows && Array.isArray(section.rows)) {
       return section.rows.reduce((total: number, row: any) => {
         if (Array.isArray(row.seats)) {
@@ -89,6 +86,7 @@ export default function Step2Venue() {
       }, 0)
     }
     
+    // Fallback to totalSeats or default
     return section.totalSeats || section.totalCapacity || 0
   }
   
@@ -119,35 +117,28 @@ export default function Step2Venue() {
       let totalCalculatedCapacity = 0
       
       if (isSeatingChart && layout.sections) {
-        // Process seating chart sections with their price categories
         availableSections = layout.sections.map((section: any) => {
           const capacity = calculateSectionCapacity(section)
           totalCalculatedCapacity += capacity
           
-          // Extract price category ID from section
-          let priceCategoryId = section.pricing || 
+          // Get price category from section or layout
+          const priceCategory = section.pricing || 
                                section.priceCategory || 
-                               section.priceCategoryId || 
-                               'standard'
-          
-          // Find the full price category data from layout
-          const priceCategory = layout.priceCategories?.find((cat: any) => 
-            cat.id === priceCategoryId
-          ) || null
+                               (layout.priceCategories?.find((cat: any) => cat.id === section.priceCategoryId)) ||
+                               'Standard'
           
           return {
             sectionId: section.id,
             sectionName: section.name || section.label || `Section ${section.id}`,
             available: true,
             capacity: capacity,
-            priceCategoryId: priceCategoryId,
-            priceCategory: priceCategory, // Include full price category object
-            rows: section.rows || [],
-            seats: section.seats || []
+            priceCategories: priceCategory,
+            minPrice: 0,
+            maxPrice: 0,
+            rows: section.rows || []
           }
         })
       } else if (isGA && layout.gaLevels) {
-        // Process GA levels
         availableSections = layout.gaLevels.map((level: any) => {
           const capacity = calculateGACapacity(level)
           totalCalculatedCapacity += capacity
@@ -164,35 +155,60 @@ export default function Step2Venue() {
         })
       }
       
+      // Use calculated total if layout doesn't have totalCapacity
       const finalTotalCapacity = layout.totalCapacity || totalCalculatedCapacity
       
-      // Pass all layout pricing data to formData
       updateFormData('venue', { 
         layoutId,
         layoutType: layout.type,
         seatingType: isSeatingChart ? 'reserved' : 'general',
         availableSections,
         totalCapacity: finalTotalCapacity,
-        priceCategories: layout.priceCategories || [],
-        layoutName: layout.name
+        priceCategories: layout.priceCategories || []
       })
     }
+  }
+  
+  const checkSectionUsage = async (sectionId: string) => {
+    const hasPricing = formData.pricing?.tiers?.some((tier: any) => tier.sectionId === sectionId)
+    const hasSales = false // Will be implemented when sales checking is added
+    return { hasPricing, hasSales }
   }
   
   const toggleSectionAvailability = async (sectionId: string) => {
     const section = formData.venue.availableSections.find((s: any) => s.sectionId === sectionId)
     
-    if (section) {
-      const sections = formData.venue.availableSections.map(s =>
-        s.sectionId === sectionId 
-          ? { ...s, available: !s.available }
-          : s
-      )
-      updateFormData('venue', { 
-        ...formData.venue,
-        availableSections: sections 
-      })
+    if (section?.available) {
+      const { hasPricing, hasSales } = await checkSectionUsage(sectionId)
+      
+      if (hasSales) {
+        alert('Cannot disable this section - tickets have already been sold for this section.')
+        return
+      }
+      
+      if (hasPricing) {
+        const confirmed = confirm(
+          'This section has pricing configured. Disabling it will remove the pricing configuration. Continue?'
+        )
+        if (!confirmed) return
+        
+        const updatedTiers = formData.pricing?.tiers?.filter((tier: any) => tier.sectionId !== sectionId) || []
+        updateFormData('pricing', {
+          ...formData.pricing,
+          tiers: updatedTiers
+        })
+      }
     }
+    
+    const sections = formData.venue.availableSections.map(s =>
+      s.sectionId === sectionId 
+        ? { ...s, available: !s.available }
+        : s
+    )
+    updateFormData('venue', { 
+      ...formData.venue,
+      availableSections: sections 
+    })
   }
   
   const totalAvailableCapacity = formData.venue.availableSections
@@ -203,6 +219,7 @@ export default function Step2Venue() {
     <div>
       <h3 className="text-xl font-bold mb-4">Venue & Layout Selection</h3>
       
+      {/* Venue Selection */}
       <div className="mb-6">
         <label className="block text-sm font-medium mb-2">
           Select Venue *
@@ -222,6 +239,7 @@ export default function Step2Venue() {
         </select>
       </div>
       
+      {/* Layout Selection */}
       {formData.venue.venueId && (
         <div className="mb-6">
           <label className="block text-sm font-medium mb-2">
@@ -236,10 +254,12 @@ export default function Step2Venue() {
             >
               <option value="">Select a layout</option>
               {layouts.map(layout => {
-                const displayCapacity = layout.totalCapacity || layout.capacity || 'N/A'
+                const displayCapacity = layout.totalCapacity || layout.capacity || 
+                  (layout.sections?.reduce((sum: number, s: any) => 
+                    sum + calculateSectionCapacity(s), 0)) || 'N/A'
                 return (
                   <option key={layout.id} value={layout.id}>
-                    {layout.name} - {layout.type === 'seating_chart' ? 'Assigned Seating' : 'GA'} - Capacity: {displayCapacity}
+                    {layout.name} - Capacity: {displayCapacity}
                   </option>
                 )
               })}
@@ -250,38 +270,26 @@ export default function Step2Venue() {
         </div>
       )}
       
+      {/* Layout Details */}
       {selectedLayout && formData.venue.availableSections && (
         <>
           <div className="mb-6 p-4 bg-purple-600/20 rounded-lg">
             <p className="text-sm text-gray-300">
-              <span className="font-semibold">Layout Type:</span> {
+              <span className="font-semibold">Seating Type:</span> {
                 selectedLayout.type === 'seating_chart' 
-                  ? 'Assigned Seating (Reserved seats with price categories)' 
+                  ? 'Reserved Seating (Specific seat assignments)' 
                   : 'General Admission (First come, first served)'
               }
             </p>
-            {selectedLayout.priceCategories && selectedLayout.priceCategories.length > 0 && (
-              <div className="mt-2">
-                <p className="text-sm font-semibold text-gray-300">Price Categories:</p>
-                <div className="flex flex-wrap gap-2 mt-1">
-                  {selectedLayout.priceCategories.map((cat: any) => (
-                    <span 
-                      key={cat.id}
-                      className="px-2 py-1 rounded text-xs"
-                      style={{ backgroundColor: cat.color + '40', borderColor: cat.color, borderWidth: 1, borderStyle: 'solid' }}
-                    >
-                      {cat.name}: ${cat.price}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
           
           <div className="mb-6">
             <h4 className="font-semibold mb-3">
               {selectedLayout.type === 'seating_chart' ? 'Sections' : 'Levels'} Configuration
             </h4>
+            <p className="text-sm text-gray-400 mb-4">
+              Select which {selectedLayout.type === 'seating_chart' ? 'sections' : 'levels'} to make available
+            </p>
             
             <div className="space-y-3">
               {formData.venue.availableSections.map((section: any) => (
@@ -307,19 +315,7 @@ export default function Step2Venue() {
                           {selectedLayout.type === 'seating_chart' ? (
                             <>
                               Capacity: {section.capacity} seats
-                              {section.priceCategory && (
-                                <span 
-                                  className="ml-2 px-2 py-0.5 rounded text-xs"
-                                  style={{ 
-                                    backgroundColor: section.priceCategory.color + '40',
-                                    borderColor: section.priceCategory.color,
-                                    borderWidth: 1,
-                                    borderStyle: 'solid'
-                                  }}
-                                >
-                                  {section.priceCategory.name}: ${section.priceCategory.price}
-                                </span>
-                              )}
+                              {section.priceCategories && ` • ${section.priceCategories}`}
                             </>
                           ) : (
                             <>

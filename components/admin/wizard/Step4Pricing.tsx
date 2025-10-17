@@ -1,31 +1,121 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useEventWizardStore } from '@/lib/store/eventWizardStore'
 
 export default function Step4Pricing() {
   const { formData, updateFormData } = useEventWizardStore()
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([])
   
-  // Initialize pricing tiers from venue configuration
+  // Prevent scroll on number inputs
   useEffect(() => {
-    if (formData.venue?.availableSections?.length > 0 && (!formData.pricing?.tiers || formData.pricing.tiers.length === 0)) {
-      const availableSections = formData.venue.availableSections?.filter((s: any) => s.available).filter((s: any) => s.available)
-      
-      if (availableSections.length > 0) {
-        const newTiers = availableSections.map((section: any) => ({
-          id: section.sectionId,
-          name: section.sectionName,
-          basePrice: 0,
-          sectionId: section.sectionId,
-          capacity: section.capacity || 0
-        }))
-        
-        updateFormData('pricing', {
-          ...formData.pricing,
-          tiers: newTiers
-        })
+    const handleWheel = (e: WheelEvent) => {
+      if (document.activeElement?.getAttribute('type') === 'number') {
+        e.preventDefault()
       }
     }
-  }, [formData.venue?.availableSections])
+    
+    // Add listener to all number inputs
+    inputRefs.current.forEach(input => {
+      if (input) {
+        input.addEventListener('wheel', handleWheel, { passive: false })
+      }
+    })
+    
+    // Cleanup
+    return () => {
+      inputRefs.current.forEach(input => {
+        if (input) {
+          input.removeEventListener('wheel', handleWheel)
+        }
+      })
+    }
+  }, [formData.pricing?.tiers])
+  
+  useEffect(() => {
+    console.log('Step4Pricing - Price Categories:', formData.venue?.priceCategories)
+    console.log('Step4Pricing - Available Sections:', formData.venue?.availableSections)
+    
+    if (formData.venue?.availableSections?.length > 0) {
+      const isSeatingChart = formData.venue?.layoutType === 'seating_chart'
+      const priceCategories = formData.venue?.priceCategories || []
+      const availableSections = formData.venue.availableSections?.filter((s: any) => s.available) || []
+      
+      if (availableSections.length > 0) {
+        if (isSeatingChart && priceCategories.length > 0) {
+          console.log('Creating price category based tiers')
+          
+          const tiersByCategory = new Map()
+          
+          // Create tiers from price categories
+          priceCategories.forEach((category: any) => {
+            tiersByCategory.set(category.id, {
+              id: category.id,
+              name: category.name,
+              basePrice: category.price || 0,
+              categoryId: category.id,
+              color: category.color || '#666666',
+              sections: [],
+              capacity: 0,
+              isFromLayout: true
+            })
+          })
+          
+          // Assign sections to their categories
+          availableSections.forEach((section: any) => {
+            const categoryId = section.priceCategoryId || 
+                             section.priceCategory?.id || 
+                             section.priceCategory ||
+                             section.pricing ||
+                             'standard'
+            
+            const tier = tiersByCategory.get(categoryId)
+            if (tier) {
+              tier.sections.push({
+                sectionId: section.sectionId,
+                sectionName: section.sectionName,
+                capacity: section.capacity || 0
+              })
+              tier.capacity += section.capacity || 0
+            }
+          })
+          
+          const newTiers = Array.from(tiersByCategory.values()).filter(tier => tier.capacity > 0)
+          
+          updateFormData('pricing', {
+            ...formData.pricing,
+            tiers: newTiers,
+            usePriceCategories: true,
+            layoutId: formData.venue.layoutId,
+            isSeatingChart: true
+          })
+        } else {
+          // Per-section pricing fallback
+          const newTiers = availableSections.map((section: any) => {
+            const existingTier = formData.pricing?.tiers?.find((t: any) => 
+              t.id === section.sectionId || t.sectionId === section.sectionId
+            )
+            
+            return {
+              id: section.sectionId,
+              name: section.sectionName,
+              basePrice: existingTier?.basePrice || 0,
+              sectionId: section.sectionId,
+              capacity: section.capacity || 0,
+              isFromLayout: false
+            }
+          })
+          
+          updateFormData('pricing', {
+            ...formData.pricing,
+            tiers: newTiers,
+            usePriceCategories: false,
+            layoutId: formData.venue.layoutId,
+            isSeatingChart: isSeatingChart
+          })
+        }
+      }
+    }
+  }, [formData.venue?.availableSections, formData.venue?.priceCategories, formData.venue?.layoutId])
   
   const updateTierPrice = (tierId: string, price: number) => {
     const tiers = (formData.pricing?.tiers || []).map((tier: any) => 
@@ -49,54 +139,104 @@ export default function Step4Pricing() {
   
   const isSeatingChart = formData.venue?.layoutType === 'seating_chart'
   const hasTiers = formData.pricing?.tiers?.length > 0
+  const usePriceCategories = formData.pricing?.usePriceCategories
   
   return (
     <div>
       <h3 className="text-xl font-bold mb-4">Ticket Pricing & Fees</h3>
       
-      {/* Level/Section Pricing */}
+      {isSeatingChart && formData.venue?.priceCategories?.length > 0 && (
+        <div className="mb-4 p-3 bg-purple-600/20 rounded-lg">
+          <p className="text-sm text-purple-300">
+            💡 Pricing is based on price categories from your seating chart layout.
+          </p>
+        </div>
+      )}
+      
       {hasTiers ? (
         <div className="mb-6">
           <h4 className="font-semibold mb-4">
-            {isSeatingChart ? 'Section' : 'Level'} Pricing
+            {usePriceCategories ? 'Price Categories' : 'Section Pricing'}
           </h4>
+          
           <div className="space-y-3">
-            {formData.pricing.tiers.map((tier: any) => (
-              <div key={tier.id} className="flex items-center justify-between p-4 bg-black/20 rounded-lg">
-                <div>
-                  <p className="font-semibold">{tier.name}</p>
-                  <p className="text-sm text-gray-400">
-                    Capacity: {tier.capacity} {isSeatingChart ? 'seats' : 'tickets'}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-400">$</span>
-                  <input
-                    type="number"
-                    value={tier.basePrice || ''}
-                    onChange={(e) => updateTierPrice(tier.id, parseFloat(e.target.value) || 0)}
-                    className="w-32 px-3 py-2 bg-white/10 rounded-lg focus:bg-white/20 outline-none text-right"
-                    placeholder="0.00"
-                    step="0.01"
-                    min="0"
-                  />
-                  <span className="text-sm text-gray-400">per ticket</span>
+            {formData.pricing.tiers.map((tier: any, index: number) => (
+              <div key={tier.id} className="bg-black/20 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      {tier.color && (
+                        <div 
+                          className="w-5 h-5 rounded"
+                          style={{ backgroundColor: tier.color }}
+                        />
+                      )}
+                      <div>
+                        <p className="font-semibold text-lg">{tier.name}</p>
+                        {tier.isFromLayout && (
+                          <span className="text-xs text-purple-400">From Layout</span>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {tier.sections && tier.sections.length > 0 && (
+                      <div className="mt-2 pl-8">
+                        <p className="text-xs text-gray-500 mb-1">Sections:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {tier.sections.map((section: any) => (
+                            <span 
+                              key={section.sectionId} 
+                              className="px-2 py-0.5 bg-white/10 rounded text-xs"
+                            >
+                              {section.sectionName} • {section.capacity} seats
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    <p className="text-sm text-gray-400 mt-2 pl-8">
+                      Total Capacity: <span className="font-semibold">{tier.capacity}</span> seats
+                    </p>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 ml-4">
+                    <span className="text-gray-400">$</span>
+                    <input
+                      ref={el => inputRefs.current[index] = el}
+                      type="number"
+                      value={tier.basePrice || ''}
+                      onChange={(e) => updateTierPrice(tier.id, parseFloat(e.target.value) || 0)}
+                      onWheel={(e) => e.currentTarget.blur()}
+                      className="w-32 px-3 py-2 bg-white/10 rounded-lg focus:bg-white/20 outline-none text-right"
+                      placeholder="0.00"
+                      step="0.01"
+                      min="0"
+                    />
+                    <span className="text-sm text-gray-400">per ticket</span>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
+          
+          <div className="mt-4 p-3 bg-purple-600/30 rounded-lg text-center">
+            <p className="font-semibold">
+              Total Event Capacity: {
+                formData.pricing.tiers.reduce((sum: number, tier: any) => sum + (tier.capacity || 0), 0)
+              } seats
+            </p>
+          </div>
         </div>
       ) : (
         <div className="mb-6 p-4 bg-yellow-600/20 rounded-lg text-yellow-300">
-          No venue levels/sections available. Please go back to Step 2 and select a venue layout.
+          No venue sections available. Please go back to Step 2 and select a venue layout.
         </div>
       )}
       
-      {/* Service & Transaction Fees - Compact Layout */}
       <div className="mb-6">
         <h4 className="font-semibold mb-4">Service & Transaction Fees</h4>
         <div className="space-y-3">
-          {/* Convenience Fee */}
           <div className="flex items-center gap-3 p-4 bg-black/20 rounded-lg">
             <label className="w-32 text-sm">Convenience Fee</label>
             <select
@@ -109,97 +249,14 @@ export default function Step4Pricing() {
             </select>
             <input
               type="number"
-              value={formData.pricing?.fees?.serviceFee ?? 4}
+              value={formData.pricing?.fees?.serviceFee ?? 0}
               onChange={(e) => updateFees('serviceFee', parseFloat(e.target.value) || 0)}
-              className="w-24 px-3 py-2 bg-white/10 rounded-lg"
+              onWheel={(e) => e.currentTarget.blur()}
+              className="w-20 px-3 py-2 bg-white/10 rounded-lg text-center"
               placeholder="0"
-              step="0.01"
+              step={formData.pricing?.fees?.serviceFeeType === 'percentage' ? '0.1' : '0.01'}
               min="0"
             />
-            <select
-              value={formData.pricing?.fees?.serviceFeePer || 'ticket'}
-              onChange={(e) => updateFees('serviceFeePer', e.target.value)}
-              className="px-3 py-2 bg-white/10 rounded-lg"
-            >
-              <option value="ticket">Per Ticket</option>
-              <option value="transaction">Per Transaction</option>
-            </select>
-          </div>
-          
-          {/* Processing Fee */}
-          <div className="flex items-center gap-3 p-4 bg-black/20 rounded-lg">
-            <label className="w-32 text-sm">Processing Fee</label>
-            <select
-              value={formData.pricing?.fees?.processingFeeType || 'percentage'}
-              onChange={(e) => updateFees('processingFeeType', e.target.value)}
-              className="px-3 py-2 bg-white/10 rounded-lg"
-            >
-              <option value="percentage">Percentage (%)</option>
-              <option value="fixed">Fixed ($)</option>
-            </select>
-            <input
-              type="number"
-              value={formData.pricing?.fees?.processingFee ?? 2.5}
-              onChange={(e) => updateFees('processingFee', parseFloat(e.target.value) || 0)}
-              className="w-24 px-3 py-2 bg-white/10 rounded-lg"
-              placeholder="0"
-              step="0.01"
-              min="0"
-            />
-            <select
-              value={formData.pricing?.fees?.processingFeePer || 'transaction'}
-              onChange={(e) => updateFees('processingFeePer', e.target.value)}
-              className="px-3 py-2 bg-white/10 rounded-lg"
-            >
-              <option value="ticket">Per Ticket</option>
-              <option value="transaction">Per Transaction</option>
-            </select>
-          </div>
-          
-          {/* Facility Fee */}
-          <div className="flex items-center gap-3 p-4 bg-black/20 rounded-lg">
-            <label className="w-32 text-sm">Facility Fee</label>
-            <select
-              value={formData.pricing?.fees?.facilityFeeType || 'fixed'}
-              onChange={(e) => updateFees('facilityFeeType', e.target.value)}
-              className="px-3 py-2 bg-white/10 rounded-lg"
-            >
-              <option value="fixed">Fixed ($)</option>
-              <option value="percentage">Percentage (%)</option>
-            </select>
-            <input
-              type="number"
-              value={formData.pricing?.fees?.facilityFee ?? 0}
-              onChange={(e) => updateFees('facilityFee', parseFloat(e.target.value) || 0)}
-              className="w-24 px-3 py-2 bg-white/10 rounded-lg"
-              placeholder="0"
-              step="0.01"
-              min="0"
-            />
-            <select
-              value={formData.pricing?.fees?.facilityFeePer || 'ticket'}
-              onChange={(e) => updateFees('facilityFeePer', e.target.value)}
-              className="px-3 py-2 bg-white/10 rounded-lg"
-            >
-              <option value="ticket">Per Ticket</option>
-              <option value="transaction">Per Transaction</option>
-            </select>
-          </div>
-          
-          {/* Sales Tax */}
-          <div className="flex items-center gap-3 p-4 bg-black/20 rounded-lg">
-            <label className="w-32 text-sm">Sales Tax</label>
-            <input
-              type="number"
-              value={formData.pricing?.fees?.salesTax ?? 8.25}
-              onChange={(e) => updateFees('salesTax', parseFloat(e.target.value) || 0)}
-              className="w-24 px-3 py-2 bg-white/10 rounded-lg"
-              placeholder="0"
-              step="0.01"
-              min="0"
-              max="100"
-            />
-            <span className="text-gray-400">% (Applied to subtotal)</span>
           </div>
         </div>
       </div>

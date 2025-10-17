@@ -1,260 +1,199 @@
 'use client'
-import { useState, useEffect } from 'react'
-import { AdminService } from '@/lib/admin/adminService'
-import Link from 'next/link'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 
-export default function AdminPage() {
+import { useState, useEffect } from 'react'
+import { useFirebaseAuth } from '@/lib/firebase-auth'
+import { AdminService } from '@/lib/admin/adminService'
+import { usePromoterFiltering } from '@/lib/hooks/usePromoterFiltering'
+import Link from 'next/link'
+
+export default function AdminDashboard() {
+  const { user, isAdmin } = useFirebaseAuth()
+  const [stats, setStats] = useState({
+    totalEvents: 0,
+    totalOrders: 0,
+    totalRevenue: 0,
+    totalCustomers: 0
+  })
+  const [recentEvents, setRecentEvents] = useState<any[]>([])
+  const [recentOrders, setRecentOrders] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [events, setEvents] = useState<any[]>([])
-  const [venues, setVenues] = useState<any[]>([])
-  const [orders, setOrders] = useState<any[]>([])
-  const [customers, setCustomers] = useState<any[]>([])
-  const [promotions, setPromotions] = useState<any[]>([])
-  const [promoters, setPromoters] = useState<any[]>([])
-  const [orderStats, setOrderStats] = useState<any>(null)
+  const [currentPromoterId, setCurrentPromoterId] = useState<string>()
+
+  const { activePromoterIds, shouldFilter } = usePromoterFiltering(isAdmin, currentPromoterId)
 
   useEffect(() => {
-    loadDashboardData()
-  }, [])
+    const loadDashboardData = async () => {
+      setLoading(true)
+      try {
+        const [events, orders] = await Promise.all([
+          AdminService.getEvents(),
+          AdminService.getOrders()
+        ])
 
-  const loadDashboardData = async () => {
-    setLoading(true)
-    try {
-      const [eventsData, venuesData, ordersData, customersData, promotionsData, promotersData, statsData] = await Promise.all([
-        AdminService.getEvents(),
-        AdminService.getVenues(),
-        AdminService.getOrders(),
-        AdminService.getCustomers(),
-        AdminService.getPromotions(),
-        AdminService.getPromoters(),
-        AdminService.getOrderStats()
-      ])
+        console.log('[Dashboard] Total events loaded:', events.length)
+        console.log('[Dashboard] Total orders loaded:', orders.length)
 
-      setEvents(eventsData)
-      setVenues(venuesData)
-      setOrders(ordersData)
-      setCustomers(customersData)
-      setPromotions(promotionsData)
-      setPromoters(promotersData)
-      setOrderStats(statsData)
-    } catch (error) {
-      console.error('Error loading dashboard data:', error)
+        // Apply filtering
+        let filteredEvents = events
+        let filteredOrders = orders
+
+        if (shouldFilter && activePromoterIds && activePromoterIds.length > 0) {
+          filteredEvents = events.filter(event => {
+            const eventPromoterId = event.promoter?.promoterId || event.promoterId
+            if (!eventPromoterId && isAdmin) return true
+            return activePromoterIds.includes(eventPromoterId)
+          })
+
+          const eventIds = new Set(filteredEvents.map(e => e.id))
+          filteredOrders = orders.filter(order => eventIds.has(order.eventId))
+        } else if (shouldFilter && (!activePromoterIds || activePromoterIds.length === 0)) {
+          filteredEvents = []
+          filteredOrders = []
+        }
+
+        // Calculate stats
+        const totalRevenue = filteredOrders.reduce((sum, order) => {
+          return sum + (order.pricing?.total || order.total || 0)
+        }, 0)
+
+        // Get unique customers from orders - check all possible email fields
+        const customerEmails = new Set<string>()
+        filteredOrders.forEach(order => {
+          const email = order.customer?.email || order.customerEmail || order.buyerEmail || order.email
+          if (email && email !== 'N/A') {
+            customerEmails.add(email.toLowerCase())
+          }
+        })
+
+        console.log('[Dashboard] Unique customer emails:', customerEmails.size)
+
+        setStats({
+          totalEvents: filteredEvents.length,
+          totalOrders: filteredOrders.length,
+          totalRevenue,
+          totalCustomers: customerEmails.size
+        })
+
+        // Sort events by date
+        const sortedEvents = [...filteredEvents].sort((a, b) => {
+          const aTime = a.createdAt?.toDate?.()?.getTime() || 0
+          const bTime = b.createdAt?.toDate?.()?.getTime() || 0
+          return bTime - aTime
+        })
+
+        setRecentEvents(sortedEvents.slice(0, 5))
+        setRecentOrders(filteredOrders.slice(0, 10))
+
+      } catch (error) {
+        console.error('[Dashboard] Error loading data:', error)
+      } finally {
+        setLoading(false)
+      }
     }
-    setLoading(false)
-  }
 
-  const monthlyRevenueData = [
-    { name: 'Jan', revenue: 0 },
-    { name: 'Feb', revenue: 0 },
-    { name: 'Mar', revenue: 0 },
-    { name: 'Apr', revenue: 0 },
-    { name: 'May', revenue: 0 },
-    { name: 'Jun', revenue: 0 },
-    { name: 'Jul', revenue: 0 },
-    { name: 'Aug', revenue: 0 },
-    { name: 'Sep', revenue: 0 },
-    { name: 'Oct', revenue: 0 },
-    { name: 'Nov', revenue: 0 },
-    { name: 'Dec', revenue: 0 },
-  ]
-
-  const orderStatusData = [
-    { name: 'Confirmed', value: orderStats?.confirmed || 0, color: '#10B981' },
-    { name: 'Pending', value: orderStats?.pending || 0, color: '#F59E0B' },
-    { name: 'Cancelled', value: orderStats?.cancelled || 0, color: '#EF4444' },
-  ]
-
-  const totalRevenue = orderStats?.totalRevenue || 0
+    loadDashboardData()
+  }, [activePromoterIds, shouldFilter, isAdmin])
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-purple-500"/>
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-purple-500"></div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      {/* Sub-navigation tabs specific to dashboard */}
-      <div className="p-8 border-b border-white/10">
-        <div className="flex gap-4">
-          <button className="px-6 py-2 bg-purple-600 rounded-lg">Overview</button>
-          <button className="px-6 py-2 bg-white/10 rounded-lg hover:bg-white/20">Analytics</button>
-          <button className="px-6 py-2 bg-white/10 rounded-lg hover:bg-white/20">AI Assistant</button>
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-3xl font-bold">Dashboard</h1>
+        <p className="text-gray-400 mt-1">
+          Welcome back, {user?.email}
+          {isAdmin && <span className="text-purple-400"> (Master Admin)</span>}
+        </p>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white/5 rounded-xl p-6 border border-gray-800">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-gray-400 text-sm">Total Events</p>
+            <span className="text-2xl">🎫</span>
+          </div>
+          <p className="text-3xl font-bold">{stats.totalEvents}</p>
+        </div>
+
+        <div className="bg-white/5 rounded-xl p-6 border border-gray-800">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-gray-400 text-sm">Total Orders</p>
+            <span className="text-2xl">🛒</span>
+          </div>
+          <p className="text-3xl font-bold">{stats.totalOrders}</p>
+        </div>
+
+        <div className="bg-white/5 rounded-xl p-6 border border-gray-800">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-gray-400 text-sm">Total Revenue</p>
+            <span className="text-2xl">💰</span>
+          </div>
+          <p className="text-3xl font-bold">${stats.totalRevenue.toLocaleString()}</p>
+        </div>
+
+        <div className="bg-white/5 rounded-xl p-6 border border-gray-800">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-gray-400 text-sm">Total Customers</p>
+            <span className="text-2xl">👥</span>
+          </div>
+          <p className="text-3xl font-bold">{stats.totalCustomers}</p>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="p-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 mb-8">
-          {/* Events Card */}
-          <div className="bg-gradient-to-br from-purple-900/50 to-purple-700/30 rounded-xl p-6 border border-purple-500/20">
-            <p className="text-gray-300 text-sm mb-2">Events</p>
-            <p className="text-4xl font-bold mb-4">{events.length}</p>
-            <Link href="/admin/events" className="text-purple-400 hover:text-purple-300">
-              Manage →
+      {/* Recent Events & Orders */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white/5 rounded-xl p-6 border border-gray-800">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold">Recent Events</h2>
+            <Link href="/admin/events" className="text-purple-400 hover:text-purple-300 text-sm">
+              View All →
             </Link>
           </div>
-
-          {/* Venues Card */}
-          <div className="bg-gradient-to-br from-blue-900/50 to-blue-700/30 rounded-xl p-6 border border-blue-500/20">
-            <p className="text-gray-300 text-sm mb-2">Venues</p>
-            <p className="text-4xl font-bold mb-4">{venues.length}</p>
-            <Link href="/admin/venues" className="text-blue-400 hover:text-blue-300">
-              View →
-            </Link>
-          </div>
-
-          {/* Orders Card */}
-          <div className="bg-gradient-to-br from-green-900/50 to-green-700/30 rounded-xl p-6 border border-green-500/20">
-            <p className="text-gray-300 text-sm mb-2">Orders</p>
-            <p className="text-4xl font-bold mb-4">{orders.length}</p>
-            <Link href="/admin/orders" className="text-green-400 hover:text-green-300">
-              Details →
-            </Link>
-          </div>
-
-          {/* Customers Card */}
-          <div className="bg-gradient-to-br from-yellow-900/50 to-yellow-700/30 rounded-xl p-6 border border-yellow-500/20">
-            <p className="text-gray-300 text-sm mb-2">Customers</p>
-            <p className="text-4xl font-bold mb-4">{customers.length}</p>
-            <Link href="/admin/customers" className="text-yellow-400 hover:text-yellow-300">
-              View →
-            </Link>
-          </div>
-
-          {/* Promotions Card */}
-          <div className="bg-gradient-to-br from-pink-900/50 to-pink-700/30 rounded-xl p-6 border border-pink-500/20">
-            <p className="text-gray-300 text-sm mb-2">Promotions</p>
-            <p className="text-4xl font-bold mb-4">{promotions.length}</p>
-            <Link href="/admin/promotions" className="text-pink-400 hover:text-pink-300">
-              Manage →
-            </Link>
-          </div>
-
-          {/* Promoters Card */}
-          <div className="bg-gradient-to-br from-indigo-900/50 to-indigo-700/30 rounded-xl p-6 border border-indigo-500/20">
-            <p className="text-gray-300 text-sm mb-2">Promoters</p>
-            <p className="text-4xl font-bold mb-4">{promoters.length}</p>
-            <Link href="/admin/promoters" className="text-indigo-400 hover:text-indigo-300">
-              View →
-            </Link>
-          </div>
-
-          {/* Revenue Card */}
-          <div className="bg-gradient-to-br from-emerald-900/50 to-emerald-700/30 rounded-xl p-6 border border-emerald-500/20 md:col-span-2">
-            <p className="text-gray-300 text-sm mb-2">Revenue</p>
-            <p className="text-4xl font-bold mb-2">${totalRevenue.toFixed(2)}</p>
-            <p className="text-sm text-gray-400">Total</p>
-          </div>
-        </div>
-
-        {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          {/* Monthly Revenue Chart */}
-          <div className="bg-gray-900 rounded-xl p-6">
-            <h3 className="text-xl font-bold mb-4">Monthly Revenue</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={monthlyRevenueData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                <XAxis dataKey="name" stroke="#9CA3AF" />
-                <YAxis stroke="#9CA3AF" />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#1F2937', border: 'none' }}
-                  labelStyle={{ color: '#9CA3AF' }}
-                />
-                <Bar dataKey="revenue" fill="#A855F7" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Order Status Chart */}
-          <div className="bg-gray-900 rounded-xl p-6">
-            <h3 className="text-xl font-bold mb-4">Order Status</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={orderStatusData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={100}
-                  label
-                >
-                  {orderStatusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#1F2937', border: 'none' }}
-                  labelStyle={{ color: '#9CA3AF' }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="flex justify-center gap-6 mt-4">
-              {orderStatusData.map((status) => (
-                <div key={status.name} className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: status.color }} />
-                  <span className="text-sm text-gray-400">
-                    {status.name}: {status.value}
-                  </span>
+          
+          {recentEvents.length === 0 ? (
+            <p className="text-gray-400 text-center py-8">No events found</p>
+          ) : (
+            <div className="space-y-3">
+              {recentEvents.map(event => (
+                <div key={event.id} className="p-3 bg-white/5 rounded-lg">
+                  <p className="font-medium">{event.name}</p>
+                  <p className="text-sm text-gray-400">{event.venueName}</p>
                 </div>
               ))}
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Recent Tables */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Recent Orders */}
-          <div className="bg-gray-900 rounded-xl p-6">
-            <h3 className="text-xl font-bold mb-4">Recent Orders</h3>
-            {orders.length > 0 ? (
-              <div className="space-y-3">
-                {orders.slice(0, 5).map((order) => (
-                  <div key={order.id} className="flex justify-between items-center p-3 bg-gray-800 rounded-lg">
-                    <div>
-                      <p className="font-semibold">{order.customerName}</p>
-                      <p className="text-sm text-gray-400">{order.eventName}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold">${order.total?.toFixed(2)}</p>
-                      <p className="text-xs text-gray-400">{order.status}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-400">No recent orders</p>
-            )}
+        <div className="bg-white/5 rounded-xl p-6 border border-gray-800">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold">Recent Orders</h2>
+            <Link href="/admin/orders" className="text-purple-400 hover:text-purple-300 text-sm">
+              View All →
+            </Link>
           </div>
-
-          {/* Recent Customers */}
-          <div className="bg-gray-900 rounded-xl p-6">
-            <h3 className="text-xl font-bold mb-4">Recent Customers</h3>
-            {customers.length > 0 ? (
-              <div className="space-y-3">
-                {customers.slice(0, 5).map((customer) => (
-                  <div key={customer.id} className="flex justify-between items-center p-3 bg-gray-800 rounded-lg">
-                    <div>
-                      <p className="font-semibold">{customer.name}</p>
-                      <p className="text-sm text-gray-400">{customer.email}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm text-gray-400">
-                        {new Date(customer.createdAt).toLocaleDateString()}
-                      </p>
-                    </div>
+          
+          {recentOrders.length === 0 ? (
+            <p className="text-gray-400 text-center py-8">No orders found</p>
+          ) : (
+            <div className="space-y-3">
+              {recentOrders.map(order => (
+                <div key={order.id} className="p-3 bg-white/5 rounded-lg">
+                  <p className="font-medium">{order.customer?.name || order.customerName}</p>
+                  <div className="flex justify-between text-sm text-gray-400 mt-1">
+                    <span>{order.eventName}</span>
+                    <span>${order.pricing?.total || order.total}</span>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-400">No recent customers</p>
-            )}
-          </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -16,6 +16,7 @@ import { db } from '@/lib/firebase'
 
 export class AdminService {
   
+  // ============ VENUES ============
   static async getVenues() {
     try {
       const venuesRef = collection(db, 'venues')
@@ -44,6 +45,48 @@ export class AdminService {
     }
   }
 
+  static async createVenue(venueData: any) {
+    try {
+      const venuesRef = collection(db, 'venues')
+      const docRef = await addDoc(venuesRef, {
+        ...venueData,
+        active: true,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      })
+      return docRef.id
+    } catch (error) {
+      console.error('Error creating venue:', error)
+      throw error
+    }
+  }
+
+  static async updateVenue(venueId: string, venueData: any) {
+    try {
+      const venueRef = doc(db, 'venues', venueId)
+      await updateDoc(venueRef, {
+        ...venueData,
+        updatedAt: Timestamp.now()
+      })
+      return true
+    } catch (error) {
+      console.error('Error updating venue:', error)
+      throw error
+    }
+  }
+
+  static async deleteVenue(venueId: string) {
+    try {
+      const venueRef = doc(db, 'venues', venueId)
+      await deleteDoc(venueRef)
+      return true
+    } catch (error) {
+      console.error('Error deleting venue:', error)
+      throw error
+    }
+  }
+
+  // ============ LAYOUTS ============
   static async getLayouts() {
     try {
       const layoutsRef = collection(db, 'layouts')
@@ -73,6 +116,80 @@ export class AdminService {
     }
   }
 
+  static async createLayout(layoutData: any): Promise<string> {
+    try {
+      const layoutsRef = collection(db, 'layouts')
+      const docRef = await addDoc(layoutsRef, {
+        venueId: layoutData.venueId || '',
+        name: layoutData.name || 'Unnamed Layout',
+        type: layoutData.type || 'seating_chart',
+        sections: layoutData.sections || [],
+        gaLevels: layoutData.gaLevels || [],
+        totalCapacity: layoutData.totalCapacity || 0,
+        configuration: layoutData.configuration || {},
+        stage: layoutData.stage || null,
+        aisles: layoutData.aisles || [],
+        viewBox: layoutData.viewBox || null,
+        priceCategories: layoutData.priceCategories || [],
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      })
+      return docRef.id
+    } catch (error) {
+      console.error('Error creating layout:', error)
+      throw error
+    }
+  }
+
+  static async updateLayout(layoutId: string, layoutData: any) {
+    try {
+      // Remove undefined values that Firebase doesn't accept
+      const cleanData = JSON.parse(JSON.stringify(layoutData))
+      
+      // Ensure all required fields have values
+      const updateData: any = {
+        venueId: cleanData.venueId || '',
+        name: cleanData.name || 'Unnamed Layout',
+        type: cleanData.type || 'seating_chart',
+        sections: cleanData.sections || [],
+        gaLevels: cleanData.gaLevels || [],
+        totalCapacity: cleanData.totalCapacity || 0,
+        configuration: cleanData.configuration || {},
+        stage: cleanData.stage || null,
+        aisles: cleanData.aisles || [],
+        viewBox: cleanData.viewBox || null,
+        priceCategories: cleanData.priceCategories || [],
+        updatedAt: Timestamp.now()
+      }
+      
+      // Remove null values if not needed
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key] === undefined) {
+          delete updateData[key]
+        }
+      })
+      
+      const layoutRef = doc(db, 'layouts', layoutId)
+      await updateDoc(layoutRef, updateData)
+      return true
+    } catch (error) {
+      console.error('Error updating layout:', error)
+      throw error
+    }
+  }
+
+  static async deleteLayout(layoutId: string) {
+    try {
+      const layoutRef = doc(db, 'layouts', layoutId)
+      await deleteDoc(layoutRef)
+      return true
+    } catch (error) {
+      console.error('Error deleting layout:', error)
+      throw error
+    }
+  }
+
+  // ============ EVENTS ============
   static async getEvents() {
     try {
       const eventsRef = collection(db, 'events')
@@ -90,23 +207,22 @@ export class AdminService {
   static async getEvent(eventId: string) {
     console.log(`[ADMIN SERVICE] Fetching event: ${eventId}`)
     try {
-      const eventRef = doc(db, "events", eventId)
+      const eventRef = doc(db, 'events', eventId)
       const eventDoc = await getDoc(eventRef)
       if (eventDoc.exists()) {
         const eventData = { id: eventDoc.id, ...eventDoc.data() }
-        console.log(`[ADMIN SERVICE] Successfully fetched event ${eventId}`)
+        console.log(`[ADMIN SERVICE] Successfully fetched event:`, eventData)
         return eventData
       }
       console.log(`[ADMIN SERVICE] Event not found: ${eventId}`)
       return null
     } catch (error) {
-      console.error(`[ADMIN SERVICE] Error fetching event ${eventId}:`, error)
+      console.error(`[ADMIN SERVICE] Error fetching event: ${eventId}`, error)
       return null
     }
   }
 
   static async createEvent(eventData: any) {
-    console.log('[ADMIN SERVICE] Creating new event with data:', eventData)
     try {
       const eventsRef = collection(db, 'events')
       const docRef = await addDoc(eventsRef, {
@@ -114,131 +230,417 @@ export class AdminService {
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now()
       })
-      console.log(`[ADMIN SERVICE] Successfully created event: ${docRef.id}`)
       return docRef.id
     } catch (error) {
-      console.error('[ADMIN SERVICE] Error creating event:', error)
+      console.error('Error creating event:', error)
       throw error
     }
   }
 
+  // Import sanitizeEventData at the top of the file if not already present
   static async updateEvent(eventId: string, eventData: any) {
-    console.log(`[ADMIN SERVICE] Attempting to update event ${eventId}`)
-    
-    if (!eventId || eventId.length < 10) {
-      throw new Error(`[CRITICAL] Invalid event ID: ${eventId}`)
-    }
-    
-    if (eventData.id && eventData.id !== eventId) {
-      throw new Error(`[CRITICAL] Event ID mismatch! URL: ${eventId}, Data: ${eventData.id}`)
-    }
-    
-    const safeEventData = { ...eventData }
-    delete safeEventData.id
-    delete safeEventData.eventId
-    
-    console.log(`[ADMIN SERVICE] Safe data for event ${eventId}:`, Object.keys(safeEventData))
-    
     try {
-      const eventRef = doc(db, 'events', eventId)
+      // Remove undefined values that Firebase doesnt accept
+      const cleanData = JSON.parse(JSON.stringify(eventData))
+      
+      // Ensure no undefined values exist
+      Object.keys(cleanData).forEach(key => {
+        if (cleanData[key] === undefined) {
+          delete cleanData[key]
+        }
+        if (typeof cleanData[key] === "object" && cleanData[key] !== null) {
+          Object.keys(cleanData[key]).forEach(subKey => {
+            if (cleanData[key][subKey] === undefined) {
+              delete cleanData[key][subKey]
+            }
+          })
+        }
+      })
+      
+      const eventRef = doc(db, "events", eventId)
       await updateDoc(eventRef, {
-        ...safeEventData,
+        ...cleanData,
         updatedAt: Timestamp.now()
       })
-      console.log(`[ADMIN SERVICE] Successfully updated event ${eventId}`)
       return true
     } catch (error) {
-      console.error(`[ADMIN SERVICE] Failed to update event ${eventId}:`, error)
+      console.error("Error updating event:", error)
+      throw error
+    }
+  }
+  static async updateEvent(eventId: string, eventData: any) {
+    try {
+      // Remove undefined values that Firebase doesnt accept
+      const cleanData = JSON.parse(JSON.stringify(eventData))
+      
+      // Ensure no undefined values exist
+      Object.keys(cleanData).forEach(key => {
+        if (cleanData[key] === undefined) {
+          delete cleanData[key]
+        }
+        if (typeof cleanData[key] === "object" && cleanData[key] !== null) {
+          Object.keys(cleanData[key]).forEach(subKey => {
+            if (cleanData[key][subKey] === undefined) {
+              delete cleanData[key][subKey]
+            }
+          })
+        }
+      })
+      
+      const eventRef = doc(db, "events", eventId)
+      await updateDoc(eventRef, {
+        ...cleanData,
+        updatedAt: Timestamp.now()
+      })
+      return true
+    } catch (error) {
+      console.error("Error updating event:", error)
+      throw error
+    }
+  }
+  static async updateEvent(eventId: string, eventData: any) {
+    try {
+      // Remove undefined values that Firebase doesnt accept
+      const cleanData = JSON.parse(JSON.stringify(eventData))
+      
+      // Ensure no undefined values exist
+      Object.keys(cleanData).forEach(key => {
+        if (cleanData[key] === undefined) {
+          delete cleanData[key]
+        }
+        if (typeof cleanData[key] === "object" && cleanData[key] !== null) {
+          Object.keys(cleanData[key]).forEach(subKey => {
+            if (cleanData[key][subKey] === undefined) {
+              delete cleanData[key][subKey]
+            }
+          })
+        }
+      })
+      
+      const eventRef = doc(db, "events", eventId)
+      await updateDoc(eventRef, {
+        ...cleanData,
+        updatedAt: Timestamp.now()
+      })
+      return true
+    } catch (error) {
+      console.error("Error updating event:", error)
+      throw error
+    }
+  }
+  static async updateEvent(eventId: string, eventData: any) {
+    try {
+      // Remove undefined values that Firebase doesnt accept
+      const cleanData = JSON.parse(JSON.stringify(eventData))
+      
+      // Ensure no undefined values exist
+      Object.keys(cleanData).forEach(key => {
+        if (cleanData[key] === undefined) {
+          delete cleanData[key]
+        }
+        if (typeof cleanData[key] === "object" && cleanData[key] !== null) {
+          Object.keys(cleanData[key]).forEach(subKey => {
+            if (cleanData[key][subKey] === undefined) {
+              delete cleanData[key][subKey]
+            }
+          })
+        }
+      })
+      
+      const eventRef = doc(db, "events", eventId)
+      await updateDoc(eventRef, {
+        ...cleanData,
+        updatedAt: Timestamp.now()
+      })
+      return true
+    } catch (error) {
+      console.error("Error updating event:", error)
+      throw error
+    }
+  }
+  static async updateEvent(eventId: string, eventData: any) {
+    try {
+      // Remove undefined values that Firebase doesnt accept
+      const cleanData = JSON.parse(JSON.stringify(eventData))
+      
+      // Ensure no undefined values exist
+      Object.keys(cleanData).forEach(key => {
+        if (cleanData[key] === undefined) {
+          delete cleanData[key]
+        }
+        if (typeof cleanData[key] === "object" && cleanData[key] !== null) {
+          Object.keys(cleanData[key]).forEach(subKey => {
+            if (cleanData[key][subKey] === undefined) {
+              delete cleanData[key][subKey]
+            }
+          })
+        }
+      })
+      
+      const eventRef = doc(db, "events", eventId)
+      await updateDoc(eventRef, {
+        ...cleanData,
+        updatedAt: Timestamp.now()
+      })
+      return true
+    } catch (error) {
+      console.error("Error updating event:", error)
+      throw error
+    }
+  }
+  static async updateEvent(eventId: string, eventData: any) {
+    try {
+      // Remove undefined values that Firebase doesnt accept
+      const cleanData = JSON.parse(JSON.stringify(eventData))
+      
+      // Ensure no undefined values exist
+      Object.keys(cleanData).forEach(key => {
+        if (cleanData[key] === undefined) {
+          delete cleanData[key]
+        }
+        if (typeof cleanData[key] === "object" && cleanData[key] !== null) {
+          Object.keys(cleanData[key]).forEach(subKey => {
+            if (cleanData[key][subKey] === undefined) {
+              delete cleanData[key][subKey]
+            }
+          })
+        }
+      })
+      
+      const eventRef = doc(db, "events", eventId)
+      await updateDoc(eventRef, {
+        ...cleanData,
+        updatedAt: Timestamp.now()
+      })
+      return true
+    } catch (error) {
+      console.error("Error updating event:", error)
+      throw error
+    }
+  }
+  static async updateEvent(eventId: string, eventData: any) {
+    try {
+      // Remove undefined values that Firebase doesnt accept
+      const cleanData = JSON.parse(JSON.stringify(eventData))
+      
+      // Ensure no undefined values exist
+      Object.keys(cleanData).forEach(key => {
+        if (cleanData[key] === undefined) {
+          delete cleanData[key]
+        }
+        if (typeof cleanData[key] === "object" && cleanData[key] !== null) {
+          Object.keys(cleanData[key]).forEach(subKey => {
+            if (cleanData[key][subKey] === undefined) {
+              delete cleanData[key][subKey]
+            }
+          })
+        }
+      })
+      
+      const eventRef = doc(db, "events", eventId)
+      await updateDoc(eventRef, {
+        ...cleanData,
+        updatedAt: Timestamp.now()
+      })
+      return true
+    } catch (error) {
+      console.error("Error updating event:", error)
+      throw error
+    }
+  }
+  static async updateEvent(eventId: string, eventData: any) {
+    try {
+      // Remove undefined values that Firebase doesnt accept
+      const cleanData = JSON.parse(JSON.stringify(eventData))
+      
+      // Ensure no undefined values exist
+      Object.keys(cleanData).forEach(key => {
+        if (cleanData[key] === undefined) {
+          delete cleanData[key]
+        }
+        if (typeof cleanData[key] === "object" && cleanData[key] !== null) {
+          Object.keys(cleanData[key]).forEach(subKey => {
+            if (cleanData[key][subKey] === undefined) {
+              delete cleanData[key][subKey]
+            }
+          })
+        }
+      })
+      
+      const eventRef = doc(db, "events", eventId)
+      await updateDoc(eventRef, {
+        ...cleanData,
+        updatedAt: Timestamp.now()
+      })
+      return true
+    } catch (error) {
+      console.error("Error updating event:", error)
+      throw error
+    }
+  }
+  static async updateEvent(eventId: string, eventData: any) {
+    try {
+      // Remove undefined values that Firebase doesnt accept
+      const cleanData = JSON.parse(JSON.stringify(eventData))
+      
+      // Ensure no undefined values exist
+      Object.keys(cleanData).forEach(key => {
+        if (cleanData[key] === undefined) {
+          delete cleanData[key]
+        }
+        if (typeof cleanData[key] === "object" && cleanData[key] !== null) {
+          Object.keys(cleanData[key]).forEach(subKey => {
+            if (cleanData[key][subKey] === undefined) {
+              delete cleanData[key][subKey]
+            }
+          })
+        }
+      })
+      
+      const eventRef = doc(db, "events", eventId)
+      await updateDoc(eventRef, {
+        ...cleanData,
+        updatedAt: Timestamp.now()
+      })
+      return true
+    } catch (error) {
+      console.error("Error updating event:", error)
+      throw error
+    }
+  }
+  static async updateEvent(eventId: string, eventData: any) {
+    try {
+      // Remove undefined values that Firebase doesnt accept
+      const cleanData = JSON.parse(JSON.stringify(eventData))
+      
+      // Ensure no undefined values exist
+      Object.keys(cleanData).forEach(key => {
+        if (cleanData[key] === undefined) {
+          delete cleanData[key]
+        }
+        if (typeof cleanData[key] === "object" && cleanData[key] !== null) {
+          Object.keys(cleanData[key]).forEach(subKey => {
+            if (cleanData[key][subKey] === undefined) {
+              delete cleanData[key][subKey]
+            }
+          })
+        }
+      })
+      
+      const eventRef = doc(db, "events", eventId)
+      await updateDoc(eventRef, {
+        ...cleanData,
+        updatedAt: Timestamp.now()
+      })
+      return true
+    } catch (error) {
+      console.error("Error updating event:", error)
+      throw error
+    }
+  }
+  static async updateEvent(eventId: string, eventData: any) {
+    try {
+      // Remove undefined values that Firebase doesnt accept
+      const cleanData = JSON.parse(JSON.stringify(eventData))
+      
+      // Ensure no undefined values exist
+      Object.keys(cleanData).forEach(key => {
+        if (cleanData[key] === undefined) {
+          delete cleanData[key]
+        }
+        if (typeof cleanData[key] === "object" && cleanData[key] !== null) {
+          Object.keys(cleanData[key]).forEach(subKey => {
+            if (cleanData[key][subKey] === undefined) {
+              delete cleanData[key][subKey]
+            }
+          })
+        }
+      })
+      
+      const eventRef = doc(db, "events", eventId)
+      await updateDoc(eventRef, {
+        ...cleanData,
+        updatedAt: Timestamp.now()
+      })
+      return true
+    } catch (error) {
+      console.error("Error updating event:", error)
+      throw error
+    }
+  }
+  static async updateEvent(eventId: string, eventData: any) {
+    try {
+      // Remove undefined values that Firebase doesnt accept
+      const cleanData = JSON.parse(JSON.stringify(eventData))
+      
+      // Ensure no undefined values exist
+      Object.keys(cleanData).forEach(key => {
+        if (cleanData[key] === undefined) {
+          delete cleanData[key]
+        }
+        if (typeof cleanData[key] === "object" && cleanData[key] !== null) {
+          Object.keys(cleanData[key]).forEach(subKey => {
+            if (cleanData[key][subKey] === undefined) {
+              delete cleanData[key][subKey]
+            }
+          })
+        }
+      })
+      
+      const eventRef = doc(db, "events", eventId)
+      await updateDoc(eventRef, {
+        ...cleanData,
+        updatedAt: Timestamp.now()
+      })
+      return true
+    } catch (error) {
+      console.error("Error updating event:", error)
+      throw error
+    }
+  }
+  static async updateEvent(eventId: string, eventData: any) {
+    try {
+      // Remove undefined values that Firebase doesnt accept
+      const cleanData = JSON.parse(JSON.stringify(eventData))
+      
+      // Ensure no undefined values exist
+      Object.keys(cleanData).forEach(key => {
+        if (cleanData[key] === undefined) {
+          delete cleanData[key]
+        }
+        if (typeof cleanData[key] === "object" && cleanData[key] !== null) {
+          Object.keys(cleanData[key]).forEach(subKey => {
+            if (cleanData[key][subKey] === undefined) {
+              delete cleanData[key][subKey]
+            }
+          })
+        }
+      })
+      
+      const eventRef = doc(db, "events", eventId)
+      await updateDoc(eventRef, {
+        ...cleanData,
+        updatedAt: Timestamp.now()
+      })
+      return true
+    } catch (error) {
+      console.error("Error updating event:", error)
       throw error
     }
   }
 
-  static async checkEventOrders(eventId: string) {
+  static async deleteEvent(eventId: string) {
     try {
-      const ordersRef = collection(db, 'orders')
-      const q = query(ordersRef, where('eventId', '==', eventId))
-      const snapshot = await getDocs(q)
-      
-      return {
-        hasOrders: !snapshot.empty,
-        orderCount: snapshot.size
-      }
-    } catch (error) {
-      console.error('Error checking event orders:', error)
-      throw new Error('Failed to check event orders')
-    }
-  }
-
-  static async deleteEvent(eventId: string, userId?: string) {
-    try {
-      const { hasOrders, orderCount } = await this.checkEventOrders(eventId)
-      
-      if (hasOrders) {
-        const eventRef = doc(db, 'events', eventId)
-        await updateDoc(eventRef, {
-          status: 'deleted',
-          deletedAt: Timestamp.now(),
-          deletedBy: userId || 'unknown',
-          updatedAt: Timestamp.now()
-        })
-        console.log('Event soft deleted:', eventId)
-        return { deleted: true, type: 'soft' as const, orderCount }
-      } else {
-        const eventRef = doc(db, 'events', eventId)
-        await deleteDoc(eventRef)
-        console.log('Event hard deleted:', eventId)
-        return { deleted: true, type: 'hard' as const }
-      }
+      const eventRef = doc(db, 'events', eventId)
+      await deleteDoc(eventRef)
+      return true
     } catch (error) {
       console.error('Error deleting event:', error)
       throw error
     }
   }
 
-  static async restoreEvent(eventId: string) {
-    try {
-      const eventRef = doc(db, 'events', eventId)
-      await updateDoc(eventRef, {
-        status: 'draft',
-        deletedAt: null,
-        deletedBy: null,
-        updatedAt: Timestamp.now()
-      })
-      console.log('Event restored:', eventId)
-    } catch (error) {
-      console.error('Error restoring event:', error)
-      throw new Error('Failed to restore event')
-    }
-  }
-
-  static async getPromoters() {
-    try {
-      const promotersRef = collection(db, 'promoters')
-      const snapshot = await getDocs(promotersRef)
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }))
-    } catch (error) {
-      console.error('Error fetching promoters:', error)
-      return []
-    }
-  }
-
-  static async getPromotions() {
-    try {
-      const promotionsRef = collection(db, 'promotions')
-      const snapshot = await getDocs(promotionsRef)
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }))
-    } catch (error) {
-      console.error('Error fetching promotions:', error)
-      return []
-    }
-  }
-
+  // ============ ORDERS ============
   static async getOrders() {
     try {
       const ordersRef = collection(db, 'orders')
@@ -253,6 +655,22 @@ export class AdminService {
     }
   }
 
+  static async getOrdersByEventId(eventId: string) {
+    try {
+      const ordersRef = collection(db, 'orders')
+      const q = query(ordersRef, where('eventId', '==', eventId))
+      const snapshot = await getDocs(q)
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+    } catch (error) {
+      console.error('Error fetching orders for event:', error)
+      return []
+    }
+  }
+
+  // ============ CUSTOMERS ============
   static async getCustomers() {
     try {
       const customersRef = collection(db, 'customers')
@@ -267,117 +685,78 @@ export class AdminService {
     }
   }
 
-  static async getOrderStats() {
+  // ============ PROMOTERS ============
+  static async getPromoters() {
     try {
-      const orders = await this.getOrders()
-      
-      const now = new Date()
-      const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-      
-      let totalRevenue = 0
-      let monthlyRevenue = 0
-      let lastMonthRevenue = 0
-      
-      orders.forEach(order => {
-        const orderDate = order.purchaseDate?.toDate?.() || order.createdAt?.toDate?.() || new Date(0)
-        const amount = order.pricing?.total || order.totalAmount || order.total || 0
-        
-        totalRevenue += amount
-        
-        if (orderDate >= thisMonth) {
-          monthlyRevenue += amount
-        } else if (orderDate >= lastMonth && orderDate < thisMonth) {
-          lastMonthRevenue += amount
-        }
+      const promotersRef = collection(db, 'promoters')
+      const snapshot = await getDocs(promotersRef)
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+    } catch (error) {
+      console.error('Error fetching promoters:', error)
+      return []
+    }
+  }
+
+  static async getPromoter(promoterId: string) {
+    try {
+      const promoterRef = doc(db, 'promoters', promoterId)
+      const promoterDoc = await getDoc(promoterRef)
+      if (promoterDoc.exists()) {
+        return { id: promoterDoc.id, ...promoterDoc.data() }
+      }
+      return null
+    } catch (error) {
+      console.error('Error fetching promoter:', error)
+      return null
+    }
+  }
+
+  static async createPromoter(promoterData: any) {
+    try {
+      const promotersRef = collection(db, 'promoters')
+      const docRef = await addDoc(promotersRef, {
+        ...promoterData,
+        active: true,
+        users: [],
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
       })
-      
-      const revenueGrowth = lastMonthRevenue > 0 
-        ? ((monthlyRevenue - lastMonthRevenue) / lastMonthRevenue) * 100 
-        : 0
-      
-      return {
-        totalOrders: orders.length,
-        totalRevenue,
-        monthlyRevenue,
-        lastMonthRevenue,
-        revenueGrowth: Math.round(revenueGrowth * 100) / 100,
-        recentOrders: orders
-          .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
-          .slice(0, 10)
-      }
+      return docRef.id
     } catch (error) {
-      console.error('Error getting order stats:', error)
-      return {
-        totalOrders: 0,
-        totalRevenue: 0,
-        monthlyRevenue: 0,
-        lastMonthRevenue: 0,
-        revenueGrowth: 0,
-        recentOrders: []
-      }
+      console.error('Error creating promoter:', error)
+      throw error
     }
   }
 
-  static async getEventStats() {
+  static async updatePromoter(promoterId: string, promoterData: any) {
     try {
-      const events = await this.getEvents()
-      
-      return {
-        totalEvents: events.length,
-        publishedEvents: events.filter(e => e.status === 'published').length,
-        draftEvents: events.filter(e => e.status === 'draft').length,
-        recentEvents: events
-          .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
-          .slice(0, 5)
-      }
+      const promoterRef = doc(db, 'promoters', promoterId)
+      await updateDoc(promoterRef, {
+        ...promoterData,
+        updatedAt: Timestamp.now()
+      })
+      return true
     } catch (error) {
-      console.error('Error getting event stats:', error)
-      return {
-        totalEvents: 0,
-        publishedEvents: 0,
-        draftEvents: 0,
-        recentEvents: []
-      }
+      console.error('Error updating promoter:', error)
+      throw error
     }
   }
 
-  static async getVenueStats() {
+  static async deletePromoter(promoterId: string) {
     try {
-      const venues = await this.getVenues()
-      
-      return {
-        totalVenues: venues.length,
-        activeVenues: venues.filter(v => v.active !== false).length
-      }
+      const promoterRef = doc(db, 'promoters', promoterId)
+      await deleteDoc(promoterRef)
+      return true
     } catch (error) {
-      console.error('Error getting venue stats:', error)
-      return {
-        totalVenues: 0,
-        activeVenues: 0
-      }
+      console.error('Error deleting promoter:', error)
+      throw error
     }
   }
 
-  static async getCustomerStats() {
-    try {
-      const customers = await this.getCustomers()
-      
-      return {
-        totalCustomers: customers.length,
-        recentCustomers: customers
-          .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
-          .slice(0, 5)
-      }
-    } catch (error) {
-      console.error('Error getting customer stats:', error)
-      return {
-        totalCustomers: 0,
-        recentCustomers: []
-      }
-    }
-  }
-
+  // ============ DASHBOARD STATS ============
   static async getDashboardStats() {
     try {
       const [events, venues, orders, customers, promoters] = await Promise.all([
@@ -405,45 +784,67 @@ export class AdminService {
           lastMonthRevenue += amount
         }
       })
-
+      
       const revenueGrowth = lastMonthRevenue > 0 
-        ? ((monthlyRevenue - lastMonthRevenue) / lastMonthRevenue) * 100 
-        : 0
-
+        ? ((monthlyRevenue - lastMonthRevenue) / lastMonthRevenue * 100).toFixed(1)
+        : '0'
+      
+      const activeEvents = events.filter(event => {
+        const eventDate = event.schedule?.date?.toDate?.() || event.date?.toDate?.() || new Date(0)
+        return eventDate >= now
+      })
+      
+      const completedEvents = events.filter(event => {
+        const eventDate = event.schedule?.date?.toDate?.() || event.date?.toDate?.() || new Date(0)
+        return eventDate < now
+      })
+      
       return {
         totalEvents: events.length,
-        activeEvents: events.filter(e => e.status === 'published').length,
+        activeEvents: activeEvents.length,
+        completedEvents: completedEvents.length,
         totalVenues: venues.length,
         totalOrders: orders.length,
         totalCustomers: customers.length,
         totalPromoters: promoters.length,
         monthlyRevenue,
-        revenueGrowth: Math.round(revenueGrowth * 100) / 100,
-        recentEvents: events
-          .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
-          .slice(0, 5),
-        recentOrders: orders
-          .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
-          .slice(0, 5)
+        revenueGrowth
       }
     } catch (error) {
       console.error('Error fetching dashboard stats:', error)
       return {
         totalEvents: 0,
         activeEvents: 0,
+        completedEvents: 0,
         totalVenues: 0,
         totalOrders: 0,
         totalCustomers: 0,
         totalPromoters: 0,
         monthlyRevenue: 0,
-        revenueGrowth: 0,
-        recentEvents: [],
-        recentOrders: []
+        revenueGrowth: '0'
       }
     }
   }
 
-  static async getStats() {
-    return this.getDashboardStats()
+  // ============ PROMOTIONS (Alias for dashboard compatibility) ============
+  static async getPromotions() {
+    // The dashboard expects getPromotions but we have getPromoters
+    // Add this method as an alias for backward compatibility
+    return this.getPromoters()
+  }
+
+  // ============ ORDER STATS (for dashboard) ============
+  static async getOrderStats() {
+    try {
+      const orders = await this.getOrders()
+      return {
+        confirmed: orders.filter((o: any) => o.status === 'confirmed').length,
+        pending: orders.filter((o: any) => o.status === 'pending').length,
+        cancelled: orders.filter((o: any) => o.status === 'cancelled').length
+      }
+    } catch (error) {
+      console.error('Error getting order stats:', error)
+      return { confirmed: 0, pending: 0, cancelled: 0 }
+    }
   }
 }

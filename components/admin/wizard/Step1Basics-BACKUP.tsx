@@ -1,88 +1,17 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useEventWizardStore } from '@/lib/store/eventWizardStore'
-import { EventAI, AIExtractedData } from '@/lib/ai/eventAI'
 import { StorageService } from '@/lib/storage/storageService'
-import AIButton from '../AIButton'
-import AILoadingState from '../AILoadingState'
-import ConfidenceBadge from '../ConfidenceBadge'
-import URLImportModal from '../URLImportModal'
-import PosterScanModal from '../PosterScanModal'
 
 export default function Step1Basics() {
   const { formData, updateFormData } = useEventWizardStore()
-  const [aiLoading, setAiLoading] = useState(false)
-  const [aiConfidence, setAiConfidence] = useState<number | null>(null)
-  const [showURLModal, setShowURLModal] = useState(false)
-  const [showPosterModal, setShowPosterModal] = useState(false)
   const [uploadingCover, setUploadingCover] = useState(false)
   const [uploadingGallery, setUploadingGallery] = useState(false)
   const [performerInput, setPerformerInput] = useState('')
-
-  const performers = formData.basics?.performers || []
+  
   const gallery = formData.basics?.images?.gallery || []
-  const coverImage = formData.basics?.images?.cover
-
-  // AI Features
-  const handleSmartFill = async () => {
-    const eventName = formData.basics?.name
-    if (!eventName?.trim()) {
-      alert('Please enter an event name first')
-      return
-    }
-
-    setAiLoading(true)
-    try {
-      const result = await EventAI.smartFill(eventName)
-      
-      updateFormData('basics', {
-        description: result.description,
-        category: result.category,
-        type: result.category,
-        tags: result.tags,
-        performers: result.performers
-      })
-      
-      setAiConfidence(result.confidence)
-      setTimeout(() => setAiConfidence(null), 10000)
-    } catch (error: any) {
-      alert(error.message)
-    } finally {
-      setAiLoading(false)
-    }
-  }
-
-  const handleURLImport = (data: AIExtractedData) => {
-    updateFormData('basics', {
-      name: data.name,
-      description: data.description,
-      category: data.category,
-      type: data.category,
-      tags: data.tags,
-      performers: data.performers,
-      images: data.images || formData.basics?.images
-    })
-    
-    setAiConfidence(data.confidence)
-    setTimeout(() => setAiConfidence(null), 10000)
-  }
-
-  const handlePosterImport = (data: AIExtractedData) => {
-    updateFormData('basics', {
-      name: data.name,
-      description: data.description,
-      category: data.category,
-      type: data.category,
-      tags: data.tags,
-      performers: data.performers,
-      images: data.images || formData.basics?.images
-    })
-    
-    setAiConfidence(data.confidence)
-    setTimeout(() => setAiConfidence(null), 10000)
-  }
-
-  // Manual Image Upload
+  const performers = formData.basics?.performers || []
+  
   const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -91,18 +20,16 @@ export default function Step1Basics() {
     try {
       const eventName = formData.basics?.name || 'temp-event'
       const url = await StorageService.uploadEventImage(file, eventName)
-      
       updateFormData('basics', {
         images: {
           ...formData.basics?.images,
           cover: url,
-          thumbnail: formData.basics?.images?.thumbnail || url,
+          thumbnail: formData.basics?.images?.thumbnail || '',
           gallery: gallery
         }
       })
     } catch (error) {
       console.error('Error uploading cover:', error)
-      alert('Failed to upload image')
     }
     setUploadingCover(false)
   }
@@ -129,23 +56,10 @@ export default function Step1Basics() {
       })
     } catch (error) {
       console.error('Error uploading gallery:', error)
-      alert('Failed to upload images')
     }
     setUploadingGallery(false)
   }
-
-  const handleRemoveGalleryImage = (index: number) => {
-    updateFormData('basics', {
-      images: {
-        ...formData.basics?.images,
-        cover: formData.basics?.images?.cover || '',
-        thumbnail: formData.basics?.images?.thumbnail || '',
-        gallery: gallery.filter((_: string, i: number) => i !== index)
-      }
-    })
-  }
-
-  // Performers
+  
   const handleAddPerformer = () => {
     if (performerInput.trim()) {
       updateFormData('basics', {
@@ -154,37 +68,32 @@ export default function Step1Basics() {
       setPerformerInput('')
     }
   }
-
+  
   const handleRemovePerformer = (index: number) => {
     updateFormData('basics', {
-      performers: performers.filter((_: string, i: number) => i !== index)
+      performers: performers.filter((_, i) => i !== index)
     })
   }
-
+  
+  const handleRemoveGalleryImage = (index: number) => {
+    updateFormData('basics', {
+      images: {
+        ...formData.basics?.images,
+        cover: formData.basics?.images?.cover || '',
+        thumbnail: formData.basics?.images?.thumbnail || '',
+        gallery: gallery.filter((_, i) => i !== index)
+      }
+    })
+  }
+  
   return (
     <div className="space-y-6">
-      {/* Header with AI Tools */}
+      {/* Section Header */}
       <div className="border-b border-gray-800 pb-3">
-        <div className="flex justify-between items-start">
-          <div>
-            <h3 className="text-xl font-semibold text-white">Basic Information</h3>
-            <p className="text-gray-500 text-sm mt-1">Set up the foundational details of your event</p>
-          </div>
-          <div className="flex gap-2">
-            <AIButton onClick={handleSmartFill} label="✨ Smart Fill" />
-            <AIButton onClick={() => setShowURLModal(true)} label="🔗 Import URL" />
-            <AIButton onClick={() => setShowPosterModal(true)} label="🖼️ Scan Poster" />
-          </div>
-        </div>
-        {aiConfidence && (
-          <div className="mt-3">
-            <ConfidenceBadge confidence={aiConfidence} />
-          </div>
-        )}
+        <h3 className="text-xl font-semibold text-white">Basic Information</h3>
+        <p className="text-gray-500 text-sm mt-1">Set up the foundational details of your event</p>
       </div>
-
-      {aiLoading && <AILoadingState message="AI is generating content..." />}
-
+      
       {/* Event Name */}
       <div>
         <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -200,7 +109,27 @@ export default function Step1Basics() {
           placeholder="Enter event name..."
         />
       </div>
-
+      
+      {/* Event Type */}
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-2">
+          Event Type <span className="text-red-400">*</span>
+        </label>
+        <select
+          value={formData.basics?.type || formData.basics?.category || 'concert'}
+          onChange={(e) => updateFormData('basics', { type: e.target.value, category: e.target.value })}
+          className="w-full px-4 py-2.5 bg-gray-850 border border-gray-800 rounded-lg 
+                   focus:bg-gray-800 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500/50
+                   transition-all text-white cursor-pointer"
+        >
+          <option value="concert">Concert</option>
+          <option value="theater">Theater</option>
+          <option value="sports">Sports</option>
+          <option value="comedy">Comedy</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      
       {/* Description */}
       <div>
         <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -209,49 +138,16 @@ export default function Step1Basics() {
         <textarea
           value={formData.basics?.description || ''}
           onChange={(e) => updateFormData('basics', { description: e.target.value })}
-          rows={5}
           className="w-full px-4 py-2.5 bg-gray-850 border border-gray-800 rounded-lg 
                    focus:bg-gray-800 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500/50
-                   transition-all text-white placeholder-gray-500"
-          placeholder="Enter event description..."
+                   transition-all text-white placeholder-gray-500 h-28 resize-none"
+          placeholder="Describe your event..."
         />
+        <p className="text-xs text-gray-500 mt-1">
+          This will appear on the event page. HTML formatting supported.
+        </p>
       </div>
-
-      {/* Category */}
-      <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
-          Category <span className="text-red-400">*</span>
-        </label>
-        <select
-          value={formData.basics?.category || ''}
-          onChange={(e) => updateFormData('basics', { category: e.target.value, type: e.target.value })}
-          className="w-full px-4 py-2.5 bg-gray-850 border border-gray-800 rounded-lg 
-                   focus:bg-gray-800 focus:border-purple-500 focus:outline-none text-white"
-        >
-          <option value="">Select category...</option>
-          <option value="concert">Concert</option>
-          <option value="theater">Theater</option>
-          <option value="sports">Sports</option>
-          <option value="comedy">Comedy</option>
-          <option value="festival">Festival</option>
-          <option value="conference">Conference</option>
-          <option value="other">Other</option>
-        </select>
-      </div>
-
-      {/* Tags */}
-      <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">Tags</label>
-        <input
-          type="text"
-          value={formData.basics?.tags?.join(', ') || ''}
-          onChange={(e) => updateFormData('basics', { tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean) })}
-          className="w-full px-4 py-2.5 bg-gray-850 border border-gray-800 rounded-lg 
-                   focus:bg-gray-800 focus:border-purple-500 focus:outline-none text-white"
-          placeholder="indie, rock, live music (comma-separated)"
-        />
-      </div>
-
+      
       {/* Performers */}
       <div>
         <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -264,40 +160,44 @@ export default function Step1Basics() {
             onChange={(e) => setPerformerInput(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddPerformer())}
             className="flex-1 px-4 py-2.5 bg-gray-850 border border-gray-800 rounded-lg 
-                     focus:bg-gray-800 focus:border-purple-500 focus:outline-none text-white"
+                     focus:bg-gray-800 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500/50
+                     transition-all text-white placeholder-gray-500"
             placeholder="Add performer name..."
           />
           <button
             type="button"
             onClick={handleAddPerformer}
-            className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium"
+            className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg
+                     transition-all font-medium"
           >
             Add
           </button>
         </div>
         <div className="flex flex-wrap gap-2">
-          {performers.map((performer: string, index: number) => (
+          {performers.map((performer, index) => (
             <span
               key={index}
               className="px-3 py-1.5 bg-purple-950/30 border border-purple-900/30 text-purple-400 
-                       rounded-lg flex items-center gap-2"
+                       rounded-lg flex items-center gap-2 group"
             >
-              {performer}
+              <span className="text-sm">{performer}</span>
               <button
                 onClick={() => handleRemovePerformer(index)}
-                className="text-gray-500 hover:text-red-400"
+                className="text-gray-500 hover:text-red-400 transition-colors"
               >
-                ✕
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </span>
           ))}
         </div>
       </div>
-
+      
       {/* Cover Image */}
       <div>
         <label className="block text-sm font-medium text-gray-300 mb-2">
-          Cover Image
+          Cover Image <span className="text-red-400">*</span>
         </label>
         <div className="relative">
           <input
@@ -329,23 +229,17 @@ export default function Step1Basics() {
             )}
           </label>
         </div>
-        {coverImage && (
-          <div className="mt-3 relative">
+        {formData.basics?.images?.cover && (
+          <div className="mt-3">
             <img
-              src={coverImage}
+              src={formData.basics.images.cover}
               alt="Cover"
               className="w-full max-w-sm h-40 object-cover rounded-lg border border-gray-800"
             />
-            <button
-              onClick={() => updateFormData('basics', { images: { ...formData.basics?.images, cover: '', thumbnail: '' } })}
-              className="absolute top-2 right-2 px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-white text-xs"
-            >
-              Remove
-            </button>
           </div>
         )}
       </div>
-
+      
       {/* Gallery Images */}
       <div>
         <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -384,7 +278,7 @@ export default function Step1Basics() {
         </div>
         {gallery.length > 0 && (
           <div className="grid grid-cols-4 gap-3 mt-3">
-            {gallery.map((image: string, index: number) => (
+            {gallery.map((image, index) => (
               <div key={index} className="relative group">
                 <img
                   src={image}
@@ -405,21 +299,60 @@ export default function Step1Basics() {
           </div>
         )}
       </div>
-
-      {/* Modals */}
-      {showURLModal && (
-        <URLImportModal
-          onClose={() => setShowURLModal(false)}
-          onImport={handleURLImport}
-        />
-      )}
       
-      {showPosterModal && (
-        <PosterScanModal
-          onClose={() => setShowPosterModal(false)}
-          onImport={handlePosterImport}
-        />
-      )}
+      {/* Status */}
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-2">
+          Status
+        </label>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {[
+            { value: 'draft', label: 'Draft', color: 'gray' },
+            { value: 'active', label: 'Active', color: 'green' },
+            { value: 'paused', label: 'Paused', color: 'yellow' },
+            { value: 'completed', label: 'Completed', color: 'blue' }
+          ].map((status) => (
+            <button
+              key={status.value}
+              type="button"
+              onClick={() => updateFormData('basics', { status: status.value })}
+              className={`px-3 py-2 rounded-lg border transition-all text-sm font-medium
+                ${formData.basics?.status === status.value
+                  ? status.color === 'green' ? 'bg-green-950/50 border-green-500 text-green-400' :
+                    status.color === 'yellow' ? 'bg-yellow-950/50 border-yellow-500 text-yellow-400' :
+                    status.color === 'blue' ? 'bg-blue-950/50 border-blue-500 text-blue-400' :
+                    'bg-gray-850 border-gray-600 text-gray-300'
+                  : 'bg-gray-900 border-gray-800 text-gray-500 hover:bg-gray-850 hover:border-gray-700'
+                }`}
+            >
+              {status.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      
+      {/* Featured Event */}
+      <div>
+        <label className="flex items-center gap-3 cursor-pointer p-4 bg-gray-900 rounded-lg border border-gray-800
+                      hover:bg-gray-850 hover:border-gray-700 transition-all">
+          <input
+            type="checkbox"
+            checked={formData.basics?.featured || false}
+            onChange={(e) => updateFormData('basics', { featured: e.target.checked })}
+            className="w-5 h-5 rounded border-gray-700 bg-gray-800 text-purple-600 
+                     focus:ring-purple-500 focus:ring-offset-0"
+          />
+          <div className="flex-1">
+            <span className="text-sm font-medium text-gray-200">Feature this event</span>
+            <p className="text-xs text-gray-500">Display prominently on the homepage</p>
+          </div>
+          {formData.basics?.featured && (
+            <span className="px-2 py-1 bg-purple-950/30 border border-purple-900/30 rounded text-xs text-purple-400">
+              Featured
+            </span>
+          )}
+        </label>
+      </div>
     </div>
   )
 }

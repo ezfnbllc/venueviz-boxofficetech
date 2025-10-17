@@ -1,179 +1,345 @@
 'use client'
-import { useState, useEffect } from 'react'
+
+import React, { useState, useEffect } from 'react'
+import { useAuth } from '@/lib/useAuth'
+import { db } from '@/lib/firebase'
+import { collection, getDocs, doc, setDoc, getDoc } from 'firebase/firestore'
 import { useEventWizardStore } from '@/lib/store/eventWizardStore'
-import { AdminService } from '@/lib/admin/adminService'
+
+interface Promoter {
+  id: string
+  name: string
+  email: string
+  phone?: string
+  website?: string
+  commission?: number
+  paymentTerms?: string
+}
 
 export default function Step5Promoter() {
   const { formData, updateFormData } = useEventWizardStore()
-  const [promoters, setPromoters] = useState<any[]>([])
-  const [selectedPromoter, setSelectedPromoter] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
+  const { user, loading: authLoading } = useAuth()
   
+  const [promoters, setPromoters] = useState<Promoter[]>([])
+  const [selectedPromoterId, setSelectedPromoterId] = useState<string>('')
+  const [isNewPromoter, setIsNewPromoter] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [initialLoadDone, setInitialLoadDone] = useState(false)
+  
+  const isMasterAdmin = user?.isMaster === true && user?.role === 'admin'
+  const promoterData = formData.promoter || {}
+  
+  const handleUpdate = (updates: any) => {
+    console.log('[Step5] Updating promoter section:', updates)
+    updateFormData('promoter', updates)
+  }
+
+  // Fetch promoters on mount
   useEffect(() => {
-    loadPromoters()
+    fetchPromoters()
   }, [])
   
+  // Load existing promoter data after promoters are fetched
   useEffect(() => {
-    if (formData.promoter?.promoterId && promoters.length > 0) {
-      const promoter = promoters.find(p => p.id === formData.promoter.promoterId)
-      if (promoter) {
-        setSelectedPromoter(promoter)
+    if (!initialLoadDone && promoters.length > 0 && promoterData.promoterId) {
+      console.log('[Step5] Initial load - setting promoter:', promoterData.promoterId)
+      setSelectedPromoterId(promoterData.promoterId)
+      
+      // Load the full promoter data if we only have the ID
+      const existingPromoter = promoters.find(p => p.id === promoterData.promoterId)
+      if (existingPromoter && !promoterData.promoterEmail) {
+        console.log('[Step5] Loading full promoter data from database')
+        handleUpdate({
+          promoterId: existingPromoter.id,
+          promoterName: existingPromoter.name,
+          promoterEmail: existingPromoter.email || '',
+          promoterPhone: existingPromoter.phone || '',
+          promoterWebsite: existingPromoter.website || '',
+          commission: promoterData.commission || existingPromoter.commission || 0,
+          paymentTerms: promoterData.paymentTerms || existingPromoter.paymentTerms || 'net-30'
+        })
+      }
+      setInitialLoadDone(true)
+    }
+  }, [promoters, promoterData.promoterId, initialLoadDone])
+
+  const fetchPromoters = async () => {
+    try {
+      const snapshot = await getDocs(collection(db, 'promoters'))
+      const list = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Promoter))
+      
+      setPromoters(list)
+      setLoading(false)
+    } catch (error) {
+      console.error('[Step5] Error:', error)
+      setLoading(false)
+    }
+  }
+
+  const handlePromoterSelect = async (promoterId: string) => {
+    console.log('[Step5] Selecting:', promoterId)
+    setSelectedPromoterId(promoterId)
+    
+    if (!promoterId) {
+      handleUpdate({
+        promoterId: '',
+        promoterName: '',
+        promoterEmail: '',
+        promoterPhone: '',
+        promoterWebsite: '',
+        commission: 0,
+        paymentTerms: 'net-30'
+      })
+      return
+    }
+    
+    if (promoterId === 'new') {
+      setIsNewPromoter(true)
+      handleUpdate({
+        promoterId: '',
+        promoterName: '',
+        promoterEmail: '',
+        promoterPhone: '',
+        promoterWebsite: '',
+        commission: 0,
+        paymentTerms: 'net-30'
+      })
+      return
+    }
+
+    // Load selected promoter data
+    const promoter = promoters.find(p => p.id === promoterId)
+    if (promoter) {
+      setIsNewPromoter(false)
+      
+      // Also try to load from database for complete data
+      try {
+        const docSnap = await getDoc(doc(db, 'promoters', promoterId))
+        const dbData = docSnap.exists() ? docSnap.data() : {}
+        
+        handleUpdate({
+          promoterId: promoter.id,
+          promoterName: promoter.name || dbData.name,
+          promoterEmail: promoter.email || dbData.email || '',
+          promoterPhone: promoter.phone || dbData.phone || '',
+          promoterWebsite: promoter.website || dbData.website || '',
+          commission: promoter.commission || dbData.commission || 0,
+          paymentTerms: promoter.paymentTerms || dbData.paymentTerms || 'net-30'
+        })
+      } catch (error) {
+        console.error('[Step5] Error loading promoter details:', error)
+        // Fall back to local data
+        handleUpdate({
+          promoterId: promoter.id,
+          promoterName: promoter.name,
+          promoterEmail: promoter.email || '',
+          promoterPhone: promoter.phone || '',
+          promoterWebsite: promoter.website || '',
+          commission: promoter.commission || 0,
+          paymentTerms: promoter.paymentTerms || 'net-30'
+        })
       }
     }
-  }, [formData.promoter?.promoterId, promoters])
-  
-  const loadPromoters = async () => {
-    try {
-      const promotersData = await AdminService.getPromoters()
-      setPromoters(promotersData)
-    } catch (error) {
-      console.error('Error loading promoters:', error)
+  }
+
+  const saveNewPromoter = async () => {
+    if (!promoterData.promoterName || !promoterData.promoterEmail) {
+      alert('Name and email required')
+      return
     }
-    setLoading(false)
-  }
-  
-  const handlePromoterSelect = (promoterId: string) => {
-    const promoter = promoters.find(p => p.id === promoterId)
-    setSelectedPromoter(promoter)
-    
-    // Update all promoter data at once
-    updateFormData('promoter', {
-      promoterId: promoterId,
-      promoterName: promoter?.name || '',
-      commission: formData.promoter?.commission || promoter?.defaultCommission || 10,
-      paymentTerms: formData.promoter?.paymentTerms || 'net-30',
-      responsibilities: formData.promoter?.responsibilities || []
-    })
-  }
-  
-  const updatePromoterField = (field: string, value: any) => {
-    updateFormData('promoter', {
-      ...formData.promoter,
-      [field]: value
-    })
-  }
-  
-  const toggleResponsibility = (responsibility: string) => {
-    const current = formData.promoter?.responsibilities || []
-    const updated = current.includes(responsibility)
-      ? current.filter(r => r !== responsibility)
-      : [...current, responsibility]
-    
-    updatePromoterField('responsibilities', updated)
-  }
-  
-  const availableResponsibilities = [
-    'Marketing & Promotion',
-    'Ticket Sales',
-    'Venue Management',
-    'Artist Coordination',
-    'Security',
-    'Concessions',
-    'Merchandising',
-    'Sponsorships'
-  ]
-  
-  return (
-    <div>
-      <h3 className="text-xl font-bold mb-4">Promoter Configuration</h3>
+
+    try {
+      const newPromoter = {
+        name: promoterData.promoterName,
+        email: promoterData.promoterEmail,
+        phone: promoterData.promoterPhone || '',
+        website: promoterData.promoterWebsite || '',
+        commission: promoterData.commission || 0,
+        paymentTerms: promoterData.paymentTerms || 'net-30',
+        active: true,
+        createdAt: new Date().toISOString()
+      }
+
+      const docRef = doc(collection(db, 'promoters'))
+      await setDoc(docRef, newPromoter)
       
+      setPromoters([...promoters, { ...newPromoter, id: docRef.id }])
+      setSelectedPromoterId(docRef.id)
+      setIsNewPromoter(false)
+      
+      handleUpdate({ promoterId: docRef.id })
+      alert('Promoter saved!')
+    } catch (error) {
+      console.error('[Step5] Save error:', error)
+      alert('Failed to save')
+    }
+  }
+
+  if (authLoading || loading) {
+    return <div className="p-8 text-center animate-pulse">Loading...</div>
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-6">
+      {/* Header */}
+      <div>
+        <h2 className="text-2xl font-bold mb-4">Promoter Information</h2>
+        <p className="text-gray-400">Select an existing promoter or create new</p>
+      </div>
+
+      {/* User Status */}
+      {user && (
+        <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-gray-400">Logged in as:</span>
+            <span className="text-sm font-medium">{user.email}</span>
+            {isMasterAdmin ? (
+              <span className="px-2 py-1 bg-purple-600/20 text-purple-400 text-xs rounded-full">
+                🔑 Master Admin
+              </span>
+            ) : (
+              <span className="px-2 py-1 bg-gray-600/20 text-gray-400 text-xs rounded-full">
+                Standard User
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Promoter Selection */}
-      <div className="mb-6">
-        <label className="block text-sm font-medium mb-2">
-          Select Promoter
-        </label>
-        {loading ? (
-          <p className="text-gray-400">Loading promoters...</p>
-        ) : (
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold">Select Promoter</h3>
+        
+        <div className="flex gap-4">
           <select
-            value={formData.promoter?.promoterId || ''}
+            value={selectedPromoterId}
             onChange={(e) => handlePromoterSelect(e.target.value)}
-            className="w-full px-4 py-2 bg-white/10 rounded-lg focus:bg-white/20 outline-none"
+            className="flex-1 px-4 py-2 bg-white/10 rounded-lg"
           >
-            <option value="">Select a promoter</option>
-            {promoters.map(promoter => (
-              <option key={promoter.id} value={promoter.id}>
-                {promoter.name} - {promoter.company || 'Independent'}
+            <option value="">-- Select --</option>
+            {promoters.map(p => (
+              <option key={p.id} value={p.id}>
+                {p.name} ({p.email || 'No email'})
               </option>
             ))}
+            <option value="new">+ Add New</option>
           </select>
-        )}
+          
+          {isNewPromoter && (
+            <button
+              onClick={saveNewPromoter}
+              className="px-6 py-2 bg-green-600 rounded-lg hover:bg-green-700"
+            >
+              Save
+            </button>
+          )}
+        </div>
       </div>
-      
-      {selectedPromoter && (
-        <>
-          {/* Promoter Details */}
-          <div className="mb-6 p-4 bg-purple-600/20 rounded-lg">
-            <h4 className="font-semibold mb-2">{selectedPromoter.name}</h4>
-            <p className="text-sm text-gray-300">
-              {selectedPromoter.company && `Company: ${selectedPromoter.company}`}
-              {selectedPromoter.email && ` • Email: ${selectedPromoter.email}`}
-              {selectedPromoter.phone && ` • Phone: ${selectedPromoter.phone}`}
+
+      {/* Basic Information */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold">Basic Information</h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm mb-2">Name *</label>
+            <input
+              type="text"
+              value={promoterData.promoterName || ''}
+              onChange={(e) => handleUpdate({ promoterName: e.target.value })}
+              className="w-full px-4 py-2 bg-white/10 rounded-lg"
+              disabled={!isNewPromoter && selectedPromoterId !== ''}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm mb-2">Email *</label>
+            <input
+              type="email"
+              value={promoterData.promoterEmail || ''}
+              onChange={(e) => handleUpdate({ promoterEmail: e.target.value })}
+              className="w-full px-4 py-2 bg-white/10 rounded-lg"
+              disabled={!isNewPromoter && selectedPromoterId !== ''}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm mb-2">Phone</label>
+            <input
+              type="tel"
+              value={promoterData.promoterPhone || ''}
+              onChange={(e) => handleUpdate({ promoterPhone: e.target.value })}
+              className="w-full px-4 py-2 bg-white/10 rounded-lg"
+              disabled={!isNewPromoter && selectedPromoterId !== ''}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm mb-2">Website</label>
+            <input
+              type="url"
+              value={promoterData.promoterWebsite || ''}
+              onChange={(e) => handleUpdate({ promoterWebsite: e.target.value })}
+              className="w-full px-4 py-2 bg-white/10 rounded-lg"
+              disabled={!isNewPromoter && selectedPromoterId !== ''}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Commission & Terms - Master Admin Only */}
+      <div className={`space-y-4 ${!isMasterAdmin ? 'opacity-50 pointer-events-none' : ''}`}>
+        <h3 className="text-lg font-semibold flex items-center gap-2">
+          Commission & Payment Terms
+          {isMasterAdmin ? (
+            <span className="px-2 py-1 bg-purple-600/20 text-purple-400 text-xs rounded-full">
+              🔑 Master Admin Only
+            </span>
+          ) : (
+            <span className="px-2 py-1 bg-red-600/20 text-red-400 text-xs rounded-full">
+              🔒 Restricted
+            </span>
+          )}
+        </h3>
+        
+        {!isMasterAdmin ? (
+          <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+            <p className="text-sm text-gray-500">
+              Commission: {promoterData.commission || 0}% | Terms: {promoterData.paymentTerms || 'net-30'}
             </p>
           </div>
-          
-          {/* Commission & Payment Terms */}
-          <div className="grid grid-cols-2 gap-4 mb-6">
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-2">
-                Commission (%)
-              </label>
+              <label className="block text-sm mb-2">Commission (%)</label>
               <input
                 type="number"
-                value={formData.promoter?.commission || 10}
-                onChange={(e) => updatePromoterField('commission', parseFloat(e.target.value) || 0)}
-                className="w-full px-4 py-2 bg-white/10 rounded-lg focus:bg-white/20 outline-none"
-                min="0"
-                max="100"
-                step="0.1"
+                value={promoterData.commission || 0}
+                onChange={(e) => handleUpdate({ commission: parseFloat(e.target.value) || 0 })}
+                className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                min="0" max="100" step="0.01"
               />
             </div>
-            
+
             <div>
-              <label className="block text-sm font-medium mb-2">
-                Payment Terms
-              </label>
+              <label className="block text-sm mb-2">Payment Terms</label>
               <select
-                value={formData.promoter?.paymentTerms || 'net-30'}
-                onChange={(e) => updatePromoterField('paymentTerms', e.target.value)}
-                className="w-full px-4 py-2 bg-white/10 rounded-lg focus:bg-white/20 outline-none"
+                value={promoterData.paymentTerms || 'net-30'}
+                onChange={(e) => handleUpdate({ paymentTerms: e.target.value })}
+                className="w-full px-4 py-2 bg-white/10 rounded-lg"
               >
                 <option value="immediate">Immediate</option>
-                <option value="net-15">Net 15</option>
+                <option value="net-7">Net 7</option>
+                <option value="net-14">Net 14</option>
                 <option value="net-30">Net 30</option>
-                <option value="net-45">Net 45</option>
-                <option value="net-60">Net 60</option>
-                <option value="custom">Custom Terms</option>
               </select>
             </div>
           </div>
-          
-          {/* Responsibilities */}
-          <div className="mb-6">
-            <h4 className="font-semibold mb-3">Promoter Responsibilities</h4>
-            <div className="grid grid-cols-2 gap-3">
-              {availableResponsibilities.map(resp => (
-                <label
-                  key={resp}
-                  className={`flex items-center gap-2 p-3 rounded-lg cursor-pointer transition-all ${
-                    formData.promoter?.responsibilities?.includes(resp)
-                      ? 'bg-purple-600/30 border border-purple-600'
-                      : 'bg-black/20 border border-gray-600 hover:border-gray-500'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={formData.promoter?.responsibilities?.includes(resp) || false}
-                    onChange={() => toggleResponsibility(resp)}
-                    className="w-4 h-4"
-                  />
-                  <span className="text-sm">{resp}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-        </>
-      )}
+        )}
+      </div>
     </div>
   )
 }

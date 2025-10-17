@@ -1,496 +1,370 @@
 'use client'
+
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { AdminService } from '@/lib/admin/adminService'
-import { auth } from '@/lib/firebase'
-import { onAuthStateChanged } from 'firebase/auth'
+import { db } from '@/lib/firebase'
+import { collection, getDocs, doc, deleteDoc, updateDoc, query, where } from 'firebase/firestore'
+import { useAuth } from '@/lib/useAuth'
 
-export default function PromotionsManagement() {
+interface Promotion {
+  id: string
+  code: string
+  type: 'percentage' | 'fixed'
+  value: number
+  maxUses?: number
+  usedCount: number
+  active: boolean
+  description?: string
+  createdAt?: string
+}
+
+interface EventPromotion extends Promotion {
+  eventId: string
+  eventName: string
+  promoterId?: string
+}
+
+export default function PromotionsPage() {
   const router = useRouter()
-  const [promotions, setPromotions] = useState<any[]>([])
+  const { user } = useAuth()
+  const [masterPromotions, setMasterPromotions] = useState<Promotion[]>([])
+  const [eventPromotions, setEventPromotions] = useState<EventPromotion[]>([])
   const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [editingPromotion, setEditingPromotion] = useState<any>(null)
-  const [formData, setFormData] = useState({
-    name: '',
-    code: '',
-    type: 'percentage',
-    value: 10,
-    minPurchase: 0,
-    maxUses: 100,
-    usedCount: 0,
-    active: true,
-    startDate: '',
-    endDate: '',
-    description: '',
-    applicableEvents: [] as string[],
-    applicableVenues: [] as string[]
+  const [activeTab, setActiveTab] = useState<'master' | 'event'>('master')
+  const [stats, setStats] = useState({
+    totalMaster: 0,
+    totalEvent: 0,
+    activeMaster: 0,
+    activeEvent: 0,
+    totalUses: 0
   })
-  
-  const [events, setEvents] = useState<any[]>([])
-  const [venues, setVenues] = useState<any[]>([])
+
+  const isMasterAdmin = user?.role === 'admin' && user?.isMaster === true
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        loadData()
-      } else {
-        router.push('/login')
-      }
-    })
-    return () => unsubscribe()
-  }, [router])
-
-  const loadData = async () => {
-    try {
-      const [promotionsData, eventsData, venuesData] = await Promise.all([
-        AdminService.getPromotions(),
-        AdminService.getEvents(),
-        AdminService.getVenues()
-      ])
-      setPromotions(promotionsData)
-      setEvents(eventsData)
-      setVenues(venuesData)
-    } catch (error) {
-      console.error('Error loading data:', error)
+    if (user) {
+      loadPromotions()
     }
-    setLoading(false)
-  }
+  }, [user])
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const loadPromotions = async () => {
     try {
-      if (editingPromotion) {
-        await AdminService.updatePromotion(editingPromotion.id, formData)
-      } else {
-        await AdminService.createPromotion(formData)
+      // Load master promotions
+      const promoSnapshot = await getDocs(collection(db, 'promotions'))
+      const masterPromos: Promotion[] = promoSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Promotion))
+
+      // Load event-specific promotions
+      let eventsQuery = collection(db, 'events')
+      
+      // If not master admin, filter by promoter
+      if (!isMasterAdmin && user?.promoterId) {
+        eventsQuery = query(collection(db, 'events'), where('promoter.promoterId', '==', user.promoterId)) as any
       }
-      setShowForm(false)
-      resetForm()
-      await loadData()
+      
+      const eventsSnapshot = await getDocs(eventsQuery)
+      const eventPromos: EventPromotion[] = []
+      
+      eventsSnapshot.docs.forEach(eventDoc => {
+        const eventData = eventDoc.data()
+        const eventPromotions = eventData.promotions?.eventPromotions || []
+        
+        eventPromotions.forEach((promo: any) => {
+          eventPromos.push({
+            ...promo,
+            eventId: eventDoc.id,
+            eventName: eventData.name || 'Unnamed Event',
+            promoterId: eventData.promoter?.promoterId,
+            active: promo.active !== false
+          })
+        })
+      })
+
+      // Calculate stats
+      const activeMaster = masterPromos.filter(p => p.active !== false).length
+      const activeEvent = eventPromos.filter(p => p.active !== false).length
+      const totalUses = [...masterPromos, ...eventPromos].reduce((sum, p) => sum + (p.usedCount || 0), 0)
+
+      setStats({
+        totalMaster: masterPromos.length,
+        totalEvent: eventPromos.length,
+        activeMaster,
+        activeEvent,
+        totalUses
+      })
+
+      setMasterPromotions(masterPromos)
+      setEventPromotions(eventPromos)
+      setLoading(false)
     } catch (error) {
-      console.error('Error saving promotion:', error)
+      console.error('Error loading promotions:', error)
+      setLoading(false)
     }
   }
 
-  const handleEdit = (promotion: any) => {
-    setEditingPromotion(promotion)
-    setFormData({
-      name: promotion.name || '',
-      code: promotion.code || '',
-      type: promotion.type || 'percentage',
-      value: promotion.value || 10,
-      minPurchase: promotion.minPurchase || 0,
-      maxUses: promotion.maxUses || 100,
-      usedCount: promotion.usedCount || 0,
-      active: promotion.active !== false,
-      startDate: promotion.startDate || '',
-      endDate: promotion.endDate || '',
-      description: promotion.description || '',
-      applicableEvents: promotion.applicableEvents || [],
-      applicableVenues: promotion.applicableVenues || []
-    })
-    setShowForm(true)
-  }
-
-  const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to delete this promotion?')) {
+  const handleDeleteMaster = async (promoId: string) => {
+    if (confirm('Delete this promotion?')) {
       try {
-        await AdminService.deletePromotion(id)
-        await loadData()
+        await deleteDoc(doc(db, 'promotions', promoId))
+        await loadPromotions()
       } catch (error) {
         console.error('Error deleting promotion:', error)
       }
     }
   }
 
-  const handleToggleActive = async (promotion: any) => {
+  const handleDeleteEvent = async (eventId: string, promoId: string) => {
+    if (confirm('Remove this promotion from the event?')) {
+      try {
+        const eventDoc = await getDocs(query(collection(db, 'events'), where('__name__', '==', eventId)))
+        if (!eventDoc.empty) {
+          const eventData = eventDoc.docs[0].data()
+          const updatedPromos = (eventData.promotions?.eventPromotions || []).filter((p: any) => p.id !== promoId)
+          
+          await updateDoc(doc(db, 'events', eventId), {
+            'promotions.eventPromotions': updatedPromos
+          })
+          
+          await loadPromotions()
+        }
+      } catch (error) {
+        console.error('Error removing event promotion:', error)
+      }
+    }
+  }
+
+  const toggleActive = async (promoId: string, currentActive: boolean) => {
     try {
-      await AdminService.updatePromotion(promotion.id, {
-        ...promotion,
-        active: !promotion.active
+      await updateDoc(doc(db, 'promotions', promoId), {
+        active: !currentActive
       })
-      await loadData()
+      await loadPromotions()
     } catch (error) {
       console.error('Error toggling promotion:', error)
     }
   }
 
-  const resetForm = () => {
-    setEditingPromotion(null)
-    setFormData({
-      name: '',
-      code: '',
-      type: 'percentage',
-      value: 10,
-      minPurchase: 0,
-      maxUses: 100,
-      usedCount: 0,
-      active: true,
-      startDate: '',
-      endDate: '',
-      description: '',
-      applicableEvents: [],
-      applicableVenues: []
-    })
+  const formatDiscount = (promo: Promotion | EventPromotion) => {
+    if (!promo.value) return 'No discount'
+    return promo.type === 'percentage' 
+      ? `${promo.value}% OFF` 
+      : `$${promo.value} OFF`
   }
 
-  const generatePromoCode = () => {
-    const code = `PROMO${Math.random().toString(36).substring(2, 8).toUpperCase()}`
-    setFormData({...formData, code})
+  const getUsagePercentage = (promo: Promotion | EventPromotion) => {
+    if (!promo.maxUses) return 0
+    return Math.min(100, (promo.usedCount / promo.maxUses) * 100)
   }
 
-  const getUsagePercentage = (promotion: any) => {
-    const used = promotion.usedCount || 0
-    const max = promotion.maxUses || 100
-    return (used / max) * 100
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-purple-500"></div>
+      </div>
+    )
   }
+
+  const displayPromotions = activeTab === 'master' ? masterPromotions : eventPromotions
 
   return (
-    <>
-      <div className="max-w-7xl mx-auto p-6">
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold">Promotions</h1>
-            <p className="text-gray-400">Manage discount codes and special offers</p>
-          </div>
-          <button
-            onClick={() => {
-              resetForm()
-              setShowForm(true)
-            }}
-            className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg hover:from-purple-700 hover:to-pink-700"
-          >
-            + New Promotion
-          </button>
+    <div className="p-6">
+      <div className="mb-8 flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">Promotions</h1>
+          <p className="text-gray-400">Manage discount codes and special offers</p>
         </div>
+        <button
+          onClick={() => router.push('/admin/promotions/new')}
+          className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg hover:from-purple-700 hover:to-pink-700"
+        >
+          + New Promotion
+        </button>
+      </div>
 
-        {/* Stats Cards */}
-        <div className="grid md:grid-cols-4 gap-4 mb-8">
-          <div className="p-4 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10">
-            <p className="text-gray-400 text-sm mb-1">Total Promotions</p>
-            <p className="text-2xl font-bold">{promotions.length}</p>
-          </div>
-          <div className="p-4 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10">
-            <p className="text-gray-400 text-sm mb-1">Active</p>
-            <p className="text-2xl font-bold text-green-400">
-              {promotions.filter(p => p.active).length}
-            </p>
-          </div>
-          <div className="p-4 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10">
-            <p className="text-gray-400 text-sm mb-1">Total Uses</p>
-            <p className="text-2xl font-bold">
-              {promotions.reduce((sum, p) => sum + (p.usedCount || 0), 0)}
-            </p>
-          </div>
-          <div className="p-4 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10">
-            <p className="text-gray-400 text-sm mb-1">Avg. Discount</p>
-            <p className="text-2xl font-bold">
-              {promotions.length > 0 
-                ? Math.round(promotions.reduce((sum, p) => sum + (p.value || 0), 0) / promotions.length) 
-                : 0}%
-            </p>
+      {/* User Status */}
+      <div className="mb-6 p-3 bg-white/5 rounded-lg flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-400">Viewing as:</span>
+          <span className="text-sm font-medium">{user?.email}</span>
+          {isMasterAdmin ? (
+            <span className="px-2 py-1 bg-purple-600/20 text-purple-400 text-xs rounded-full">
+              🔑 Master Admin (All Promotions)
+            </span>
+          ) : (
+            <span className="px-2 py-1 bg-blue-600/20 text-blue-400 text-xs rounded-full">
+              Promoter User
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
+        <div className="bg-black/40 backdrop-blur-xl rounded-xl p-4">
+          <div className="text-gray-400 text-xs mb-1">Master Promos</div>
+          <div className="text-2xl font-bold">{stats.totalMaster}</div>
+          <div className="text-xs text-green-400">{stats.activeMaster} active</div>
+        </div>
+        
+        <div className="bg-black/40 backdrop-blur-xl rounded-xl p-4">
+          <div className="text-gray-400 text-xs mb-1">Event Promos</div>
+          <div className="text-2xl font-bold">{stats.totalEvent}</div>
+          <div className="text-xs text-green-400">{stats.activeEvent} active</div>
+        </div>
+        
+        <div className="bg-black/40 backdrop-blur-xl rounded-xl p-4">
+          <div className="text-gray-400 text-xs mb-1">Total Active</div>
+          <div className="text-2xl font-bold text-green-400">
+            {stats.activeMaster + stats.activeEvent}
           </div>
         </div>
-
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-purple-500"/>
+        
+        <div className="bg-black/40 backdrop-blur-xl rounded-xl p-4">
+          <div className="text-gray-400 text-xs mb-1">Total Uses</div>
+          <div className="text-2xl font-bold">{stats.totalUses}</div>
+        </div>
+        
+        <div className="bg-black/40 backdrop-blur-xl rounded-xl p-4">
+          <div className="text-gray-400 text-xs mb-1">Total Promos</div>
+          <div className="text-2xl font-bold text-purple-400">
+            {stats.totalMaster + stats.totalEvent}
           </div>
-        ) : promotions.length === 0 ? (
-          <div className="text-center py-12 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10">
-            <div className="text-6xl mb-4">🎟️</div>
-            <p className="text-gray-400 mb-4">No promotions yet. Create your first promotion!</p>
-            <button
-              onClick={() => setShowForm(true)}
-              className="px-6 py-2 bg-purple-600 rounded-lg hover:bg-purple-700"
-            >
-              Create First Promotion
-            </button>
-          </div>
-        ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {promotions.map(promo => (
-              <div key={promo.id} className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 p-6 hover:scale-105 transition-transform">
-                {/* Header */}
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="text-xl font-bold mb-1">{promo.name}</h3>
-                    <p className="text-purple-400 font-mono text-lg">{promo.code}</p>
-                  </div>
-                  <button
-                    onClick={() => handleToggleActive(promo)}
-                    className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                      promo.active 
-                        ? 'bg-green-600/20 text-green-400 hover:bg-green-600/30' 
-                        : 'bg-gray-600/20 text-gray-400 hover:bg-gray-600/30'
-                    }`}
-                  >
-                    {promo.active ? 'Active' : 'Inactive'}
-                  </button>
-                </div>
+        </div>
+      </div>
 
-                {/* Discount Info */}
-                <div className="mb-4 p-3 bg-purple-600/10 rounded-lg">
-                  <p className="text-3xl font-bold text-purple-400">
-                    {promo.type === 'percentage' ? `${promo.value}%` : `$${promo.value}`}
-                    <span className="text-sm font-normal text-gray-400 ml-2">OFF</span>
-                  </p>
-                  {promo.minPurchase > 0 && (
-                    <p className="text-sm text-gray-400 mt-1">
-                      Min. purchase: ${promo.minPurchase}
-                    </p>
-                  )}
-                </div>
+      {/* Tabs */}
+      <div className="flex gap-4 mb-6">
+        <button
+          onClick={() => setActiveTab('master')}
+          className={`px-6 py-2 rounded-lg transition-all ${
+            activeTab === 'master'
+              ? 'bg-purple-600 text-white'
+              : 'bg-white/5 text-gray-400 hover:bg-white/10'
+          }`}
+        >
+          Master Promotions ({stats.totalMaster})
+        </button>
+        <button
+          onClick={() => setActiveTab('event')}
+          className={`px-6 py-2 rounded-lg transition-all ${
+            activeTab === 'event'
+              ? 'bg-purple-600 text-white'
+              : 'bg-white/5 text-gray-400 hover:bg-white/10'
+          }`}
+        >
+          Event-Specific ({stats.totalEvent})
+        </button>
+      </div>
 
-                {/* Usage Stats */}
-                <div className="mb-4">
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-gray-400">Usage</span>
-                    <span className="text-gray-300">
-                      {promo.usedCount || 0} / {promo.maxUses || 100}
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-700 rounded-full h-2">
-                    <div 
-                      className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all"
-                      style={{ width: `${getUsagePercentage(promo)}%` }}
-                    />
+      {/* Promotions Grid */}
+      {displayPromotions.length === 0 ? (
+        <div className="text-center py-12 bg-black/40 rounded-xl">
+          <p className="text-gray-400">
+            {activeTab === 'master' 
+              ? 'No master promotions found. Create your first promotion!'
+              : 'No event-specific promotions found.'}
+          </p>
+        </div>
+      ) : (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {displayPromotions.map((promo) => (
+            <div key={promo.id} className="bg-black/40 backdrop-blur-xl rounded-xl p-6">
+              {/* Event Badge for Event Promos */}
+              {activeTab === 'event' && 'eventName' in promo && (
+                <div className="mb-3 pb-3 border-b border-white/10">
+                  <div className="text-xs text-gray-400">Event</div>
+                  <div className="text-sm font-medium text-purple-300 truncate">
+                    {promo.eventName}
                   </div>
                 </div>
+              )}
 
-                {/* Description */}
+              <div className="flex justify-between items-start mb-4">
+                <h3 className="text-xl font-bold">{promo.code || 'NO CODE'}</h3>
+                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                  promo.active !== false
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-600 text-white'
+                }`}>
+                  {promo.active !== false ? 'Active' : 'Inactive'}
+                </span>
+              </div>
+
+              <div className="mb-4">
+                <div className="text-3xl font-bold text-purple-400 mb-2">
+                  {formatDiscount(promo)}
+                </div>
                 {promo.description && (
-                  <p className="text-sm text-gray-400 mb-4 line-clamp-2">
-                    {promo.description}
-                  </p>
+                  <p className="text-sm text-gray-400">{promo.description}</p>
                 )}
-
-                {/* Validity Dates */}
-                {(promo.startDate || promo.endDate) && (
-                  <div className="text-xs text-gray-500 mb-4">
-                    {promo.startDate && (
-                      <p>Starts: {new Date(promo.startDate).toLocaleDateString()}</p>
-                    )}
-                    {promo.endDate && (
-                      <p>Ends: {new Date(promo.endDate).toLocaleDateString()}</p>
-                    )}
-                  </div>
-                )}
-
-                {/* Actions */}
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleEdit(promo)}
-                    className="flex-1 px-3 py-2 bg-blue-600/20 text-blue-400 rounded-lg hover:bg-blue-600/30 text-sm"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => navigator.clipboard.writeText(promo.code)}
-                    className="px-3 py-2 bg-gray-600/20 text-gray-400 rounded-lg hover:bg-gray-600/30 text-sm"
-                    title="Copy code"
-                  >
-                    📋
-                  </button>
-                  <button
-                    onClick={() => handleDelete(promo.id)}
-                    className="px-3 py-2 bg-red-600/20 text-red-400 rounded-lg hover:bg-red-600/30 text-sm"
-                  >
-                    Delete
-                  </button>
-                </div>
               </div>
-            ))}
-          </div>
-        )}
 
-        {/* Form Modal */}
-        {showForm && (
-          <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
-            <div className="bg-gray-900 rounded-xl p-6 w-full max-w-2xl my-8">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold">
-                  {editingPromotion ? 'Edit Promotion' : 'Create Promotion'}
-                </h2>
-                <button
-                  onClick={() => {
-                    setShowForm(false)
-                    resetForm()
-                  }}
-                  className="text-gray-400 hover:text-white"
-                >
-                  ✕
-                </button>
-              </div>
-              
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm mb-2">Promotion Name</label>
-                    <input
-                      type="text"
-                      value={formData.name}
-                      onChange={(e) => setFormData({...formData, name: e.target.value})}
-                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
-                      placeholder="Summer Sale"
-                      required
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm mb-2">Promo Code</label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={formData.code}
-                        onChange={(e) => setFormData({...formData, code: e.target.value.toUpperCase()})}
-                        className="flex-1 px-4 py-2 bg-white/10 rounded-lg font-mono"
-                        placeholder="SUMMER20"
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={generatePromoCode}
-                        className="px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700"
-                        title="Generate code"
-                      >
-                        🎲
-                      </button>
-                    </div>
-                  </div>
+              {/* Usage Bar */}
+              <div className="mb-4">
+                <div className="flex justify-between text-sm text-gray-400 mb-1">
+                  <span>Usage</span>
+                  <span>
+                    {promo.usedCount || 0} / {promo.maxUses || '∞'}
+                  </span>
                 </div>
-                
-                <div>
-                  <label className="block text-sm mb-2">Description</label>
-                  <textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData({...formData, description: e.target.value})}
-                    className="w-full px-4 py-2 bg-white/10 rounded-lg h-20"
-                    placeholder="Special discount for summer events..."
+                <div className="w-full bg-gray-700 rounded-full h-2">
+                  <div
+                    className="bg-purple-600 h-2 rounded-full transition-all"
+                    style={{ width: `${getUsagePercentage(promo)}%` }}
                   />
                 </div>
-                
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm mb-2">Discount Type</label>
-                    <select
-                      value={formData.type}
-                      onChange={(e) => setFormData({...formData, type: e.target.value})}
-                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-2">
+                {activeTab === 'master' ? (
+                  <>
+                    <button
+                      onClick={() => router.push(`/admin/promotions/edit/${promo.id}`)}
+                      className="flex-1 px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-700"
                     >
-                      <option value="percentage">Percentage</option>
-                      <option value="fixed">Fixed Amount</option>
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm mb-2">
-                      {formData.type === 'percentage' ? 'Percentage (%)' : 'Amount ($)'}
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.value}
-                      onChange={(e) => setFormData({...formData, value: parseInt(e.target.value)})}
-                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
-                      min="0"
-                      max={formData.type === 'percentage' ? '100' : undefined}
-                      required
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm mb-2">Min. Purchase ($)</label>
-                    <input
-                      type="number"
-                      value={formData.minPurchase}
-                      onChange={(e) => setFormData({...formData, minPurchase: parseInt(e.target.value)})}
-                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
-                      min="0"
-                    />
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm mb-2">Max Uses</label>
-                    <input
-                      type="number"
-                      value={formData.maxUses}
-                      onChange={(e) => setFormData({...formData, maxUses: parseInt(e.target.value)})}
-                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
-                      min="1"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm mb-2">Current Uses</label>
-                    <input
-                      type="number"
-                      value={formData.usedCount}
-                      className="w-full px-4 py-2 bg-white/10 rounded-lg opacity-50"
-                      disabled
-                    />
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm mb-2">Start Date (Optional)</label>
-                    <input
-                      type="date"
-                      value={formData.startDate}
-                      onChange={(e) => setFormData({...formData, startDate: e.target.value})}
-                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm mb-2">End Date (Optional)</label>
-                    <input
-                      type="date"
-                      value={formData.endDate}
-                      onChange={(e) => setFormData({...formData, endDate: e.target.value})}
-                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
-                    />
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={formData.active}
-                      onChange={(e) => setFormData({...formData, active: e.target.checked})}
-                      className="rounded"
-                    />
-                    <span>Active (Promotion can be used)</span>
-                  </label>
-                </div>
-                
-                <div className="flex justify-end gap-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowForm(false)
-                      resetForm()
-                    }}
-                    className="px-6 py-2 bg-gray-700 rounded-lg hover:bg-gray-600"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg hover:from-purple-700 hover:to-pink-700"
-                  >
-                    {editingPromotion ? 'Update' : 'Create'}
-                  </button>
-                </div>
-              </form>
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => toggleActive(promo.id, promo.active)}
+                      className={`px-4 py-2 rounded-lg ${
+                        promo.active !== false
+                          ? 'bg-yellow-600 hover:bg-yellow-700'
+                          : 'bg-green-600 hover:bg-green-700'
+                      }`}
+                    >
+                      {promo.active !== false ? 'Pause' : 'Enable'}
+                    </button>
+                    <button
+                      onClick={() => handleDeleteMaster(promo.id)}
+                      className="px-4 py-2 bg-red-600 rounded-lg hover:bg-red-700"
+                    >
+                      Delete
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => router.push(`/admin/events/edit/${(promo as EventPromotion).eventId}`)}
+                      className="flex-1 px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-700"
+                    >
+                      Edit Event
+                    </button>
+                    <button
+                      onClick={() => handleDeleteEvent((promo as EventPromotion).eventId, promo.id)}
+                      className="px-4 py-2 bg-red-600 rounded-lg hover:bg-red-700"
+                    >
+                      Remove
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        )}
-      </div>
-    </>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }

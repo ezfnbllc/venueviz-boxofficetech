@@ -1,155 +1,202 @@
 'use client'
+
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useFirebaseAuth } from '@/lib/firebase-auth'
 import { AdminService } from '@/lib/admin/adminService'
+import { usePromoterFiltering } from '@/lib/hooks/usePromoterFiltering'
+import StatusMultiSelect from '@/components/admin/StatusMultiSelect'
 
 export default function EventsPage() {
   const router = useRouter()
-  const [events, setEvents] = useState<any[]>([])
+  const { user, isAdmin } = useFirebaseAuth()
+  const [allEvents, setAllEvents] = useState<any[]>([])
+  const [filteredEvents, setFilteredEvents] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState('all')
+  const [currentPromoterId, setCurrentPromoterId] = useState<string>()
   const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState<string[]>(['active', 'published'])
 
+  const { activePromoterIds, shouldFilter } = usePromoterFiltering(isAdmin, currentPromoterId)
+
+  console.log('[Events] isAdmin:', isAdmin, 'activePromoterIds:', activePromoterIds)
+
+  // Load ALL events using AdminService
   useEffect(() => {
+    const loadEvents = async () => {
+      setLoading(true)
+      try {
+        const events = await AdminService.getEvents()
+        console.log('[Events] Loaded from AdminService:', events.length, 'events')
+        setAllEvents(events)
+      } catch (error) {
+        console.error('Error loading events:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
     loadEvents()
   }, [])
 
-  const loadEvents = async () => {
-    setLoading(true)
-    try {
-      const eventsData = await AdminService.getEvents()
-      setEvents(eventsData)
-    } catch (error) {
-      console.error('Error loading events:', error)
-    }
-    setLoading(false)
-  }
+  // Apply filtering
+  useEffect(() => {
+    let events = allEvents
 
-  const handleCreateNew = () => {
+    // Apply search filter
+    if (searchTerm) {
+      events = events.filter(event => 
+        event.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        event.venueName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        event.description?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    }
+
+    // Apply status filter
+    events = events.filter(event => 
+      statusFilter.includes(event.status)
+    )
+
+    // Apply promoter filter
+    if (shouldFilter && activePromoterIds && activePromoterIds.length > 0) {
+      events = events.filter(event => {
+        const eventPromoterId = event.promoter?.promoterId || event.promoterId
+        if (!eventPromoterId && isAdmin) return true
+        return activePromoterIds.includes(eventPromoterId)
+      })
+      console.log('[Events] Filtered to', events.length, 'events')
+    } else if (shouldFilter && (!activePromoterIds || activePromoterIds.length === 0)) {
+      events = []
+    }
+
+    setFilteredEvents(events)
+  }, [allEvents, searchTerm, statusFilter, activePromoterIds, shouldFilter, isAdmin])
+
+  const handleCreateEvent = () => {
     router.push('/admin/events/new')
   }
 
-  const handleEdit = (eventId: string) => {
+  const handleEditEvent = (eventId: string) => {
     router.push(`/admin/events/edit/${eventId}`)
   }
 
-  const handleDelete = async (eventId: string) => {
-    if (confirm('Are you sure you want to delete this event?')) {
-      try {
-        await AdminService.deleteEvent(eventId)
-        loadEvents()
-      } catch (error) {
-        console.error('Error deleting event:', error)
-      }
+  const handleDeleteEvent = async (eventId: string) => {
+    if (!confirm('Are you sure you want to delete this event?')) return
+
+    try {
+      await AdminService.deleteEvent(eventId)
+      setAllEvents(allEvents.filter(e => e.id !== eventId))
+    } catch (error) {
+      console.error('Error deleting event:', error)
+      alert('Failed to delete event')
     }
   }
 
-  const filteredEvents = events.filter(event => {
-    const matchesFilter = filter === 'all' || event.status === filter
-    const matchesSearch = searchTerm === '' || 
-      event.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      event.venueName?.toLowerCase().includes(searchTerm.toLowerCase())
-    return matchesFilter && matchesSearch
-  })
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-purple-500"></div>
+      </div>
+    )
+  }
 
   return (
-    <div className="p-8">
-      {/* Page Header - Matching venues style */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Events Management</h1>
-        <p className="text-gray-400">Create and manage events</p>
-      </div>
-
-      {/* Actions Bar */}
+    <div>
       <div className="flex justify-between items-center mb-6">
-        <div className="flex gap-4">
-          <input
-            type="text"
-            placeholder="Search events..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="px-4 py-2 bg-white/10 rounded-lg w-64 focus:bg-white/20 outline-none"
-          />
-          <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="px-4 py-2 bg-white/10 rounded-lg focus:bg-white/20 outline-none"
-          >
-            <option value="all">All Status</option>
-            <option value="draft">Draft</option>
-            <option value="pending_approval">Pending Approval</option>
-            <option value="published">Published</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
+        <div>
+          <h1 className="text-3xl font-bold">Events</h1>
+          <p className="text-gray-400 mt-1">
+            Showing {filteredEvents.length} of {allEvents.length} events
+          </p>
         </div>
         <button
-          onClick={handleCreateNew}
-          className="px-6 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors"
+          onClick={handleCreateEvent}
+          className="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg font-medium"
         >
           + Create Event
         </button>
       </div>
 
-      {/* Events Grid */}
-      {loading ? (
-        <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-purple-500"/>
+      {/* Filters */}
+      <div className="flex gap-4 mb-6">
+        <input
+          type="text"
+          placeholder="Search events..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="flex-1 px-4 py-2 bg-white/10 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+        />
+        <StatusMultiSelect
+          selectedStatuses={statusFilter}
+          onChange={setStatusFilter}
+        />
+      </div>
+
+      {filteredEvents.length === 0 ? (
+        <div className="bg-white/5 rounded-xl p-12 text-center">
+          <p className="text-gray-400 text-lg">
+            {shouldFilter && activePromoterIds?.length === 0 
+              ? 'No promoters selected. Please select promoters from the filter above.'
+              : searchTerm
+              ? 'No events match your search.'
+              : 'No events found. Create your first event to get started.'}
+          </p>
         </div>
-      ) : filteredEvents.length > 0 ? (
+      ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredEvents.map(event => (
-            <div key={event.id} className="bg-gray-900 rounded-xl overflow-hidden hover:shadow-xl transition-shadow">
-              {event.images?.cover ? (
-                <img 
-                  src={event.images.cover} 
-                  alt={event.name}
-                  className="w-full h-48 object-cover"
-                />
-              ) : (
-                <div className="w-full h-48 bg-gradient-to-br from-purple-600/20 to-purple-800/20 flex items-center justify-center">
-                  <span className="text-6xl opacity-30">🎭</span>
+            <div
+              key={event.id}
+              className="bg-white/5 rounded-xl overflow-hidden border border-gray-800 hover:border-purple-500 transition-all"
+            >
+              {event.images?.cover && (
+                <div className="h-48 bg-gray-800">
+                  <img
+                    src={event.images.cover}
+                    alt={event.name}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
               )}
-              
+
               <div className="p-6">
-                <div className="flex justify-between items-start mb-4">
+                <div className="flex items-start justify-between mb-3">
                   <h3 className="text-xl font-bold">{event.name}</h3>
                   <span className={`px-2 py-1 rounded text-xs ${
-                    event.status === 'published' ? 'bg-green-600' :
-                    event.status === 'draft' ? 'bg-gray-600' :
-                    event.status === 'pending_approval' ? 'bg-yellow-600' :
-                    'bg-red-600'
+                    event.status === 'published' || event.status === 'active'
+                      ? 'bg-green-500/20 text-green-400'
+                      : event.status === 'draft'
+                      ? 'bg-yellow-500/20 text-yellow-400'
+                      : 'bg-gray-500/20 text-gray-400'
                   }`}>
-                    {event.status?.replace('_', ' ')}
+                    {event.status}
                   </span>
                 </div>
-                
-                <p className="text-gray-400 text-sm mb-4 line-clamp-2">
-                  {event.description}
-                </p>
-                
+
                 <div className="space-y-2 text-sm text-gray-400 mb-4">
                   {event.venueName && (
                     <p>📍 {event.venueName}</p>
                   )}
                   {event.schedule?.performances?.[0]?.date && (
-                    <p>📅 {new Date(event.schedule.performances[0].date).toLocaleDateString()}</p>
+                    <p>�� {new Date(event.schedule.performances[0].date).toLocaleDateString()}</p>
                   )}
-                  {event.pricing?.length > 0 && (
-                    <p>💵 Starting from ${Math.min(...event.pricing.map((p: any) => p.basePrice))}</p>
+                  {event.promoter?.promoterName ? (
+                    <p>🤝 {event.promoter.promoterName}</p>
+                  ) : isAdmin && (
+                    <p className="text-yellow-400">🤝 Unassigned</p>
                   )}
                 </div>
-                
+
                 <div className="flex gap-2">
                   <button
-                    onClick={() => handleEdit(event.id)}
-                    className="flex-1 px-4 py-2 bg-purple-600 rounded hover:bg-purple-700 transition-colors"
+                    onClick={() => handleEditEvent(event.id)}
+                    className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm"
                   >
                     Edit
                   </button>
                   <button
-                    onClick={() => handleDelete(event.id)}
-                    className="px-4 py-2 bg-red-600 rounded hover:bg-red-700 transition-colors"
+                    onClick={() => handleDeleteEvent(event.id)}
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-sm"
                   >
                     Delete
                   </button>
@@ -157,16 +204,6 @@ export default function EventsPage() {
               </div>
             </div>
           ))}
-        </div>
-      ) : (
-        <div className="text-center py-12">
-          <p className="text-gray-400 mb-4">No events found</p>
-          <button
-            onClick={handleCreateNew}
-            className="px-6 py-3 bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors"
-          >
-            Create Your First Event
-          </button>
         </div>
       )}
     </div>

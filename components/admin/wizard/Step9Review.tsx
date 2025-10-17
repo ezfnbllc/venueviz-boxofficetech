@@ -1,206 +1,387 @@
 'use client'
+
+import React, { useEffect, useState } from 'react'
 import { useEventWizardStore } from '@/lib/store/eventWizardStore'
+import { db } from '@/lib/firebase'
+import { doc, getDoc } from 'firebase/firestore'
 
 export default function Step9Review() {
   const { formData } = useEventWizardStore()
-  
-  const formatPrice = (price: number) => `$${price.toFixed(2)}`
-  
-  const isValid = formData.basics.name && formData.venue.venueId && formData.venue.layoutId
-  
+  const [linkedPromotionDetails, setLinkedPromotionDetails] = useState<any[]>([])
+  const [venueDetails, setVenueDetails] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchAdditionalData = async () => {
+      try {
+        // Fetch venue details
+        if (formData.venue?.venueId) {
+          const venueDoc = await getDoc(doc(db, 'venues', formData.venue.venueId))
+          if (venueDoc.exists()) {
+            setVenueDetails(venueDoc.data())
+          }
+        }
+
+        // Fetch linked promotion details
+        if (formData.promotions?.linkedPromotions?.length > 0) {
+          const promoDetails = []
+          for (const promoId of formData.promotions.linkedPromotions) {
+            const promoDoc = await getDoc(doc(db, 'promotions', promoId))
+            if (promoDoc.exists()) {
+              promoDetails.push({ id: promoId, ...promoDoc.data() })
+            }
+          }
+          setLinkedPromotionDetails(promoDetails)
+        }
+      } catch (error) {
+        console.error('Error fetching additional data:', error)
+      }
+      setLoading(false)
+    }
+
+    fetchAdditionalData()
+  }, [formData])
+
+  // Format address object to string
+  const formatAddress = (address: any) => {
+    if (!address) return 'Not available'
+    if (typeof address === 'string') return address
+    
+    // Handle address object
+    const parts = []
+    if (address.street) parts.push(address.street)
+    if (address.city) parts.push(address.city)
+    if (address.state) parts.push(address.state)
+    if (address.zip) parts.push(address.zip)
+    if (address.country) parts.push(address.country)
+    
+    return parts.join(', ') || 'Not available'
+  }
+
+  // Format date for display
+  const formatDate = (date: any) => {
+    if (!date) return 'Not set'
+    try {
+      const d = new Date(date)
+      return d.toLocaleDateString('en-US', { 
+        weekday: 'short', 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    } catch (e) {
+      return date.toString()
+    }
+  }
+
+  // Calculate total capacity
+  const getTotalCapacity = () => {
+    if (formData.venue?.availableSections?.length > 0) {
+      return formData.venue.availableSections.reduce((sum: number, section: any) => 
+        sum + (section.capacity || 0), 0
+      )
+    }
+    return 0
+  }
+
+  if (loading) {
+    return <div className="p-8 text-center animate-pulse">Preparing review...</div>
+  }
+
   return (
-    <div>
-      <h3 className="text-xl font-bold mb-4">Event Review & Publish</h3>
-      
-      {/* Validation Status */}
-      <div className="mb-6 p-4 rounded-lg bg-black/20">
-        {isValid ? (
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 bg-green-500 rounded-full"></span>
-            <p className="text-green-400">Event is ready to publish!</p>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 bg-red-500 rounded-full"></span>
-            <p className="text-red-400">Please complete all required fields</p>
-          </div>
-        )}
-      </div>
-      
-      {/* Event Summary */}
-      <div className="space-y-6">
-        
-        {/* Basic Info */}
-        <div className="bg-black/20 rounded-lg p-4">
-          <h4 className="font-semibold mb-3">Basic Information</h4>
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="text-gray-400">Event Name:</span>
-              <p className="font-medium">{formData.basics.name || 'Not set'}</p>
-            </div>
-            <div>
-              <span className="text-gray-400">Category:</span>
-              <p className="font-medium capitalize">{formData.basics.category || 'Not set'}</p>
-            </div>
-            <div className="col-span-2">
-              <span className="text-gray-400">Description:</span>
-              <p className="font-medium">{formData.basics.description || 'Not set'}</p>
-            </div>
-          </div>
-        </div>
-        
-        {/* Venue & Layout */}
-        <div className="bg-black/20 rounded-lg p-4">
-          <h4 className="font-semibold mb-3">Venue Configuration</h4>
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="text-gray-400">Venue ID:</span>
-              <p className="font-medium">{formData.venue.venueId || 'Not selected'}</p>
-            </div>
-            <div>
-              <span className="text-gray-400">Layout ID:</span>
-              <p className="font-medium">{formData.venue.layoutId || 'Not selected'}</p>
-            </div>
-            <div>
-              <span className="text-gray-400">Seating Type:</span>
-              <p className="font-medium capitalize">{formData.venue.seatingType || 'Not set'}</p>
-            </div>
-            <div>
-              <span className="text-gray-400">Available Sections:</span>
-              <p className="font-medium">{formData.venue.availableSections?.filter(s => s.available).length || 0}</p>
-            </div>
-          </div>
-        </div>
-        
-        {/* Pricing */}
-        <div className="bg-black/20 rounded-lg p-4">
-          <h4 className="font-semibold mb-3">Pricing Configuration</h4>
-          
-          {/* Tiers */}
-          {formData.pricing.tiers && formData.pricing.tiers.length > 0 ? (
-            <div className="mb-4">
-              <span className="text-gray-400 text-sm">Pricing Tiers:</span>
-              <div className="mt-2 space-y-2">
-                {formData.pricing.tiers.map((tier: any) => (
-                  <div key={tier.id} className="flex justify-between items-center p-2 bg-black/20 rounded">
-                    <span>{tier.name}</span>
-                    <span className="font-medium">{formatPrice(tier.basePrice || 0)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <p className="text-gray-400 text-sm mb-4">No pricing tiers configured</p>
+    <div className="max-w-5xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-purple-600/20 to-blue-600/20 rounded-lg p-6">
+        <h2 className="text-3xl font-bold mb-2">{formData.basics?.name || 'Untitled Event'}</h2>
+        <p className="text-gray-300">{formData.basics?.description || 'No description provided'}</p>
+        <div className="flex gap-3 mt-4">
+          <span className="px-3 py-1 bg-white/10 rounded-full text-sm">
+            {formData.basics?.category || 'General'}
+          </span>
+          <span className="px-3 py-1 bg-white/10 rounded-full text-sm">
+            {formData.basics?.status || 'Draft'}
+          </span>
+          {formData.basics?.featured && (
+            <span className="px-3 py-1 bg-yellow-500/20 text-yellow-400 rounded-full text-sm">
+              ⭐ Featured
+            </span>
           )}
+        </div>
+      </div>
+
+      {/* Main Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* Left Column */}
+        <div className="space-y-6">
           
-          {/* Fees */}
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="text-gray-400">Service Fee:</span>
-              <p className="font-medium">
-                {formData.pricing.fees?.serviceFee || 0}
-                {formData.pricing.fees?.serviceFeeType === 'percentage' ? '%' : '$'} 
-                per {formData.pricing.fees?.serviceFeePer || 'ticket'}
-              </p>
+          {/* Venue & Location */}
+          <div className="bg-white/5 rounded-lg p-5">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              📍 Venue & Location
+            </h3>
+            <div className="space-y-3">
+              <div>
+                <span className="text-xs text-gray-400">Venue</span>
+                <p className="font-medium">{venueDetails?.name || formData.venue?.venueId || 'Not selected'}</p>
+              </div>
+              {venueDetails?.address && (
+                <div>
+                  <span className="text-xs text-gray-400">Address</span>
+                  <p className="text-sm">{formatAddress(venueDetails.address)}</p>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <span className="text-xs text-gray-400">Layout Type</span>
+                  <p className="text-sm">{formData.venue?.layoutType || 'General'}</p>
+                </div>
+                <div>
+                  <span className="text-xs text-gray-400">Total Capacity</span>
+                  <p className="text-sm">{getTotalCapacity().toLocaleString() || 'Not set'}</p>
+                </div>
+              </div>
+              {formData.venue?.availableSections?.length > 0 && (
+                <div>
+                  <span className="text-xs text-gray-400">Sections ({formData.venue.availableSections.length})</span>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {formData.venue.availableSections.slice(0, 5).map((section: any, idx: number) => (
+                      <span key={idx} className="text-xs px-2 py-1 bg-white/5 rounded">
+                        {section.name} ({section.capacity})
+                      </span>
+                    ))}
+                    {formData.venue.availableSections.length > 5 && (
+                      <span className="text-xs px-2 py-1 bg-white/5 rounded">
+                        +{formData.venue.availableSections.length - 5} more
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
-            <div>
-              <span className="text-gray-400">Processing Fee:</span>
-              <p className="font-medium">
-                {formData.pricing.fees?.processingFee || 0}
-                {formData.pricing.fees?.processingFeeType === 'percentage' ? '%' : '$'} 
-                per {formData.pricing.fees?.processingFeePer || 'transaction'}
-              </p>
+          </div>
+
+          {/* Schedule */}
+          <div className="bg-white/5 rounded-lg p-5">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              📅 Schedule
+            </h3>
+            <div className="space-y-3">
+              {formData.schedule?.performances?.length > 0 ? (
+                <>
+                  {formData.schedule.performances.slice(0, 3).map((perf: any, idx: number) => (
+                    <div key={idx} className="pb-3 border-b border-white/10 last:border-0">
+                      <p className="font-medium text-sm">{formatDate(perf.date)}</p>
+                      {perf.doorTime && (
+                        <p className="text-xs text-gray-400 mt-1">
+                          Doors: {perf.doorTime} | Show: {perf.showTime || 'TBA'}
+                        </p>
+                      )}
+                      <div className="flex gap-2 mt-2">
+                        <span className={`text-xs px-2 py-1 rounded ${
+                          perf.status === 'onsale' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
+                        }`}>
+                          {perf.status || 'Scheduled'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  {formData.schedule.performances.length > 3 && (
+                    <p className="text-xs text-gray-500">
+                      +{formData.schedule.performances.length - 3} more performances
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-gray-500">No performances scheduled</p>
+              )}
             </div>
-            <div>
-              <span className="text-gray-400">Sales Tax:</span>
-              <p className="font-medium">{formData.pricing.fees?.salesTax || 0}%</p>
+          </div>
+
+          {/* Promoter */}
+          <div className="bg-white/5 rounded-lg p-5">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              🤝 Promoter
+            </h3>
+            <div className="space-y-3">
+              <div>
+                <span className="text-xs text-gray-400">Company/Name</span>
+                <p className="font-medium">{formData.promoter?.promoterName || 'Not assigned'}</p>
+              </div>
+              {formData.promoter?.promoterEmail && (
+                <div>
+                  <span className="text-xs text-gray-400">Email</span>
+                  <p className="text-sm">{formData.promoter.promoterEmail}</p>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <span className="text-xs text-gray-400">Commission</span>
+                  <p className="text-sm font-medium">{formData.promoter?.commission || 0}%</p>
+                </div>
+                <div>
+                  <span className="text-xs text-gray-400">Payment Terms</span>
+                  <p className="text-sm">{formData.promoter?.paymentTerms || 'Net-30'}</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-        
-        {/* Promoter */}
-        {formData.promoter.promoterId && (
-          <div className="bg-black/20 rounded-lg p-4">
-            <h4 className="font-semibold mb-3">Promoter</h4>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-gray-400">Promoter:</span>
-                <p className="font-medium">{formData.promoter.promoterName || formData.promoter.promoterId}</p>
-              </div>
-              <div>
-                <span className="text-gray-400">Commission:</span>
-                <p className="font-medium">{formData.promoter.commission || 0}%</p>
-              </div>
-              <div>
-                <span className="text-gray-400">Payment Terms:</span>
-                <p className="font-medium">{formData.promoter.paymentTerms || 'Not set'}</p>
-              </div>
-              <div>
-                <span className="text-gray-400">Responsibilities:</span>
-                <p className="font-medium">{formData.promoter.responsibilities?.length || 0} assigned</p>
-              </div>
+
+        {/* Right Column */}
+        <div className="space-y-6">
+          
+          {/* Pricing */}
+          <div className="bg-white/5 rounded-lg p-5">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              💰 Pricing & Fees
+            </h3>
+            <div className="space-y-3">
+              {formData.pricing?.tiers?.length > 0 ? (
+                <>
+                  <div>
+                    <span className="text-xs text-gray-400">Price Tiers ({formData.pricing.tiers.length})</span>
+                    <div className="space-y-2 mt-2">
+                      {formData.pricing.tiers.slice(0, 5).map((tier: any, idx: number) => (
+                        <div key={idx} className="flex justify-between items-center text-sm">
+                          <span>{tier.name || `Tier ${idx + 1}`}</span>
+                          <span className="font-medium">${tier.price || 0}</span>
+                        </div>
+                      ))}
+                      {formData.pricing.tiers.length > 5 && (
+                        <p className="text-xs text-gray-500">+{formData.pricing.tiers.length - 5} more tiers</p>
+                      )}
+                    </div>
+                  </div>
+                  {formData.pricing?.fees && (
+                    <div className="pt-3 border-t border-white/10">
+                      <span className="text-xs text-gray-400">Fees</span>
+                      <div className="grid grid-cols-2 gap-2 mt-2">
+                        {formData.pricing.fees.serviceFee > 0 && (
+                          <div className="text-xs">
+                            <span className="text-gray-500">Service:</span> ${formData.pricing.fees.serviceFee}
+                          </div>
+                        )}
+                        {formData.pricing.fees.processingFee > 0 && (
+                          <div className="text-xs">
+                            <span className="text-gray-500">Processing:</span> ${formData.pricing.fees.processingFee}
+                          </div>
+                        )}
+                        {formData.pricing.fees.facilityFee > 0 && (
+                          <div className="text-xs">
+                            <span className="text-gray-500">Facility:</span> ${formData.pricing.fees.facilityFee}
+                          </div>
+                        )}
+                        {formData.pricing.fees.salesTax > 0 && (
+                          <div className="text-xs">
+                            <span className="text-gray-500">Tax:</span> {formData.pricing.fees.salesTax}%
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-gray-500">No pricing configured</p>
+              )}
             </div>
           </div>
-        )}
-        
-        {/* Sales Configuration */}
-        <div className="bg-black/20 rounded-lg p-4">
-          <h4 className="font-semibold mb-3">Sales Configuration</h4>
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="text-gray-400">Max Tickets Per Order:</span>
-              <p className="font-medium">{formData.sales.maxTicketsPerOrder || 10}</p>
-            </div>
-            <div>
-              <span className="text-gray-400">Refund Policy:</span>
-              <p className="font-medium capitalize">{formData.sales.refundPolicy?.replace('-', ' ') || 'No refunds'}</p>
-            </div>
-            <div>
-              <span className="text-gray-400">Will Call:</span>
-              <p className="font-medium">{formData.sales.allowWillCall ? 'Enabled' : 'Disabled'}</p>
-            </div>
-            <div>
-              <span className="text-gray-400">Mobile Tickets:</span>
-              <p className="font-medium">{formData.sales.allowMobileTickets !== false ? 'Enabled' : 'Disabled'}</p>
+
+          {/* Promotions */}
+          <div className="bg-white/5 rounded-lg p-5">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              🎟️ Active Promotions
+            </h3>
+            <div className="space-y-3">
+              {linkedPromotionDetails.length > 0 && (
+                <div>
+                  <span className="text-xs text-gray-400">Linked Promotions</span>
+                  <div className="space-y-2 mt-2">
+                    {linkedPromotionDetails.map((promo) => (
+                      <div key={promo.id} className="flex items-center justify-between text-sm">
+                        <div>
+                          <span className="font-medium">{promo.code}</span>
+                          <span className="text-gray-400 ml-2">
+                            {promo.type === 'percentage' ? `${promo.value}%` : `$${promo.value}`} off
+                          </span>
+                        </div>
+                        <span className={`text-xs px-2 py-1 rounded ${
+                          promo.active !== false 
+                            ? 'bg-green-500/20 text-green-400' 
+                            : 'bg-gray-500/20 text-gray-400'
+                        }`}>
+                          {promo.active !== false ? 'Active' : 'Inactive'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {formData.promotions?.eventPromotions?.length > 0 && (
+                <div>
+                  <span className="text-xs text-gray-400">Event-Specific</span>
+                  <div className="space-y-2 mt-2">
+                    {formData.promotions.eventPromotions.map((promo: any) => (
+                      <div key={promo.id} className="flex items-center justify-between text-sm">
+                        <div>
+                          <span className="font-medium">{promo.code}</span>
+                          <span className="text-gray-400 ml-2">
+                            {promo.type === 'percentage' ? `${promo.value}%` : `$${promo.value}`} off
+                          </span>
+                        </div>
+                        <span className="text-xs px-2 py-1 bg-purple-500/20 text-purple-400 rounded">
+                          Event
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {!linkedPromotionDetails.length && !formData.promotions?.eventPromotions?.length && (
+                <p className="text-sm text-gray-500">No promotions configured</p>
+              )}
             </div>
           </div>
-        </div>
-        
-        {/* Promotions */}
-        <div className="bg-black/20 rounded-lg p-4">
-          <h4 className="font-semibold mb-3">Promotions</h4>
-          <div className="text-sm">
-            <div className="mb-2">
-              <span className="text-gray-400">Linked Promotions:</span>
-              <span className="ml-2 font-medium">{formData.promotions.linkedPromotions?.length || 0}</span>
-            </div>
-            <div className="mb-2">
-              <span className="text-gray-400">Event-Specific Codes:</span>
-              <span className="ml-2 font-medium">{formData.promotions.eventPromotions?.length || 0}</span>
-            </div>
-            <div>
-              <span className="text-gray-400">Group Discount:</span>
-              <span className="ml-2 font-medium">
-                {formData.promotions.groupDiscount?.enabled ? 'Enabled' : 'Disabled'}
-              </span>
+
+          {/* Sales & Communications */}
+          <div className="bg-white/5 rounded-lg p-5">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              ⚙️ Sales & Communications
+            </h3>
+            <div className="space-y-3">
+              <div>
+                <span className="text-xs text-gray-400">Sales Channels</span>
+                <p className="text-sm">
+                  {formData.sales?.salesChannels?.length > 0 
+                    ? formData.sales.salesChannels.join(', ')
+                    : 'Standard channels'}
+                </p>
+              </div>
+              <div>
+                <span className="text-xs text-gray-400">Refund Policy</span>
+                <p className="text-sm">{formData.sales?.refundPolicy || 'Standard policy'}</p>
+              </div>
             </div>
           </div>
         </div>
       </div>
-      
-      {/* Test Purchase Flow */}
-      <div className="mt-6 p-4 bg-purple-600/20 rounded-lg border border-purple-600/40">
-        <h4 className="font-semibold mb-2">Test Purchase Flow</h4>
-        <p className="text-sm text-gray-300 mb-3">
-          Before publishing, you can test the complete purchase flow in sandbox mode
-        </p>
-        <button
-          type="button"
-          className="px-4 py-2 bg-purple-600 rounded hover:bg-purple-700 disabled:opacity-50"
-          disabled={!isValid}
-        >
-          Launch Test Purchase
-        </button>
+
+      {/* Summary Status Bar */}
+      <div className="bg-gradient-to-r from-green-600/20 to-blue-600/20 rounded-lg p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-green-400">✓</span>
+            <span className="text-sm">Review complete - Ready to publish</span>
+          </div>
+          <div className="flex gap-3 text-xs">
+            <span>📍 Venue set</span>
+            <span>📅 {formData.schedule?.performances?.length || 0} shows</span>
+            <span>💰 {formData.pricing?.tiers?.length || 0} tiers</span>
+            <span>🎟️ {(linkedPromotionDetails.length + (formData.promotions?.eventPromotions?.length || 0))} promos</span>
+          </div>
+        </div>
       </div>
     </div>
   )
