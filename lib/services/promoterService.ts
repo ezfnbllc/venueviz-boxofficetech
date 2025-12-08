@@ -1,12 +1,18 @@
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, Timestamp } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 
+// Helper to check if code is running in browser (prevents SSR/build-time Firebase calls)
+const isBrowser = typeof window !== 'undefined'
+
 export class PromoterService {
   static async getPromoters() {
+    // Skip during SSR/build to avoid Firebase permission errors
+    if (!isBrowser) return []
+
     try {
       const promotersRef = collection(db, 'promoters')
       const snapshot = await getDocs(promotersRef)
-      
+
       return snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -18,11 +24,14 @@ export class PromoterService {
   }
 
   static async getActivePromoters() {
+    // Skip during SSR/build to avoid Firebase permission errors
+    if (!isBrowser) return []
+
     try {
       const promotersRef = collection(db, 'promoters')
       const q = query(promotersRef, where('active', '==', true))
       const snapshot = await getDocs(q)
-      
+
       return snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()

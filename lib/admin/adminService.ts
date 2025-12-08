@@ -1,18 +1,21 @@
-import { 
-  collection, 
-  addDoc, 
-  getDocs, 
-  doc, 
-  getDoc, 
-  updateDoc, 
-  deleteDoc, 
-  query, 
-  where, 
-  orderBy, 
+import {
+  collection,
+  addDoc,
+  getDocs,
+  doc,
+  getDoc,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  orderBy,
   limit,
-  Timestamp 
+  Timestamp
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+
+// Helper to check if code is running in browser (prevents SSR/build-time Firebase calls)
+const isBrowser = typeof window !== 'undefined'
 
 export class AdminService {
   
@@ -687,6 +690,9 @@ export class AdminService {
 
   // ============ PROMOTERS ============
   static async getPromoters() {
+    // Skip during SSR/build to avoid Firebase permission errors
+    if (!isBrowser) return []
+
     try {
       const promotersRef = collection(db, 'promoters')
       const snapshot = await getDocs(promotersRef)
