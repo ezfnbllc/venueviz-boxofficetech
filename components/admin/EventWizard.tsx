@@ -86,24 +86,25 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
     const initializeWizard = async () => {
       console.log('[WIZARD INIT] Starting initialization')
       setLoading(true)
-      
+
       try {
         const user = auth.currentUser
+        console.log('[WIZARD INIT] Current user:', user?.email || 'none')
         if (user) {
           const idTokenResult = await user.getIdTokenResult()
           setUserRole(idTokenResult.claims.role || 'admin')
         }
-        
+
         if (eventId) {
           if (loadedEventRef.current === eventId) {
             console.log('[WIZARD INIT] Event already loaded:', eventId)
             setLoading(false)
             return
           }
-          
+
           console.log('[WIZARD INIT] Loading event:', eventId)
           const event = await AdminService.getEvent(eventId)
-          
+
           if (event) {
             console.log('[WIZARD INIT] Event data retrieved:', event.name)
             loadedEventRef.current = eventId
@@ -124,10 +125,11 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
         alert('Error loading event')
         onClose()
       } finally {
+        console.log('[WIZARD INIT] Setting loading to false')
         setLoading(false)
       }
     }
-    
+
     initializeWizard()
   }, [eventId])
   
@@ -265,6 +267,7 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
   }
   
   if (loading) {
+    console.log('[WIZARD RENDER] Showing loading spinner')
     return (
       <div className="fixed inset-0 bg-gray-950 z-50 flex items-center justify-center">
         <div className="bg-gray-900 rounded-xl p-8 border border-gray-800 shadow-xl">
@@ -276,7 +279,9 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
       </div>
     )
   }
-  
+
+  console.log('[WIZARD RENDER] Rendering wizard content, currentStep:', currentStep, 'formData:', formData?.basics?.name || 'empty')
+
   const steps = [
     { number: 1, title: 'Basics', icon: '📝', description: 'Event details' },
     { number: 2, title: 'Venue', icon: '🏛️', description: 'Location setup' },
@@ -386,15 +391,18 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
         <div className="flex-1 overflow-y-auto bg-gray-950 p-6">
           <div className="max-w-5xl mx-auto">
             <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-              {currentStep === 1 && <Step1Basics data={formData} updateData={updateData} />}
-              {currentStep === 2 && <Step2Venue data={formData} updateData={updateData} />}
-              {currentStep === 3 && <Step3Schedule data={formData} updateData={updateData} />}
-              {currentStep === 4 && <Step4Pricing data={formData} updateData={updateData} />}
-              {currentStep === 5 && <Step5Promoter data={formData} updateData={updateData} />}
-              {currentStep === 6 && <Step6Promotions data={formData} updateData={updateData} />}
-              {currentStep === 7 && <Step7Sales data={formData} updateData={updateData} />}
-              {currentStep === 8 && <Step8Communications data={formData} updateData={updateData} />}
-              {currentStep === 9 && <Step9Review data={formData} updateData={updateData} />}
+              {currentStep === 1 && <Step1Basics />}
+              {currentStep === 2 && <Step2Venue />}
+              {currentStep === 3 && <Step3Schedule />}
+              {currentStep === 4 && <Step4Pricing />}
+              {currentStep === 5 && <Step5Promoter />}
+              {currentStep === 6 && <Step6Promotions />}
+              {currentStep === 7 && <Step7Sales />}
+              {currentStep === 8 && <Step8Communications />}
+              {currentStep === 9 && <Step9Review />}
+              {(currentStep < 1 || currentStep > 9) && (
+                <div className="text-red-400 p-4">Invalid step: {currentStep}</div>
+              )}
             </div>
           </div>
         </div>
