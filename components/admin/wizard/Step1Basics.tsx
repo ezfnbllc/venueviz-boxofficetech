@@ -161,8 +161,6 @@ export default function Step1Basics() {
     })
   }
 
-  console.log('[Step1Basics] Rendering, formData.basics:', formData.basics)
-
   return (
     <div className="space-y-6">
       {/* Header with AI Tools */}

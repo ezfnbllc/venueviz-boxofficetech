@@ -3,8 +3,6 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useEventWizardStore } from '@/lib/store/eventWizardStore'
 import { AdminService } from '@/lib/admin/adminService'
-import { Timestamp, doc, getDoc } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
 import { auth } from '@/lib/firebase'
 
 import Step1Basics from './wizard/Step1Basics'
@@ -18,27 +16,6 @@ import Step8Communications from './wizard/Step8Communications'
 import Step9Review from './wizard/Step9Review'
 
 export default function EventWizard({ onClose, eventId }: { onClose: () => void, eventId?: string }) {
-
-  
-  // Load event data if editing
-  useEffect(() => {
-    const loadEventData = async () => {
-      if (eventId) {
-        try {
-          console.log('Loading event data for:', eventId)
-          const eventDoc = await getDoc(doc(db, 'events', eventId))
-          if (eventDoc.exists()) {
-            const eventData = eventDoc.data()
-            console.log('Loaded event data:', eventData)
-            // Data is already loaded via loadEventData
-          }
-        } catch (error) {
-          console.error('Error loading event:', error)
-        }
-      }
-    }
-    loadEventData()
-  }, [eventId])
   const router = useRouter()
   const {
     currentStep,
@@ -84,12 +61,10 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
   
   useEffect(() => {
     const initializeWizard = async () => {
-      console.log('[WIZARD INIT] Starting initialization')
       setLoading(true)
 
       try {
         const user = auth.currentUser
-        console.log('[WIZARD INIT] Current user:', user?.email || 'none')
         if (user) {
           const idTokenResult = await user.getIdTokenResult()
           setUserRole(idTokenResult.claims.role || 'admin')
@@ -97,35 +72,29 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
 
         if (eventId) {
           if (loadedEventRef.current === eventId) {
-            console.log('[WIZARD INIT] Event already loaded:', eventId)
             setLoading(false)
             return
           }
 
-          console.log('[WIZARD INIT] Loading event:', eventId)
           const event = await AdminService.getEvent(eventId)
 
           if (event) {
-            console.log('[WIZARD INIT] Event data retrieved:', event.name)
             loadedEventRef.current = eventId
             loadEventData({ ...event, id: eventId })
             setEventId(eventId)
           } else {
-            console.error('[WIZARD INIT] Event not found:', eventId)
             alert('Event not found')
             onClose()
           }
         } else {
-          console.log('[WIZARD INIT] New event mode')
           loadedEventRef.current = null
           resetWizard()
         }
       } catch (error) {
-        console.error('[WIZARD INIT] Error:', error)
+        console.error('Error loading event:', error)
         alert('Error loading event')
         onClose()
       } finally {
-        console.log('[WIZARD INIT] Setting loading to false')
         setLoading(false)
       }
     }
@@ -267,7 +236,6 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
   }
   
   if (loading) {
-    console.log('[WIZARD RENDER] Showing loading spinner')
     return (
       <div className="fixed inset-0 bg-gray-950 z-50 flex items-center justify-center">
         <div className="bg-gray-900 rounded-xl p-8 border border-gray-800 shadow-xl">
@@ -279,8 +247,6 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
       </div>
     )
   }
-
-  console.log('[WIZARD RENDER] Rendering wizard content, currentStep:', currentStep, 'formData:', formData?.basics?.name || 'empty')
 
   const steps = [
     { number: 1, title: 'Basics', icon: '📝', description: 'Event details' },
