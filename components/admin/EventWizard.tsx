@@ -41,11 +41,12 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
   }, [eventId])
   const router = useRouter()
   const {
-currentStep,
+    currentStep,
     setCurrentStep,
     nextStep,
     prevStep,
     formData,
+    updateFormData,
     validation,
     setValidation,
     resetWizard,
