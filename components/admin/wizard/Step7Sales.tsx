@@ -1,16 +1,55 @@
 'use client'
+import { useEffect, useRef } from 'react'
 import { useEventWizardStore } from '@/lib/store/eventWizardStore'
 
 export default function Step7Sales() {
   const { formData, updateFormData } = useEventWizardStore()
-  
+  const initializedRef = useRef(false)
+
+  // Auto-set default sales dates
+  useEffect(() => {
+    if (initializedRef.current) return
+    if (formData.sales?.salesStartDate && formData.sales?.salesEndDate) return
+
+    initializedRef.current = true
+
+    // Get current date/time for sales start
+    const now = new Date()
+    const salesStartDate = now.toISOString().slice(0, 16) // Format: YYYY-MM-DDTHH:mm
+
+    // Get event date/time for sales end
+    let salesEndDate = ''
+    const firstPerformance = formData.schedule?.performances?.[0]
+    if (firstPerformance?.date) {
+      const eventDate = firstPerformance.date
+      const eventTime = firstPerformance.startTime || '19:00'
+      salesEndDate = `${eventDate}T${eventTime}`
+    }
+
+    updateFormData('sales', {
+      ...formData.sales,
+      salesStartDate: formData.sales?.salesStartDate || salesStartDate,
+      salesEndDate: formData.sales?.salesEndDate || salesEndDate
+    })
+  }, [formData.schedule?.performances, formData.sales])
+
   const updateSalesField = (field: string, value: any) => {
     updateFormData('sales', {
       ...formData.sales,
       [field]: value
     })
   }
-  
+
+  // Auto-set sales end to event date button
+  const autoSetSalesEnd = () => {
+    const firstPerformance = formData.schedule?.performances?.[0]
+    if (firstPerformance?.date) {
+      const eventDate = firstPerformance.date
+      const eventTime = firstPerformance.startTime || '19:00'
+      updateSalesField('salesEndDate', `${eventDate}T${eventTime}`)
+    }
+  }
+
   return (
     <div>
       <h3 className="text-xl font-bold mb-4">Sales Configuration</h3>
@@ -32,9 +71,18 @@ export default function Step7Sales() {
           </div>
           
           <div>
-            <label className="block text-sm font-medium mb-2">
-              Sales End Date
-            </label>
+            <div className="flex justify-between items-center mb-2">
+              <label className="block text-sm font-medium">
+                Sales End Date
+              </label>
+              <button
+                type="button"
+                onClick={autoSetSalesEnd}
+                className="text-xs px-2 py-1 bg-purple-600/30 text-purple-300 rounded hover:bg-purple-600/50"
+              >
+                Use event start
+              </button>
+            </div>
             <input
               type="datetime-local"
               value={formData.sales?.salesEndDate || ''}

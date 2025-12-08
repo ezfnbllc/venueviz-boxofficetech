@@ -1,10 +1,63 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useEventWizardStore } from '@/lib/store/eventWizardStore'
+
+// Helper to calculate time offset
+function addHoursToTime(time: string, hours: number): string {
+  if (!time) return ''
+  const [h, m] = time.split(':').map(Number)
+  let newHour = h + hours
+  if (newHour >= 24) newHour = newHour - 24
+  if (newHour < 0) newHour = newHour + 24
+  return `${newHour.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
+}
 
 export default function Step3Schedule() {
   const { formData, updateFormData } = useEventWizardStore()
-  
+  const initializedRef = useRef(false)
+
+  // Auto-populate schedule from scraped data (from basics)
+  useEffect(() => {
+    if (initializedRef.current) return
+
+    const scrapedDate = (formData.basics as any)?.scrapedDate || (formData.basics as any)?.date
+    const scrapedTime = (formData.basics as any)?.scrapedTime || (formData.basics as any)?.time
+
+    // Check if we have scraped data and no performances yet
+    if ((scrapedDate || scrapedTime) && (!formData.schedule?.performances?.length || formData.schedule.performances.length === 0)) {
+      initializedRef.current = true
+
+      // Calculate default times
+      const startTime = scrapedTime || '20:00'  // Default 8 PM
+      const doorsOpen = addHoursToTime(startTime, -2)  // 2 hours before
+      const endTime = addHoursToTime(startTime, 3)     // 3 hours after
+
+      updateFormData('schedule', {
+        performances: [{
+          date: scrapedDate || '',
+          doorsOpen,
+          startTime,
+          endTime,
+          pricingModifier: 0,
+          capacity: 0
+        }]
+      })
+    } else if (!formData.schedule?.performances?.length) {
+      // Create empty first performance if none exists
+      initializedRef.current = true
+      updateFormData('schedule', {
+        performances: [{
+          date: '',
+          doorsOpen: '',
+          startTime: '',
+          endTime: '',
+          pricingModifier: 0,
+          capacity: 0
+        }]
+      })
+    }
+  }, [formData.basics, formData.schedule?.performances])
+
   const addPerformance = () => {
     updateFormData('schedule', {
       performances: [
@@ -20,25 +73,55 @@ export default function Step3Schedule() {
       ]
     })
   }
-  
+
   const updatePerformance = (index: number, field: string, value: any) => {
     const performances = [...(formData.schedule?.performances || [])]
     performances[index] = { ...performances[index], [field]: value }
+
+    // Auto-calculate doors open and end time when start time changes
+    if (field === 'startTime' && value) {
+      const doorsOpen = performances[index].doorsOpen
+      const endTime = performances[index].endTime
+
+      // Only auto-set if not already set
+      if (!doorsOpen) {
+        performances[index].doorsOpen = addHoursToTime(value, -2)
+      }
+      if (!endTime) {
+        performances[index].endTime = addHoursToTime(value, 3)
+      }
+    }
+
     updateFormData('schedule', { performances })
   }
-  
+
   const removePerformance = (index: number) => {
     updateFormData('schedule', {
       performances: formData.schedule?.performances?.filter((_, i) => i !== index)
     })
   }
-  
+
+  // Auto-set default times button
+  const autoSetTimes = (index: number) => {
+    const performances = [...(formData.schedule?.performances || [])]
+    const startTime = performances[index].startTime || '20:00'
+
+    performances[index] = {
+      ...performances[index],
+      startTime,
+      doorsOpen: addHoursToTime(startTime, -2),
+      endTime: addHoursToTime(startTime, 3)
+    }
+
+    updateFormData('schedule', { performances })
+  }
+
   return (
     <div className="space-y-6">
       <div>
         <label className="block text-sm font-medium mb-2">Timezone</label>
         <select
-          value={formData.schedule.timezone}
+          value={formData.schedule?.timezone || 'America/Chicago'}
           onChange={(e) => updateFormData('schedule', { timezone: e.target.value })}
           className="w-full px-4 py-2 bg-white/10 rounded-lg"
         >
@@ -48,19 +131,19 @@ export default function Step3Schedule() {
           <option value="America/Denver">Mountain Time (Denver)</option>
         </select>
       </div>
-      
+
       <div>
         <div className="flex justify-between items-center mb-3">
           <label className="text-sm font-medium">Performance Dates</label>
           <button
             type="button"
             onClick={addPerformance}
-            className="px-3 py-1 bg-purple-600 rounded text-sm"
+            className="px-3 py-1 bg-purple-600 rounded text-sm hover:bg-purple-700"
           >
             + Add Date
           </button>
         </div>
-        
+
         <div className="space-y-4">
           {formData.schedule?.performances?.map((perf, index) => (
             <div key={index} className="bg-black/20 rounded-lg p-4">
@@ -73,17 +156,26 @@ export default function Step3Schedule() {
                     </span>
                   )}
                 </h4>
-                {(formData.schedule?.performances?.length || 0) > 1 && (
+                <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => removePerformance(index)}
-                    className="text-red-400 hover:text-red-300"
+                    onClick={() => autoSetTimes(index)}
+                    className="text-xs px-2 py-1 bg-purple-600/30 text-purple-300 rounded hover:bg-purple-600/50"
                   >
-                    Remove
+                    Auto-set times
                   </button>
-                )}
+                  {(formData.schedule?.performances?.length || 0) > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removePerformance(index)}
+                      className="text-red-400 hover:text-red-300 text-sm"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
               </div>
-              
+
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs mb-1">Date</label>
@@ -94,17 +186,7 @@ export default function Step3Schedule() {
                     className="w-full px-3 py-2 bg-white/10 rounded"
                   />
                 </div>
-                
-                <div>
-                  <label className="block text-xs mb-1">Doors Open</label>
-                  <input
-                    type="time"
-                    value={perf.doorsOpen}
-                    onChange={(e) => updatePerformance(index, 'doorsOpen', e.target.value)}
-                    className="w-full px-3 py-2 bg-white/10 rounded"
-                  />
-                </div>
-                
+
                 <div>
                   <label className="block text-xs mb-1">Start Time</label>
                   <input
@@ -114,9 +196,25 @@ export default function Step3Schedule() {
                     className="w-full px-3 py-2 bg-white/10 rounded"
                   />
                 </div>
-                
+
                 <div>
-                  <label className="block text-xs mb-1">End Time</label>
+                  <label className="block text-xs mb-1">
+                    Doors Open
+                    <span className="text-gray-500 ml-1">(2hrs before default)</span>
+                  </label>
+                  <input
+                    type="time"
+                    value={perf.doorsOpen}
+                    onChange={(e) => updatePerformance(index, 'doorsOpen', e.target.value)}
+                    className="w-full px-3 py-2 bg-white/10 rounded"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs mb-1">
+                    End Time
+                    <span className="text-gray-500 ml-1">(3hrs after default)</span>
+                  </label>
                   <input
                     type="time"
                     value={perf.endTime}
@@ -124,7 +222,7 @@ export default function Step3Schedule() {
                     className="w-full px-3 py-2 bg-white/10 rounded"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-xs mb-1">Price Modifier (%)</label>
                   <input
@@ -138,7 +236,7 @@ export default function Step3Schedule() {
                     Adjust pricing for this date (e.g., -10 for matinee)
                   </p>
                 </div>
-                
+
                 <div>
                   <label className="block text-xs mb-1">Capacity Override</label>
                   <input

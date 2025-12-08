@@ -54,6 +54,7 @@ export default function Step1Basics() {
   }
 
   const handleURLImport = (data: AIExtractedData) => {
+    // Save to basics (including scraped date/time for Step3 to pick up)
     updateFormData('basics', {
       name: data.name,
       description: data.description,
@@ -61,9 +62,14 @@ export default function Step1Basics() {
       type: data.category,
       tags: data.tags,
       performers: data.performers,
-      images: data.images || formData.basics?.images
+      images: data.images || formData.basics?.images,
+      // Save scraped date/time for Step3 Schedule
+      scrapedDate: data.date,
+      scrapedTime: data.time,
+      // Save venue info for Step2
+      scrapedVenue: data.venue
     })
-    
+
     setAiConfidence(data.confidence)
     setTimeout(() => setAiConfidence(null), 10000)
   }
