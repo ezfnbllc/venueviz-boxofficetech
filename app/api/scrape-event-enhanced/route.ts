@@ -92,13 +92,31 @@ export async function POST(req: NextRequest) {
       const pathParts = url.split('/')
       const fullSlug = pathParts[pathParts.length - 1] || ''
       const [eventPart, locationPart] = fullSlug.split('_event-in_')
-      
+
+      // Extract year from event name (e.g., "revolution-2026-1techno" -> 2026)
+      const yearMatch = eventPart.match(/20\d{2}/)
+      const eventYear = yearMatch ? yearMatch[0] : new Date().getFullYear().toString()
+
+      // Determine if it's a New Year event
+      const isNewYear = eventPart.toLowerCase().includes('new-year') ||
+                        eventPart.toLowerCase().includes('newyear') ||
+                        eventPart.toLowerCase().includes('nye')
+
+      // Set appropriate date based on event type
+      let eventDate = `${eventYear}-12-31` // Default to NYE for new year events
+      if (!isNewYear) {
+        // For non-NYE events, use a generic future date
+        eventDate = `${eventYear}-01-15`
+      }
+
       const eventName = eventPart
         .replace(/-/g, ' ')
+        .replace(/\d+techno/gi, 'Techno') // Clean up patterns like "1techno"
         .split(' ')
         .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
         .join(' ')
-      
+        .trim()
+
       let city = 'Dallas'
       let state = 'TX'
       if (locationPart) {
@@ -108,12 +126,21 @@ export async function POST(req: NextRequest) {
           city = locParts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ')
         }
       }
-      
+
+      // Generate a more specific description based on event name
+      const eventType = eventName.toLowerCase().includes('bollywood') ? 'Bollywood' :
+                       eventName.toLowerCase().includes('comedy') ? 'comedy' :
+                       eventName.toLowerCase().includes('classical') ? 'classical music' : 'cultural'
+
+      const description = isNewYear
+        ? `Ring in ${eventYear} with an unforgettable ${eventType} celebration! Join us for a spectacular New Year's Eve party featuring live performances, amazing music, and festive entertainment. Dance the night away and welcome the new year in style!`
+        : `Experience an incredible ${eventType} event! Join us for a spectacular evening of live performances, amazing music, and unforgettable entertainment. This event celebrates the best of ${eventType} culture.`
+
       eventData = {
         title: eventName || 'Cultural Event',
-        description: `Join us for a spectacular cultural event featuring live performances.`,
-        date: '2025-12-15',
-        time: '18:30',
+        description,
+        date: eventDate,
+        time: isNewYear ? '21:00' : '18:30',
         venueName: city + ' Convention Center',
         venueAddress: '456 Convention Plaza',
         venueCity: city,
@@ -124,8 +151,8 @@ export async function POST(req: NextRequest) {
           { level: 'Premium', price: 100, serviceFee: 10, tax: 8, sections: [] },
           { level: 'General', price: 75, serviceFee: 7.5, tax: 8, sections: [] }
         ],
-        performers: [eventName.split(' ').slice(0, 2).join(' ')],
-        type: 'concert',
+        performers: [eventName.split(' ').slice(0, 3).join(' ')],
+        type: eventType === 'comedy' ? 'comedy' : 'concert',
         capacity: 5000
       }
     } else if (domain.includes('fandango.com')) {

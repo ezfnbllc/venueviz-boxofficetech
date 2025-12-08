@@ -50,7 +50,7 @@ export class EventAI {
       const response = await fetch('/api/generate-event', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: eventName })
+        body: JSON.stringify({ eventName })
       })
 
       if (!response.ok) {
@@ -104,39 +104,47 @@ export class EventAI {
         }
 
         const basicData = await basicResponse.json()
-        return {
-          name: basicData.name || '',
-          description: basicData.description || '',
-          category: basicData.category || 'other',
-          confidence: basicData.confidence || 0.5,
-          tags: basicData.tags || [],
-          performers: basicData.performers || [],
-          venue: basicData.venue,
-          date: basicData.date,
-          time: basicData.time,
-          pricing: basicData.pricing,
-          images: basicData.images
-        }
+        return EventAI.mapScrapedData(basicData)
       }
 
       const data = await response.json()
-      return {
-        name: data.name || '',
-        description: data.description || '',
-        category: data.category || 'other',
-        confidence: data.confidence || 0.8,
-        tags: data.tags || [],
-        performers: data.performers || [],
-        venue: data.venue,
-        date: data.date,
-        time: data.time,
-        pricing: data.pricing,
-        promotions: data.promotions,
-        images: data.images
-      }
+      return EventAI.mapScrapedData(data)
     } catch (error) {
       console.error('URL extraction error:', error)
       throw new Error('Unable to extract event data from the provided URL')
+    }
+  }
+
+  /**
+   * Map scraped API response to AIExtractedData format
+   */
+  private static mapScrapedData(data: any): AIExtractedData {
+    // Build venue object from flat fields
+    const venue = (data.venueName || data.venueAddress) ? {
+      name: data.venueName || '',
+      address: [data.venueAddress, data.venueCity, data.venueState].filter(Boolean).join(', ')
+    } : data.venue
+
+    // Map pricing array if it exists
+    const pricing = data.pricing?.map((p: any) => ({
+      name: p.level || p.name || 'General',
+      price: p.price || 0,
+      description: p.description || ''
+    }))
+
+    return {
+      name: data.title || data.name || '',
+      description: data.description || '',
+      category: data.type || data.category || 'other',
+      confidence: data.confidence || 0.8,
+      tags: data.tags || [],
+      performers: data.performers || [],
+      venue,
+      date: data.date || '',
+      time: data.time || '',
+      pricing,
+      promotions: data.promotions,
+      images: data.images || (data.imageUrls?.length ? { gallery: data.imageUrls } : undefined)
     }
   }
 
@@ -158,12 +166,11 @@ export class EventAI {
         reader.readAsDataURL(imageFile)
       })
 
-      const response = await fetch('/api/analyze-seating-chart', {
+      const response = await fetch('/api/analyze-poster', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           image: base64,
-          type: 'event-poster',
           filename: imageFile.name
         })
       })
