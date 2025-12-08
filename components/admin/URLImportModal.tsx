@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { EventAI, AIExtractedData } from '@/lib/ai/eventAI'
+import { StorageService } from '@/lib/storage/storageService'
 import AILoadingState from './AILoadingState'
 import ConfidenceBadge from './ConfidenceBadge'
 
@@ -12,8 +13,10 @@ interface URLImportModalProps {
 export default function URLImportModal({ onClose, onImport }: URLImportModalProps) {
   const [url, setUrl] = useState('')
   const [loading, setLoading] = useState(false)
+  const [uploadingImages, setUploadingImages] = useState(false)
   const [error, setError] = useState('')
   const [extractedData, setExtractedData] = useState<AIExtractedData | null>(null)
+  const [imageStatus, setImageStatus] = useState<string>('')
 
   const handleExtract = async () => {
     if (!url.trim()) {
@@ -39,12 +42,62 @@ export default function URLImportModal({ onClose, onImport }: URLImportModalProp
     }
   }
 
-  const handleApply = () => {
-    if (extractedData) {
-      onImport(extractedData)
-      onClose()
+  const handleApply = async () => {
+    if (!extractedData) return
+
+    // Check if there are image URLs to import
+    const imageUrls = extractedData.images?.gallery || []
+    const coverUrl = extractedData.images?.cover
+
+    // Collect all image URLs
+    const allImageUrls: string[] = []
+    if (coverUrl && coverUrl.startsWith('http')) allImageUrls.push(coverUrl)
+    imageUrls.forEach(url => {
+      if (url && url.startsWith('http') && !allImageUrls.includes(url)) {
+        allImageUrls.push(url)
+      }
+    })
+
+    let finalData = { ...extractedData }
+
+    // If there are images to import, upload them
+    if (allImageUrls.length > 0) {
+      setUploadingImages(true)
+      setImageStatus(`Importing ${allImageUrls.length} image(s)...`)
+
+      try {
+        const eventName = extractedData.name || 'imported-event'
+        const uploadedUrls = await StorageService.uploadMultipleFromUrls(allImageUrls, eventName)
+
+        if (uploadedUrls.length > 0) {
+          // Update the data with uploaded image URLs
+          finalData = {
+            ...extractedData,
+            images: {
+              cover: uploadedUrls[0] || '', // First image as cover
+              thumbnail: uploadedUrls[0] || '', // Same as cover for now
+              gallery: uploadedUrls.slice(1) // Rest as gallery
+            }
+          }
+          setImageStatus(`✓ Imported ${uploadedUrls.length} image(s)`)
+        } else {
+          setImageStatus('⚠ Could not import images')
+        }
+      } catch (err) {
+        console.error('Error uploading images:', err)
+        setImageStatus('⚠ Image import failed')
+      }
+
+      setUploadingImages(false)
     }
+
+    onImport(finalData)
+    onClose()
   }
+
+  // Check if there are importable images
+  const hasImages = extractedData?.images?.cover ||
+                   (extractedData?.images?.gallery && extractedData.images.gallery.length > 0)
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -52,7 +105,7 @@ export default function URLImportModal({ onClose, onImport }: URLImportModalProp
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b border-gray-800">
           <div>
-            <h3 className="text-xl font-bold text-white">📋 Import from URL</h3>
+            <h3 className="text-xl font-bold text-white">Import from URL</h3>
             <p className="text-sm text-gray-400 mt-1">
               Paste a URL from Sulekha, StubHub, Fandango, TicketMaster, or similar
             </p>
@@ -79,8 +132,8 @@ export default function URLImportModal({ onClose, onImport }: URLImportModalProp
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
                   placeholder="https://www.stubhub.com/event/..."
-                  className="w-full px-4 py-3 bg-gray-850 border border-gray-800 rounded-lg 
-                           focus:bg-gray-800 focus:border-purple-500 focus:outline-none 
+                  className="w-full px-4 py-3 bg-gray-850 border border-gray-800 rounded-lg
+                           focus:bg-gray-800 focus:border-purple-500 focus:outline-none
                            text-white placeholder-gray-500"
                   disabled={loading}
                   onKeyPress={(e) => e.key === 'Enter' && handleExtract()}
@@ -111,11 +164,11 @@ export default function URLImportModal({ onClose, onImport }: URLImportModalProp
               <button
                 onClick={handleExtract}
                 disabled={loading || !url.trim()}
-                className="w-full px-6 py-3 bg-purple-600 hover:bg-purple-700 
-                         disabled:opacity-50 disabled:cursor-not-allowed 
+                className="w-full px-6 py-3 bg-purple-600 hover:bg-purple-700
+                         disabled:opacity-50 disabled:cursor-not-allowed
                          rounded-lg font-medium transition-colors text-white"
               >
-                {loading ? '🔄 Extracting...' : '🚀 Extract Event Data'}
+                {loading ? 'Extracting...' : 'Extract Event Data'}
               </button>
             </>
           ) : (
@@ -150,6 +203,13 @@ export default function URLImportModal({ onClose, onImport }: URLImportModalProp
                         <p className="text-white">{extractedData.date}</p>
                       </div>
                     )}
+
+                    {extractedData.time && (
+                      <div className="p-3 bg-gray-850 rounded-lg">
+                        <p className="text-xs text-gray-400 mb-1">Time</p>
+                        <p className="text-white">{extractedData.time}</p>
+                      </div>
+                    )}
                   </div>
 
                   {extractedData.performers && extractedData.performers.length > 0 && (
@@ -174,24 +234,55 @@ export default function URLImportModal({ onClose, onImport }: URLImportModalProp
                       )}
                     </div>
                   )}
+
+                  {/* Images Section */}
+                  {hasImages && (
+                    <div className="p-3 bg-gray-850 rounded-lg">
+                      <p className="text-xs text-gray-400 mb-2">Images Found</p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-green-400 text-sm">✓</span>
+                        <span className="text-white text-sm">
+                          {(extractedData.images?.gallery?.length || 0) +
+                            (extractedData.images?.cover ? 1 : 0)} image(s) will be imported
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Image upload status */}
+                  {imageStatus && (
+                    <div className="p-3 bg-blue-600/20 rounded-lg">
+                      <p className="text-blue-400 text-sm">{imageStatus}</p>
+                    </div>
+                  )}
                 </div>
               </div>
+
+              {/* Uploading indicator */}
+              {uploadingImages && (
+                <AILoadingState message="Importing images to your storage..." />
+              )}
 
               {/* Action Buttons */}
               <div className="flex gap-3">
                 <button
-                  onClick={() => setExtractedData(null)}
-                  className="flex-1 px-6 py-3 bg-gray-700 hover:bg-gray-600 
-                           rounded-lg font-medium transition-colors text-white"
+                  onClick={() => {
+                    setExtractedData(null)
+                    setImageStatus('')
+                  }}
+                  disabled={uploadingImages}
+                  className="flex-1 px-6 py-3 bg-gray-700 hover:bg-gray-600
+                           disabled:opacity-50 rounded-lg font-medium transition-colors text-white"
                 >
                   ← Try Another URL
                 </button>
                 <button
                   onClick={handleApply}
-                  className="flex-1 px-6 py-3 bg-purple-600 hover:bg-purple-700 
-                           rounded-lg font-medium transition-colors text-white"
+                  disabled={uploadingImages}
+                  className="flex-1 px-6 py-3 bg-purple-600 hover:bg-purple-700
+                           disabled:opacity-50 rounded-lg font-medium transition-colors text-white"
                 >
-                  Apply to Form →
+                  {uploadingImages ? 'Importing...' : hasImages ? 'Apply & Import Images →' : 'Apply to Form →'}
                 </button>
               </div>
             </>
