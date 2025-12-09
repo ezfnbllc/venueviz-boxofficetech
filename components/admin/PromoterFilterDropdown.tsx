@@ -68,8 +68,8 @@ export default function PromoterFilterDropdown() {
                 }}
                 className={`w-full text-left px-3 py-2.5 rounded-xl transition-all ${
                   selectedPromoterId === 'all'
-                    ? 'glass-btn-accent text-white'
-                    : 'glass-btn text-slate-700 dark:text-slate-300'
+                    ? 'glass-btn-accent text-blue-700 dark:text-white'
+                    : 'glass-btn text-slate-700 dark:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-white/10'
                 }`}
               >
                 🌐 All Promoters
@@ -77,7 +77,7 @@ export default function PromoterFilterDropdown() {
 
               {promoters.length > 0 && (
                 <>
-                  <div className="border-t border-white/10 my-2"></div>
+                  <div className="border-t border-slate-200 dark:border-white/10 my-2"></div>
                   {promoters.map((promoter) => (
                     <button
                       key={promoter.id}
@@ -87,8 +87,8 @@ export default function PromoterFilterDropdown() {
                       }}
                       className={`w-full text-left px-3 py-2.5 rounded-xl transition-all flex items-center gap-3 ${
                         selectedPromoterId === promoter.id
-                          ? 'glass-btn-accent text-white'
-                          : 'glass-btn text-slate-700 dark:text-slate-300'
+                          ? 'glass-btn-accent text-blue-700 dark:text-white'
+                          : 'glass-btn text-slate-700 dark:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-white/10'
                       }`}
                     >
                       {promoter.logo ? (
@@ -101,13 +101,13 @@ export default function PromoterFilterDropdown() {
                       <div className="flex-1 min-w-0">
                         <p className="truncate font-medium">{promoter.name}</p>
                         {promoter.company && (
-                          <p className={`text-xs truncate ${selectedPromoterId === promoter.id ? 'text-white/70' : 'text-slate-500 dark:text-slate-400'}`}>{promoter.company}</p>
+                          <p className={`text-xs truncate ${selectedPromoterId === promoter.id ? 'text-blue-600 dark:text-white/70' : 'text-slate-500 dark:text-slate-400'}`}>{promoter.company}</p>
                         )}
                       </div>
                       {promoter.brandingType === 'advanced' && (
                         <span className={`text-xs px-2 py-0.5 rounded-lg font-medium ${
                           selectedPromoterId === promoter.id
-                            ? 'bg-white/20 text-white'
+                            ? 'bg-blue-100 dark:bg-white/20 text-blue-700 dark:text-white border border-blue-300 dark:border-transparent'
                             : 'bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/30'
                         }`}>
                           Premium

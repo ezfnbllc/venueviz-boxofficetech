@@ -112,8 +112,8 @@ export default function AdminLayout({
                       href={item.href}
                       className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
                         isActive
-                          ? 'glass-btn-accent text-white shadow-lg shadow-blue-500/25'
-                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white glass-btn'
+                          ? 'glass-btn-accent text-blue-700 dark:text-white shadow-lg shadow-blue-500/25'
+                          : 'text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/10 glass-btn'
                       }`}
                     >
                       <span className="text-lg">{item.icon}</span>
@@ -129,7 +129,7 @@ export default function AdminLayout({
               {/* Theme Toggle */}
               <button
                 onClick={toggleTheme}
-                className="glass-btn p-2.5 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                className="glass-btn p-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/10"
                 title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
               >
                 {theme === 'dark' ? (
@@ -158,8 +158,8 @@ export default function AdminLayout({
 
                 {/* User Dropdown */}
                 {userMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-64 glass-card-elevated rounded-xl overflow-hidden">
-                    <div className="p-4 border-b border-white/10">
+                  <div className="absolute right-0 mt-2 w-64 glass-card-elevated rounded-xl overflow-hidden shadow-lg">
+                    <div className="p-4 border-b border-slate-200 dark:border-white/10">
                       <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{user.email}</p>
                       {isAdmin && (
                         <span className="inline-block mt-1 px-2.5 py-1 bg-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-medium rounded-lg border border-blue-500/30">
