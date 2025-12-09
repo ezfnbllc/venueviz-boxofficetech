@@ -45,13 +45,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="flex items-center justify-between h-16">
             {/* Logo and Brand */}
             <div className="flex items-center">
-              <img 
-                src="https://firebasestorage.googleapis.com/v0/b/venueviz.appspot.com/o/BOLogo.png?alt=media" 
-                alt="VenueViz" 
-                className="h-10 w-auto mr-4"
+              <img
+                src="https://firebasestorage.googleapis.com/v0/b/venueviz.firebasestorage.app/o/BOLogo.png?alt=media"
+                alt="BoxOfficeTech"
+                className="h-10 w-auto mr-4 rounded-lg"
               />
-              <span className="text-xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-                Admin Panel
+              <span className="text-xl font-bold bg-gradient-to-r from-blue-400 to-blue-600 bg-clip-text text-transparent">
+                BoxOfficeTech Admin
               </span>
             </div>
             

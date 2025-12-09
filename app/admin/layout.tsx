@@ -91,12 +91,14 @@ export default function AdminLayout({
             {/* Left - Logo & Nav */}
             <div className="flex items-center gap-8">
               <Link href="/admin" className="flex items-center gap-3 group">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30 group-hover:scale-105 transition-transform">
-                  <span className="text-2xl">🏢</span>
-                </div>
+                <img
+                  src="https://firebasestorage.googleapis.com/v0/b/venueviz.firebasestorage.app/o/BOLogo.png?alt=media"
+                  alt="BoxOfficeTech"
+                  className="w-10 h-10 rounded-xl object-contain group-hover:scale-105 transition-transform"
+                />
                 <div>
                   <h1 className="text-xl font-bold text-blue-600 dark:text-blue-400">
-                    VenueViz
+                    BoxOfficeTech
                   </h1>
                   <p className="text-xs text-slate-500 dark:text-slate-400">Admin</p>
                 </div>

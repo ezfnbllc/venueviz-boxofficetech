@@ -854,7 +854,7 @@ export default function CustomersManagement() {
               <div className="flex justify-end gap-3">
                 <button
                   onClick={() => {
-                    const subject = `Regarding your orders at VenueViz`
+                    const subject = `Regarding your orders at BoxOfficeTech`
                     const body = `Dear ${selectedCustomer.name || 'Customer'},\n\n`
                     window.location.href = `mailto:${selectedCustomer.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
                   }}
