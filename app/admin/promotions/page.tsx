@@ -202,33 +202,33 @@ export default function PromotionsPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
-        <div className="bg-white dark:bg-slate-800 backdrop-blur-xl rounded-xl p-4">
-          <div className="text-slate-500 dark:text-slate-400 text-xs mb-1">Master Promos</div>
-          <div className="text-2xl font-bold">{stats.totalMaster}</div>
-          <div className="text-xs text-green-400">{stats.activeMaster} active</div>
+        <div className="stat-card rounded-xl p-4">
+          <div className="text-secondary-contrast text-xs mb-1 font-medium">Master Promos</div>
+          <div className="text-2xl font-bold text-primary-contrast">{stats.totalMaster}</div>
+          <div className="text-xs text-money">{stats.activeMaster} active</div>
         </div>
 
-        <div className="bg-white dark:bg-slate-800 backdrop-blur-xl rounded-xl p-4">
-          <div className="text-slate-500 dark:text-slate-400 text-xs mb-1">Event Promos</div>
-          <div className="text-2xl font-bold">{stats.totalEvent}</div>
-          <div className="text-xs text-green-400">{stats.activeEvent} active</div>
+        <div className="stat-card rounded-xl p-4">
+          <div className="text-secondary-contrast text-xs mb-1 font-medium">Event Promos</div>
+          <div className="text-2xl font-bold text-primary-contrast">{stats.totalEvent}</div>
+          <div className="text-xs text-money">{stats.activeEvent} active</div>
         </div>
 
-        <div className="bg-white dark:bg-slate-800 backdrop-blur-xl rounded-xl p-4">
-          <div className="text-slate-500 dark:text-slate-400 text-xs mb-1">Total Active</div>
-          <div className="text-2xl font-bold text-green-400">
+        <div className="stat-card rounded-xl p-4">
+          <div className="text-secondary-contrast text-xs mb-1 font-medium">Total Active</div>
+          <div className="text-2xl font-bold text-money">
             {stats.activeMaster + stats.activeEvent}
           </div>
         </div>
 
-        <div className="bg-white dark:bg-slate-800 backdrop-blur-xl rounded-xl p-4">
-          <div className="text-slate-500 dark:text-slate-400 text-xs mb-1">Total Uses</div>
-          <div className="text-2xl font-bold">{stats.totalUses}</div>
+        <div className="stat-card rounded-xl p-4">
+          <div className="text-secondary-contrast text-xs mb-1 font-medium">Total Uses</div>
+          <div className="text-2xl font-bold text-primary-contrast">{stats.totalUses}</div>
         </div>
 
-        <div className="bg-white dark:bg-slate-800 backdrop-blur-xl rounded-xl p-4">
-          <div className="text-slate-500 dark:text-slate-400 text-xs mb-1">Total Promos</div>
-          <div className="text-2xl font-bold text-accent-500 dark:text-accent-400">
+        <div className="stat-card rounded-xl p-4">
+          <div className="text-secondary-contrast text-xs mb-1 font-medium">Total Promos</div>
+          <div className="text-2xl font-bold text-blue-600 dark:text-accent-400">
             {stats.totalMaster + stats.totalEvent}
           </div>
         </div>
@@ -240,8 +240,8 @@ export default function PromotionsPage() {
           onClick={() => setActiveTab('master')}
           className={`px-6 py-2 rounded-lg transition-all ${
             activeTab === 'master'
-              ? 'bg-accent-600 text-white'
-              : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+              ? 'btn-accent'
+              : 'btn-secondary'
           }`}
         >
           Master Promotions ({stats.totalMaster})
@@ -250,8 +250,8 @@ export default function PromotionsPage() {
           onClick={() => setActiveTab('event')}
           className={`px-6 py-2 rounded-lg transition-all ${
             activeTab === 'event'
-              ? 'bg-accent-600 text-white'
-              : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+              ? 'btn-accent'
+              : 'btn-secondary'
           }`}
         >
           Event-Specific ({stats.totalEvent})
@@ -260,8 +260,8 @@ export default function PromotionsPage() {
 
       {/* Promotions Grid */}
       {displayPromotions.length === 0 ? (
-        <div className="text-center py-12 bg-white dark:bg-slate-800 rounded-xl">
-          <p className="text-slate-500 dark:text-slate-400">
+        <div className="text-center py-12 card-elevated rounded-xl">
+          <p className="text-secondary-contrast">
             {activeTab === 'master'
               ? 'No master promotions found. Create your first promotion!'
               : 'No event-specific promotions found.'}
@@ -270,7 +270,7 @@ export default function PromotionsPage() {
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {displayPromotions.map((promo) => (
-            <div key={promo.id} className="bg-white dark:bg-slate-800 backdrop-blur-xl rounded-xl p-6">
+            <div key={promo.id} className="card-elevated rounded-xl p-6">
               {/* Event Badge for Event Promos */}
               {activeTab === 'event' && 'eventName' in promo && (
                 <div className="mb-3 pb-3 border-b border-slate-200 dark:border-slate-700">
@@ -282,18 +282,18 @@ export default function PromotionsPage() {
               )}
 
               <div className="flex justify-between items-start mb-4">
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white">{promo.code || 'NO CODE'}</h3>
+                <h3 className="text-xl font-bold text-primary-contrast">{promo.code || 'NO CODE'}</h3>
                 <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
                   promo.active !== false
-                    ? 'bg-green-600 text-white'
-                    : 'bg-gray-600 text-white'
+                    ? 'badge-success'
+                    : 'bg-gray-500/20 text-gray-500 dark:text-gray-400 border border-gray-500/30'
                 }`}>
                   {promo.active !== false ? 'Active' : 'Inactive'}
                 </span>
               </div>
 
               <div className="mb-4">
-                <div className="text-3xl font-bold text-accent-500 dark:text-accent-400 mb-2">
+                <div className="text-3xl font-bold text-blue-600 dark:text-accent-400 mb-2">
                   {formatDiscount(promo)}
                 </div>
                 {promo.description && (

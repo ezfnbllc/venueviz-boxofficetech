@@ -85,29 +85,29 @@ export default function OrdersPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
-        <div className="bg-white dark:bg-slate-800 backdrop-blur-sm rounded-xl p-6 border border-slate-200 dark:border-slate-700">
-          <p className="text-slate-500 dark:text-slate-400 text-sm mb-2">Total Orders</p>
-          <p className="text-4xl font-bold text-slate-900 dark:text-white">{orders.length}</p>
+        <div className="stat-card rounded-xl p-6">
+          <p className="text-secondary-contrast text-sm mb-2 font-medium">Total Orders</p>
+          <p className="text-4xl font-bold text-primary-contrast">{orders.length}</p>
         </div>
 
-        <div className="bg-white dark:bg-slate-800 backdrop-blur-sm rounded-xl p-6 border border-slate-200 dark:border-slate-700">
-          <p className="text-slate-500 dark:text-slate-400 text-sm mb-2">Total Revenue</p>
-          <p className="text-4xl font-bold text-green-400">${totalRevenue.toFixed(2)}</p>
+        <div className="stat-card rounded-xl p-6">
+          <p className="text-secondary-contrast text-sm mb-2 font-medium">Total Revenue</p>
+          <p className="text-4xl font-bold text-money">${totalRevenue.toFixed(2)}</p>
         </div>
 
-        <div className="bg-white dark:bg-slate-800 backdrop-blur-sm rounded-xl p-6 border border-slate-200 dark:border-slate-700">
-          <p className="text-slate-500 dark:text-slate-400 text-sm mb-2">Avg Order Value</p>
-          <p className="text-4xl font-bold text-slate-900 dark:text-white">${avgOrderValue.toFixed(2)}</p>
+        <div className="stat-card rounded-xl p-6">
+          <p className="text-secondary-contrast text-sm mb-2 font-medium">Avg Order Value</p>
+          <p className="text-4xl font-bold text-primary-contrast">${avgOrderValue.toFixed(2)}</p>
         </div>
 
-        <div className="bg-white dark:bg-slate-800 backdrop-blur-sm rounded-xl p-6 border border-slate-200 dark:border-slate-700">
-          <p className="text-slate-500 dark:text-slate-400 text-sm mb-2">Completed</p>
-          <p className="text-4xl font-bold text-green-400">{completedOrders}</p>
+        <div className="stat-card rounded-xl p-6">
+          <p className="text-secondary-contrast text-sm mb-2 font-medium">Completed</p>
+          <p className="text-4xl font-bold text-money">{completedOrders}</p>
         </div>
 
-        <div className="bg-white dark:bg-slate-800 backdrop-blur-sm rounded-xl p-6 border border-slate-200 dark:border-slate-700">
-          <p className="text-slate-500 dark:text-slate-400 text-sm mb-2">Pending</p>
-          <p className="text-4xl font-bold text-yellow-400">{pendingOrders}</p>
+        <div className="stat-card rounded-xl p-6">
+          <p className="text-secondary-contrast text-sm mb-2 font-medium">Pending</p>
+          <p className="text-4xl font-bold text-amber-500 dark:text-yellow-400">{pendingOrders}</p>
         </div>
       </div>
 
@@ -129,8 +129,8 @@ export default function OrdersPage() {
 
       {/* Orders List */}
       {filteredOrders.length === 0 ? (
-        <div className="bg-white dark:bg-slate-800 rounded-xl p-12 text-center">
-          <p className="text-slate-500 dark:text-slate-400 text-lg">No orders found</p>
+        <div className="card-elevated rounded-xl p-12 text-center">
+          <p className="text-secondary-contrast text-lg">No orders found</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -139,7 +139,7 @@ export default function OrdersPage() {
             return (
               <div
                 key={order.id}
-                className="bg-white dark:bg-slate-800 backdrop-blur-sm rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden hover:border-accent-500 transition-all cursor-pointer"
+                className="card-elevated rounded-xl overflow-hidden hover:border-blue-500 dark:hover:border-accent-500 transition-all cursor-pointer"
                 onClick={() => setSelectedOrder(order)}
               >
                 <div className="p-6">
@@ -149,12 +149,12 @@ export default function OrdersPage() {
                         <h3 className="text-xl font-bold text-slate-900 dark:text-white">Order #{order.orderId || order.id.slice(0, 8)}</h3>
                         <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                           order.status === 'confirmed' || order.status === 'completed'
-                            ? 'bg-green-500/20 text-green-400'
+                            ? 'badge-success'
                             : order.status === 'pending'
-                            ? 'bg-yellow-500/20 text-yellow-400'
+                            ? 'badge-warning'
                             : order.status === 'cancelled'
-                            ? 'bg-red-500/20 text-red-400'
-                            : 'bg-gray-500/20 text-gray-400'
+                            ? 'badge-error'
+                            : 'bg-gray-500/20 text-gray-500 dark:text-gray-400'
                         }`}>
                           {order.status}
                         </span>
@@ -179,7 +179,7 @@ export default function OrdersPage() {
 
                         <div>
                           <p className="text-slate-500 dark:text-slate-400 mb-1">Total</p>
-                          <p className="text-xl font-bold text-green-400">
+                          <p className="text-xl font-bold text-money">
                             ${(order.pricing?.total || order.total || 0).toFixed(2)}
                           </p>
                         </div>
@@ -207,8 +207,8 @@ export default function OrdersPage() {
       {selectedOrder && (() => {
         const customerInfo = getCustomerInfo(selectedOrder)
         return (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
               <div className="sticky top-0 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 p-6 flex justify-between items-center">
                 <div>
                   <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Order Details</h2>
@@ -230,8 +230,8 @@ export default function OrdersPage() {
                   <div className="space-y-6">
                     {/* Customer Info */}
                     <div>
-                      <h3 className="text-sm font-semibold text-accent-500 dark:text-accent-400 mb-3">CUSTOMER DETAILS</h3>
-                      <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg space-y-2">
+                      <h3 className="text-sm font-semibold text-blue-600 dark:text-accent-400 mb-3">CUSTOMER DETAILS</h3>
+                      <div className="bg-slate-100 dark:bg-slate-900 p-4 rounded-lg space-y-2 border border-slate-200 dark:border-slate-700">
                         <p><span className="text-slate-500 dark:text-slate-400">Name:</span> <span className="font-medium text-slate-900 dark:text-white">{customerInfo.name}</span></p>
                         <p><span className="text-slate-500 dark:text-slate-400">Email:</span> <span className="font-medium text-slate-900 dark:text-white">{customerInfo.email}</span></p>
                         <p><span className="text-slate-500 dark:text-slate-400">Phone:</span> <span className="font-medium text-slate-900 dark:text-white">{customerInfo.phone}</span></p>
@@ -241,8 +241,8 @@ export default function OrdersPage() {
                     {/* Event Info */}
                     {selectedOrder.event && (
                       <div>
-                        <h3 className="text-sm font-semibold text-accent-500 dark:text-accent-400 mb-3">EVENT DETAILS</h3>
-                        <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg space-y-2">
+                        <h3 className="text-sm font-semibold text-blue-600 dark:text-accent-400 mb-3">EVENT DETAILS</h3>
+                        <div className="bg-slate-100 dark:bg-slate-900 p-4 rounded-lg space-y-2 border border-slate-200 dark:border-slate-700">
                           <p><span className="text-slate-500 dark:text-slate-400">Event:</span> <span className="font-medium text-slate-900 dark:text-white">{selectedOrder.event.name}</span></p>
                           <p><span className="text-slate-500 dark:text-slate-400">Venue:</span> <span className="font-medium text-slate-900 dark:text-white">{selectedOrder.event.venueName || 'N/A'}</span></p>
                           {selectedOrder.event.schedule?.performances?.[0]?.date && (
@@ -257,8 +257,8 @@ export default function OrdersPage() {
 
                     {/* Payment Info */}
                     <div>
-                      <h3 className="text-sm font-semibold text-accent-500 dark:text-accent-400 mb-3">PAYMENT DETAILS</h3>
-                      <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg space-y-2">
+                      <h3 className="text-sm font-semibold text-blue-600 dark:text-accent-400 mb-3">PAYMENT DETAILS</h3>
+                      <div className="bg-slate-100 dark:bg-slate-900 p-4 rounded-lg space-y-2 border border-slate-200 dark:border-slate-700">
                         <div className="flex justify-between">
                           <span className="text-slate-500 dark:text-slate-400">Subtotal:</span>
                           <span className="text-slate-900 dark:text-white">${(selectedOrder.pricing?.subtotal || selectedOrder.total || 0).toFixed(2)}</span>
@@ -275,9 +275,9 @@ export default function OrdersPage() {
                             <span className="text-slate-900 dark:text-white">${selectedOrder.pricing.tax.toFixed(2)}</span>
                           </div>
                         )}
-                        <div className="flex justify-between pt-2 border-t border-slate-200 dark:border-slate-700 font-bold text-lg">
+                        <div className="flex justify-between pt-2 border-t border-slate-300 dark:border-slate-700 font-bold text-lg">
                           <span className="text-slate-900 dark:text-white">Total:</span>
-                          <span className="text-green-400">${(selectedOrder.pricing?.total || selectedOrder.total || 0).toFixed(2)}</span>
+                          <span className="text-money">${(selectedOrder.pricing?.total || selectedOrder.total || 0).toFixed(2)}</span>
                         </div>
                       </div>
                     </div>
@@ -285,12 +285,12 @@ export default function OrdersPage() {
 
                   {/* Right Column - Tickets */}
                   <div>
-                    <h3 className="text-sm font-semibold text-accent-500 dark:text-accent-400 mb-3">
+                    <h3 className="text-sm font-semibold text-blue-600 dark:text-accent-400 mb-3">
                       TICKETS ({selectedOrder.tickets?.length || 0})
                     </h3>
                     <div className="space-y-4">
                       {selectedOrder.tickets?.map((ticket: any, index: number) => (
-                        <div key={ticket.id || index} className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <div key={ticket.id || index} className="bg-slate-100 dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
                           <div className="flex justify-between items-start mb-3">
                             <div>
                               <p className="font-semibold text-slate-900 dark:text-white">{ticket.tierName || 'General Admission'}</p>
@@ -301,9 +301,9 @@ export default function OrdersPage() {
                               </p>
                             </div>
                             <span className={`px-2 py-1 rounded text-xs ${
-                              ticket.status === 'active' ? 'bg-green-500/20 text-green-400' :
-                              ticket.status === 'used' ? 'bg-blue-500/20 text-blue-400' :
-                              'bg-gray-500/20 text-gray-400'
+                              ticket.status === 'active' ? 'badge-success' :
+                              ticket.status === 'used' ? 'badge-info' :
+                              'bg-gray-500/20 text-gray-500 dark:text-gray-400'
                             }`}>
                               {ticket.status || 'active'}
                             </span>
@@ -325,13 +325,13 @@ export default function OrdersPage() {
                           <div className="mt-3 flex gap-2">
                             <button
                               onClick={() => printTicket(ticket)}
-                              className="flex-1 px-3 py-2 bg-accent-600 hover:bg-accent-700 rounded text-sm text-white"
+                              className="flex-1 px-3 py-2 btn-accent rounded text-sm"
                             >
                               🖨️ Print
                             </button>
                             <button
                               onClick={() => emailTicket(ticket)}
-                              className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm text-white"
+                              className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm text-white shadow-lg shadow-blue-500/25"
                             >
                               📧 Email
                             </button>

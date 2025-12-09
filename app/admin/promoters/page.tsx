@@ -617,31 +617,31 @@ export default function PromotersManagement() {
 
       {/* Stats Cards */}
       <div className="grid md:grid-cols-5 gap-4 mb-8">
-        <div className="p-4 bg-white dark:bg-slate-800 backdrop-blur-xl rounded-xl border border-slate-200 dark:border-slate-700">
-          <p className="text-slate-500 dark:text-slate-400 text-sm mb-1">Total Promoters</p>
-          <p className="text-2xl font-bold text-slate-900 dark:text-white">{promoters.length}</p>
+        <div className="stat-card p-4 rounded-xl">
+          <p className="text-secondary-contrast text-sm mb-1 font-medium">Total Promoters</p>
+          <p className="text-2xl font-bold text-primary-contrast">{promoters.length}</p>
         </div>
-        <div className="p-4 bg-white dark:bg-slate-800 backdrop-blur-xl rounded-xl border border-slate-200 dark:border-slate-700">
-          <p className="text-slate-500 dark:text-slate-400 text-sm mb-1">Active</p>
-          <p className="text-2xl font-bold text-green-400">
+        <div className="stat-card p-4 rounded-xl">
+          <p className="text-secondary-contrast text-sm mb-1 font-medium">Active</p>
+          <p className="text-2xl font-bold text-money">
             {promoters.filter(p => p.active).length}
           </p>
         </div>
-        <div className="p-4 bg-white dark:bg-slate-800 backdrop-blur-xl rounded-xl border border-slate-200 dark:border-slate-700">
-          <p className="text-slate-500 dark:text-slate-400 text-sm mb-1">Total Events</p>
-          <p className="text-2xl font-bold text-slate-900 dark:text-white">
+        <div className="stat-card p-4 rounded-xl">
+          <p className="text-secondary-contrast text-sm mb-1 font-medium">Total Events</p>
+          <p className="text-2xl font-bold text-primary-contrast">
             {promoters.reduce((sum, p) => sum + (p.eventCount || 0), 0)}
           </p>
         </div>
-        <div className="p-4 bg-white dark:bg-slate-800 backdrop-blur-xl rounded-xl border border-slate-200 dark:border-slate-700">
-          <p className="text-slate-500 dark:text-slate-400 text-sm mb-1">Total Revenue</p>
-          <p className="text-2xl font-bold text-slate-900 dark:text-white">
+        <div className="stat-card p-4 rounded-xl">
+          <p className="text-secondary-contrast text-sm mb-1 font-medium">Total Revenue</p>
+          <p className="text-2xl font-bold text-primary-contrast">
             ${promoters.reduce((sum, p) => sum + (p.totalRevenue || 0), 0).toLocaleString()}
           </p>
         </div>
-        <div className="p-4 bg-white dark:bg-slate-800 backdrop-blur-xl rounded-xl border border-slate-200 dark:border-slate-700">
-          <p className="text-slate-500 dark:text-slate-400 text-sm mb-1">Total Commissions</p>
-          <p className="text-2xl font-bold text-green-400">
+        <div className="stat-card p-4 rounded-xl">
+          <p className="text-secondary-contrast text-sm mb-1 font-medium">Total Commissions</p>
+          <p className="text-2xl font-bold text-money">
             ${promoters.reduce((sum, p) => sum + parseFloat(calculateEarnings(p)), 0).toLocaleString()}
           </p>
         </div>
@@ -690,9 +690,9 @@ export default function PromotersManagement() {
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-accent-500"/>
         </div>
       ) : filteredPromoters.length === 0 ? (
-        <div className="text-center py-12 bg-white dark:bg-slate-800 backdrop-blur-xl rounded-xl border border-slate-200 dark:border-slate-700">
+        <div className="text-center py-12 card-elevated rounded-xl">
           <div className="text-6xl mb-4">🤝</div>
-          <p className="text-slate-500 dark:text-slate-400 mb-4">
+          <p className="text-secondary-contrast mb-4">
             {searchQuery || filterStatus !== 'all'
               ? 'No promoters match your filters'
               : 'No promoters yet. Add your first promoter!'
@@ -701,7 +701,7 @@ export default function PromotersManagement() {
           {!searchQuery && filterStatus === 'all' && (
             <button
               onClick={() => setShowForm(true)}
-              className="px-6 py-2 bg-accent-600 rounded-lg hover:bg-accent-700"
+              className="btn-accent px-6 py-2 rounded-lg"
             >
               Add First Promoter
             </button>
@@ -713,11 +713,11 @@ export default function PromotersManagement() {
             {paginatedPromoters.map(promoter => (
               <div
                 key={promoter.id}
-                className="bg-white dark:bg-slate-800 backdrop-blur-xl rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden hover:border-accent-500/50 transition-all"
+                className="card-elevated rounded-xl overflow-hidden hover:border-accent-500/50 transition-all"
               >
                 {/* Header with Logo and Branding - Clickable */}
                 <div
-                  className="p-6 pb-4 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                  className="p-6 pb-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                   onClick={() => handlePromoterClick(promoter)}
                 >
                   <div className="flex justify-between items-start mb-4">
@@ -730,21 +730,21 @@ export default function PromotersManagement() {
                         </div>
                       )}
                       <div>
-                        <h3 className="text-lg font-bold text-slate-900 dark:text-white hover:text-accent-500 dark:hover:text-accent-400 transition-colors">
+                        <h3 className="text-lg font-bold text-primary-contrast hover:text-blue-600 dark:hover:text-accent-400 transition-colors">
                           {promoter.name}
                         </h3>
                         <div className="flex items-center gap-2">
                           <span className={`px-2 py-0.5 rounded text-xs ${
                             promoter.brandingType === 'advanced'
-                              ? 'bg-accent-600/20 text-accent-500 dark:text-accent-400'
-                              : 'bg-slate-300 dark:bg-slate-600/20 text-slate-500 dark:text-slate-400'
+                              ? 'badge-info'
+                              : 'bg-slate-200 dark:bg-slate-600/20 text-slate-600 dark:text-slate-400'
                           }`}>
                             {promoter.brandingType || 'basic'}
                           </span>
                           <span className={`px-2 py-0.5 rounded text-xs ${
                             promoter.active
-                              ? 'bg-green-600/20 text-green-400'
-                              : 'bg-red-600/20 text-red-400'
+                              ? 'badge-success'
+                              : 'badge-error'
                           }`}>
                             {promoter.active ? 'Active' : 'Inactive'}
                           </span>
@@ -769,13 +769,13 @@ export default function PromotersManagement() {
 
                   {/* Portal URL */}
                   {promoter.slug && (
-                    <div className="mb-3 p-2 bg-slate-100 dark:bg-slate-700 rounded-lg">
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Portal URL</p>
+                    <div className="mb-3 p-2 bg-slate-100 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600">
+                      <p className="text-xs text-secondary-contrast mb-1">Portal URL</p>
                       <a
                         href={getPromoterPortalUrl(promoter.slug)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-sm text-accent-500 dark:text-accent-400 hover:underline truncate block"
+                        className="text-sm text-blue-600 dark:text-accent-400 hover:underline truncate block font-medium"
                         onClick={(e) => e.stopPropagation()}
                       >
                         /p/{promoter.slug}
@@ -785,12 +785,12 @@ export default function PromotersManagement() {
 
                   {/* Contact Info */}
                   <div className="space-y-1 mb-3 text-sm">
-                    <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                    <div className="flex items-center gap-2 text-secondary-contrast">
                       <span>📧</span>
                       <span className="truncate">{promoter.email}</span>
                     </div>
                     {promoter.phone && (
-                      <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                      <div className="flex items-center gap-2 text-secondary-contrast">
                         <span>📱</span>
                         <span>{promoter.phone}</span>
                       </div>
@@ -799,30 +799,30 @@ export default function PromotersManagement() {
 
                   {/* Stats Grid */}
                   <div className="grid grid-cols-3 gap-2 mb-3">
-                    <div className="bg-slate-100 dark:bg-slate-700 p-2 rounded text-center">
-                      <p className="text-xs text-slate-500 dark:text-slate-400">Events</p>
-                      <p className="text-lg font-bold text-slate-900 dark:text-white">{promoter.eventCount || 0}</p>
+                    <div className="bg-slate-100 dark:bg-slate-700/50 p-2 rounded text-center border border-slate-200 dark:border-slate-600">
+                      <p className="text-xs text-secondary-contrast">Events</p>
+                      <p className="text-lg font-bold text-primary-contrast">{promoter.eventCount || 0}</p>
                     </div>
-                    <div className="bg-slate-100 dark:bg-slate-700 p-2 rounded text-center">
-                      <p className="text-xs text-slate-500 dark:text-slate-400">Orders</p>
-                      <p className="text-lg font-bold text-slate-900 dark:text-white">{promoter.totalOrders || 0}</p>
+                    <div className="bg-slate-100 dark:bg-slate-700/50 p-2 rounded text-center border border-slate-200 dark:border-slate-600">
+                      <p className="text-xs text-secondary-contrast">Orders</p>
+                      <p className="text-lg font-bold text-primary-contrast">{promoter.totalOrders || 0}</p>
                     </div>
-                    <div className="bg-slate-100 dark:bg-slate-700 p-2 rounded text-center">
-                      <p className="text-xs text-slate-500 dark:text-slate-400">Users</p>
-                      <p className="text-lg font-bold text-slate-900 dark:text-white">{promoter.users?.length || 0}</p>
+                    <div className="bg-slate-100 dark:bg-slate-700/50 p-2 rounded text-center border border-slate-200 dark:border-slate-600">
+                      <p className="text-xs text-secondary-contrast">Users</p>
+                      <p className="text-lg font-bold text-primary-contrast">{promoter.users?.length || 0}</p>
                     </div>
                   </div>
 
                   {/* Commission Info */}
-                  <div className="p-3 bg-accent-100 dark:bg-accent-900/20 rounded-lg">
+                  <div className="p-3 bg-blue-50 dark:bg-accent-900/20 rounded-lg border border-blue-200 dark:border-accent-800/30">
                     <div className="flex justify-between items-center">
                       <div>
-                        <span className="text-xs text-slate-500 dark:text-slate-400">Revenue</span>
-                        <p className="text-lg font-bold text-slate-900 dark:text-white">${(promoter.totalRevenue || 0).toLocaleString()}</p>
+                        <span className="text-xs text-secondary-contrast">Revenue</span>
+                        <p className="text-lg font-bold text-primary-contrast">${(promoter.totalRevenue || 0).toLocaleString()}</p>
                       </div>
                       <div className="text-right">
-                        <span className="text-xs text-slate-500 dark:text-slate-400">Commission ({promoter.commission}%)</span>
-                        <p className="text-lg font-bold text-green-400">${calculateEarnings(promoter)}</p>
+                        <span className="text-xs text-secondary-contrast">Commission ({promoter.commission}%)</span>
+                        <p className="text-lg font-bold text-money">${calculateEarnings(promoter)}</p>
                       </div>
                     </div>
                   </div>
@@ -900,10 +900,10 @@ export default function PromotersManagement() {
 
       {/* Form Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 w-full max-w-3xl my-8">
+        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 w-full max-w-3xl my-8 border border-slate-200 dark:border-slate-700 shadow-xl">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+              <h2 className="text-2xl font-bold text-primary-contrast">
                 {editingPromoter ? 'Edit Promoter' : 'Add New Promoter'}
               </h2>
               <button
@@ -918,71 +918,71 @@ export default function PromotersManagement() {
               {/* Basic Info */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm mb-2 text-slate-900 dark:text-white">Name *</label>
+                  <label className="block text-sm mb-2 text-primary-contrast font-medium">Name *</label>
                   <input
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    className={`w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white ${formErrors.name ? 'border border-red-500' : ''}`}
+                    className={`w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 focus:border-blue-500 dark:focus:border-accent-500 focus:outline-none ${formErrors.name ? 'border-red-500' : ''}`}
                     placeholder="Promoter Name"
                   />
-                  {formErrors.name && <p className="text-red-400 text-xs mt-1">{formErrors.name}</p>}
+                  {formErrors.name && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{formErrors.name}</p>}
                 </div>
 
                 <div>
-                  <label className="block text-sm mb-2 text-slate-900 dark:text-white">Portal Slug *</label>
+                  <label className="block text-sm mb-2 text-primary-contrast font-medium">Portal Slug *</label>
                   <div className="flex items-center">
-                    <span className="text-slate-500 dark:text-slate-400 mr-2">/p/</span>
+                    <span className="text-secondary-contrast mr-2">/p/</span>
                     <input
                       type="text"
                       value={formData.slug}
                       onChange={(e) => setFormData({...formData, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '')})}
-                      className={`flex-1 px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white ${formErrors.slug ? 'border border-red-500' : ''}`}
+                      className={`flex-1 px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 focus:border-blue-500 dark:focus:border-accent-500 focus:outline-none ${formErrors.slug ? 'border-red-500' : ''}`}
                       placeholder="promoter-name"
                     />
                   </div>
                   {formErrors.slug ? (
-                    <p className="text-red-400 text-xs mt-1">{formErrors.slug}</p>
+                    <p className="text-red-600 dark:text-red-400 text-xs mt-1">{formErrors.slug}</p>
                   ) : (
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Auto-generated if left empty</p>
+                    <p className="text-xs text-secondary-contrast mt-1">Auto-generated if left empty</p>
                   )}
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm mb-2 text-slate-900 dark:text-white">Email *</label>
+                  <label className="block text-sm mb-2 text-primary-contrast font-medium">Email *</label>
                   <input
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData({...formData, email: e.target.value})}
-                    className={`w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white ${formErrors.email ? 'border border-red-500' : ''}`}
+                    className={`w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 focus:border-blue-500 dark:focus:border-accent-500 focus:outline-none ${formErrors.email ? 'border-red-500' : ''}`}
                     placeholder="promoter@example.com"
                   />
-                  {formErrors.email && <p className="text-red-400 text-xs mt-1">{formErrors.email}</p>}
+                  {formErrors.email && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{formErrors.email}</p>}
                 </div>
 
                 <div>
-                  <label className="block text-sm mb-2 text-slate-900 dark:text-white">Phone</label>
+                  <label className="block text-sm mb-2 text-primary-contrast font-medium">Phone</label>
                   <input
                     type="tel"
                     value={formData.phone}
                     onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                    className={`w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white ${formErrors.phone ? 'border border-red-500' : ''}`}
+                    className={`w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 focus:border-blue-500 dark:focus:border-accent-500 focus:outline-none ${formErrors.phone ? 'border-red-500' : ''}`}
                     placeholder="(555) 123-4567"
                   />
-                  {formErrors.phone && <p className="text-red-400 text-xs mt-1">{formErrors.phone}</p>}
+                  {formErrors.phone && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{formErrors.phone}</p>}
                 </div>
               </div>
 
               {/* Branding */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm mb-2 text-slate-900 dark:text-white">Branding Type</label>
+                  <label className="block text-sm mb-2 text-primary-contrast font-medium">Branding Type</label>
                   <select
                     value={formData.brandingType}
                     onChange={(e) => setFormData({...formData, brandingType: e.target.value as 'basic' | 'advanced'})}
-                    className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white"
+                    className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 focus:border-blue-500 dark:focus:border-accent-500 focus:outline-none"
                   >
                     <option value="basic">Basic</option>
                     <option value="advanced">Advanced</option>
@@ -990,30 +990,30 @@ export default function PromotersManagement() {
                 </div>
 
                 <div>
-                  <label className="block text-sm mb-2 text-slate-900 dark:text-white">Commission (%)</label>
+                  <label className="block text-sm mb-2 text-primary-contrast font-medium">Commission (%)</label>
                   <input
                     type="number"
                     value={formData.commission}
                     onChange={(e) => setFormData({...formData, commission: Math.max(0, Math.min(100, parseInt(e.target.value) || 0))})}
-                    className={`w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white ${formErrors.commission ? 'border border-red-500' : ''}`}
+                    className={`w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 focus:border-blue-500 dark:focus:border-accent-500 focus:outline-none ${formErrors.commission ? 'border-red-500' : ''}`}
                     min="0"
                     max="100"
                   />
-                  {formErrors.commission && <p className="text-red-400 text-xs mt-1">{formErrors.commission}</p>}
+                  {formErrors.commission && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{formErrors.commission}</p>}
                 </div>
               </div>
 
               {/* Logo Upload */}
               <div>
-                <label className="block text-sm mb-2 text-slate-900 dark:text-white">Logo</label>
+                <label className="block text-sm mb-2 text-primary-contrast font-medium">Logo</label>
                 <input
                   type="file"
                   accept="image/*"
                   onChange={handleLogoUpload}
-                  className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white"
+                  className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600"
                   disabled={uploadingLogo}
                 />
-                {uploadingLogo && <p className="text-xs text-accent-500 dark:text-accent-400 mt-2">Uploading logo...</p>}
+                {uploadingLogo && <p className="text-xs text-blue-600 dark:text-accent-400 mt-2">Uploading logo...</p>}
                 {logoUrl && (
                   <div className="mt-2">
                     <img src={logoUrl} alt="Logo preview" className="h-20 object-contain rounded" />
@@ -1023,11 +1023,11 @@ export default function PromotersManagement() {
 
               {/* Color Scheme */}
               <div>
-                <label className="block text-sm mb-2 text-slate-900 dark:text-white">Color Scheme</label>
+                <label className="block text-sm mb-2 text-primary-contrast font-medium">Color Scheme</label>
                 <div className="grid grid-cols-5 gap-3">
                   {(['primary', 'secondary', 'accent', 'background', 'text'] as const).map(key => (
                     <div key={key}>
-                      <label className="text-xs text-slate-500 dark:text-slate-400 capitalize">{key}</label>
+                      <label className="text-xs text-secondary-contrast capitalize">{key}</label>
                       <input
                         type="color"
                         value={formData.colorScheme[key]}
@@ -1035,7 +1035,7 @@ export default function PromotersManagement() {
                           ...formData,
                           colorScheme: {...formData.colorScheme, [key]: e.target.value}
                         })}
-                        className="w-full h-10 rounded cursor-pointer"
+                        className="w-full h-10 rounded cursor-pointer border border-slate-200 dark:border-slate-600"
                       />
                     </div>
                   ))}
@@ -1044,24 +1044,24 @@ export default function PromotersManagement() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm mb-2 text-slate-900 dark:text-white">Website</label>
+                  <label className="block text-sm mb-2 text-primary-contrast font-medium">Website</label>
                   <input
                     type="url"
                     value={formData.website}
                     onChange={(e) => setFormData({...formData, website: e.target.value})}
-                    className={`w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white ${formErrors.website ? 'border border-red-500' : ''}`}
+                    className={`w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 focus:border-blue-500 dark:focus:border-accent-500 focus:outline-none ${formErrors.website ? 'border-red-500' : ''}`}
                     placeholder="https://example.com"
                   />
-                  {formErrors.website && <p className="text-red-400 text-xs mt-1">{formErrors.website}</p>}
+                  {formErrors.website && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{formErrors.website}</p>}
                 </div>
 
                 <div className="flex items-end">
-                  <label className="flex items-center gap-2 text-slate-900 dark:text-white">
+                  <label className="flex items-center gap-2 text-primary-contrast">
                     <input
                       type="checkbox"
                       checked={formData.active}
                       onChange={(e) => setFormData({...formData, active: e.target.checked})}
-                      className="rounded"
+                      className="rounded border-slate-300 dark:border-slate-600"
                     />
                     <span>Active (Can manage events)</span>
                   </label>
@@ -1069,27 +1069,27 @@ export default function PromotersManagement() {
               </div>
 
               <div>
-                <label className="block text-sm mb-2 text-slate-900 dark:text-white">Description</label>
+                <label className="block text-sm mb-2 text-primary-contrast font-medium">Description</label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({...formData, description: e.target.value})}
-                  className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg h-20 text-slate-900 dark:text-white"
+                  className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg h-20 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 focus:border-blue-500 dark:focus:border-accent-500 focus:outline-none"
                   placeholder="Notes about this promoter..."
                 />
               </div>
 
-              <div className="flex justify-end gap-3 pt-4">
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
                 <button
                   type="button"
                   onClick={() => { setShowForm(false); resetForm() }}
-                  className="px-6 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-white"
+                  className="btn-secondary px-6 py-2 rounded-lg"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-6 py-2 bg-accent-600 rounded-lg hover:bg-accent-700 disabled:opacity-50"
+                  className="btn-accent px-6 py-2 rounded-lg disabled:opacity-50"
                 >
                   {submitting ? 'Saving...' : editingPromoter ? 'Update' : 'Add'}
                 </button>
@@ -1101,14 +1101,14 @@ export default function PromotersManagement() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && selectedPromoter && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 w-full max-w-lg">
-            <h2 className="text-xl font-bold mb-4 text-slate-900 dark:text-white">
+        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 w-full max-w-lg border border-slate-200 dark:border-slate-700 shadow-xl">
+            <h2 className="text-xl font-bold mb-4 text-primary-contrast">
               {selectedPromoter.active ? 'Deactivate' : 'Delete'} {selectedPromoter.name}?
             </h2>
 
             <div className="space-y-4 mb-6">
-              <label className="flex items-start gap-3 p-3 bg-yellow-600/10 border border-yellow-600/30 rounded-lg cursor-pointer">
+              <label className="flex items-start gap-3 p-3 bg-yellow-50 dark:bg-yellow-600/10 border border-yellow-300 dark:border-yellow-600/30 rounded-lg cursor-pointer">
                 <input
                   type="radio"
                   name="deleteAction"
@@ -1117,12 +1117,12 @@ export default function PromotersManagement() {
                   className="mt-1"
                 />
                 <div>
-                  <p className="font-medium text-yellow-400">Deactivate (Recommended)</p>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">Promoter will be hidden but data preserved for reporting</p>
+                  <p className="font-medium text-yellow-700 dark:text-yellow-400">Deactivate (Recommended)</p>
+                  <p className="text-sm text-secondary-contrast">Promoter will be hidden but data preserved for reporting</p>
                 </div>
               </label>
 
-              <label className="flex items-start gap-3 p-3 bg-red-600/10 border border-red-600/30 rounded-lg cursor-pointer">
+              <label className="flex items-start gap-3 p-3 bg-red-50 dark:bg-red-600/10 border border-red-300 dark:border-red-600/30 rounded-lg cursor-pointer">
                 <input
                   type="radio"
                   name="deleteAction"
@@ -1131,20 +1131,20 @@ export default function PromotersManagement() {
                   className="mt-1"
                 />
                 <div>
-                  <p className="font-medium text-red-400">Permanently Delete</p>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">Cannot be undone. All promoter data will be lost.</p>
+                  <p className="font-medium text-red-700 dark:text-red-400">Permanently Delete</p>
+                  <p className="text-sm text-secondary-contrast">Cannot be undone. All promoter data will be lost.</p>
                 </div>
               </label>
 
               {deleteAction === 'hard' && selectedPromoter.eventCount > 0 && (
-                <div className="p-3 bg-slate-100 dark:bg-slate-700 rounded-lg">
-                  <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">
+                <div className="p-3 bg-slate-100 dark:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600">
+                  <p className="text-sm text-secondary-contrast mb-2">
                     This promoter has {selectedPromoter.eventCount} events. Reassign to:
                   </p>
                   <select
                     value={reassignPromoterId}
                     onChange={(e) => setReassignPromoterId(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white"
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-600 rounded-lg text-slate-900 dark:text-white border border-slate-200 dark:border-slate-500"
                   >
                     <option value="">Select a promoter...</option>
                     {promoters.filter(p => p.id !== selectedPromoter.id && p.active).map(p => (
@@ -1155,17 +1155,17 @@ export default function PromotersManagement() {
               )}
             </div>
 
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
               <button
                 onClick={() => { setShowDeleteModal(false); setSelectedPromoter(null) }}
-                className="px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-white"
+                className="btn-secondary px-4 py-2 rounded-lg"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDelete}
                 disabled={deleteAction === 'hard' && selectedPromoter.eventCount > 0 && !reassignPromoterId}
-                className="px-4 py-2 bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {deleteAction === 'soft' ? 'Deactivate' : 'Delete'}
               </button>
@@ -1176,10 +1176,10 @@ export default function PromotersManagement() {
 
       {/* Events Modal */}
       {showEventsModal && selectedPromoter && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 w-full max-w-4xl my-8 max-h-[80vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 w-full max-w-4xl my-8 max-h-[80vh] overflow-y-auto border border-slate-200 dark:border-slate-700 shadow-xl">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Events for {selectedPromoter.name}</h2>
+              <h2 className="text-2xl font-bold text-primary-contrast">Events for {selectedPromoter.name}</h2>
               <button
                 onClick={() => { setShowEventsModal(false); setSelectedPromoter(null) }}
                 className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
@@ -1189,14 +1189,14 @@ export default function PromotersManagement() {
             </div>
 
             {getPromoterEvents(selectedPromoter.id).length === 0 ? (
-              <p className="text-slate-500 dark:text-slate-400 text-center py-8">No events yet</p>
+              <p className="text-secondary-contrast text-center py-8">No events yet</p>
             ) : (
               <div className="grid gap-4">
                 {getPromoterEvents(selectedPromoter.id).map(event => (
-                  <div key={event.id} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4 flex justify-between items-center">
+                  <div key={event.id} className="bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg p-4 flex justify-between items-center">
                     <div>
-                      <h3 className="font-bold text-slate-900 dark:text-white">{event.name}</h3>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">
+                      <h3 className="font-bold text-primary-contrast">{event.name}</h3>
+                      <p className="text-sm text-secondary-contrast">
                         {event.venueName || event.venue} • {
                           event.schedule?.date ?
                             new Date(event.schedule.date.toDate ? event.schedule.date.toDate() : event.schedule.date).toLocaleDateString() :
@@ -1206,7 +1206,7 @@ export default function PromotersManagement() {
                     </div>
                     <button
                       onClick={() => router.push(`/admin/events/edit/${event.id}`)}
-                      className="px-4 py-2 bg-accent-600 rounded-lg text-sm"
+                      className="btn-accent px-4 py-2 rounded-lg text-sm"
                     >
                       Edit
                     </button>
@@ -1220,10 +1220,10 @@ export default function PromotersManagement() {
 
       {/* Users Management Modal */}
       {showUsersModal && selectedPromoter && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 w-full max-w-2xl my-8">
+        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 w-full max-w-2xl my-8 border border-slate-200 dark:border-slate-700 shadow-xl">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Manage Users for {selectedPromoter.name}</h2>
+              <h2 className="text-2xl font-bold text-primary-contrast">Manage Users for {selectedPromoter.name}</h2>
               <button
                 onClick={() => {
                   setShowUsersModal(false)
@@ -1238,20 +1238,20 @@ export default function PromotersManagement() {
             </div>
 
             <div className="mb-6">
-              <h3 className="text-lg font-semibold mb-3 text-slate-900 dark:text-white">Current Users</h3>
+              <h3 className="text-lg font-semibold mb-3 text-primary-contrast">Current Users</h3>
               {selectedPromoter.users?.length > 0 ? (
                 <div className="space-y-2">
                   {selectedPromoter.users.map((userId: string) => {
                     const userData = users[userId]
                     return (
-                      <div key={userId} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-3 flex justify-between items-center">
+                      <div key={userId} className="bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg p-3 flex justify-between items-center">
                         <div>
-                          <p className="font-medium text-slate-900 dark:text-white">{userData?.name || 'Unknown User'}</p>
-                          <p className="text-sm text-slate-500 dark:text-slate-400">{userData?.email || userId}</p>
+                          <p className="font-medium text-primary-contrast">{userData?.name || 'Unknown User'}</p>
+                          <p className="text-sm text-secondary-contrast">{userData?.email || userId}</p>
                         </div>
                         <button
                           onClick={() => handleRemoveUser(userId)}
-                          className="px-3 py-1 bg-red-600/20 text-red-400 rounded hover:bg-red-600/30 text-sm"
+                          className="px-3 py-1 bg-red-100 dark:bg-red-600/20 text-red-600 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-600/30 text-sm"
                         >
                           Remove
                         </button>
@@ -1260,45 +1260,45 @@ export default function PromotersManagement() {
                   })}
                 </div>
               ) : (
-                <p className="text-slate-500 dark:text-slate-400">No users assigned yet</p>
+                <p className="text-secondary-contrast">No users assigned yet</p>
               )}
             </div>
 
             <div className="border-t border-slate-200 dark:border-slate-700 pt-6">
-              <h3 className="text-lg font-semibold mb-3 text-slate-900 dark:text-white">Add New User</h3>
+              <h3 className="text-lg font-semibold mb-3 text-primary-contrast">Add New User</h3>
               <div className="space-y-3">
                 <div>
-                  <label className="block text-sm mb-2 text-slate-900 dark:text-white">Name *</label>
+                  <label className="block text-sm mb-2 text-primary-contrast font-medium">Name *</label>
                   <input
                     type="text"
                     value={newUserData.name}
                     onChange={(e) => setNewUserData({...newUserData, name: e.target.value})}
-                    className={`w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white ${userFormErrors.name ? 'border border-red-500' : ''}`}
+                    className={`w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 focus:border-blue-500 dark:focus:border-accent-500 focus:outline-none ${userFormErrors.name ? 'border-red-500' : ''}`}
                     placeholder="User Name"
                   />
-                  {userFormErrors.name && <p className="text-red-400 text-xs mt-1">{userFormErrors.name}</p>}
+                  {userFormErrors.name && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{userFormErrors.name}</p>}
                 </div>
                 <div>
-                  <label className="block text-sm mb-2 text-slate-900 dark:text-white">Email *</label>
+                  <label className="block text-sm mb-2 text-primary-contrast font-medium">Email *</label>
                   <input
                     type="email"
                     value={newUserData.email}
                     onChange={(e) => setNewUserData({...newUserData, email: e.target.value})}
-                    className={`w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white ${userFormErrors.email ? 'border border-red-500' : ''}`}
+                    className={`w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 focus:border-blue-500 dark:focus:border-accent-500 focus:outline-none ${userFormErrors.email ? 'border-red-500' : ''}`}
                     placeholder="user@example.com"
                   />
-                  {userFormErrors.email && <p className="text-red-400 text-xs mt-1">{userFormErrors.email}</p>}
+                  {userFormErrors.email && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{userFormErrors.email}</p>}
                 </div>
                 <div>
-                  <label className="block text-sm mb-2 text-slate-900 dark:text-white">Password *</label>
+                  <label className="block text-sm mb-2 text-primary-contrast font-medium">Password *</label>
                   <input
                     type="password"
                     value={newUserData.password}
                     onChange={(e) => setNewUserData({...newUserData, password: e.target.value})}
-                    className={`w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white ${userFormErrors.password ? 'border border-red-500' : ''}`}
+                    className={`w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 focus:border-blue-500 dark:focus:border-accent-500 focus:outline-none ${userFormErrors.password ? 'border-red-500' : ''}`}
                     placeholder="••••••••"
                   />
-                  {userFormErrors.password && <p className="text-red-400 text-xs mt-1">{userFormErrors.password}</p>}
+                  {userFormErrors.password && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{userFormErrors.password}</p>}
                   {newUserData.password && (
                     <div className="mt-2">
                       <div className="flex gap-1">
@@ -1313,7 +1313,7 @@ export default function PromotersManagement() {
                           />
                         ))}
                       </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      <p className="text-xs text-secondary-contrast mt-1">
                         Strength: {getPasswordStrength(newUserData.password).message}
                       </p>
                     </div>
@@ -1321,7 +1321,7 @@ export default function PromotersManagement() {
                 </div>
                 <button
                   onClick={handleAddUser}
-                  className="w-full px-4 py-2 bg-accent-600 rounded-lg hover:bg-accent-700"
+                  className="w-full btn-accent px-4 py-2 rounded-lg"
                 >
                   Create User
                 </button>

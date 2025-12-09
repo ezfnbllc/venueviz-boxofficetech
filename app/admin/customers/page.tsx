@@ -290,34 +290,34 @@ export default function CustomersManagement() {
 
         {/* Stats Cards */}
         <div className="grid md:grid-cols-4 gap-4 mb-8">
-          <div className="p-4 bg-white dark:bg-slate-800 backdrop-blur-xl rounded-xl border border-slate-200 dark:border-slate-700">
-            <p className="text-slate-500 dark:text-slate-400 text-sm mb-1">Total Customers</p>
-            <p className="text-2xl font-bold text-slate-900 dark:text-white">{customers.length}</p>
+          <div className="stat-card p-4 rounded-xl">
+            <p className="text-secondary-contrast text-sm mb-1 font-medium">Total Customers</p>
+            <p className="text-2xl font-bold text-primary-contrast">{customers.length}</p>
           </div>
-          <div className="p-4 bg-white dark:bg-slate-800 backdrop-blur-xl rounded-xl border border-slate-200 dark:border-slate-700">
-            <p className="text-slate-500 dark:text-slate-400 text-sm mb-1">Total Revenue</p>
-            <p className="text-2xl font-bold text-green-400">
+          <div className="stat-card p-4 rounded-xl">
+            <p className="text-secondary-contrast text-sm mb-1 font-medium">Total Revenue</p>
+            <p className="text-2xl font-bold text-money">
               ${customers.reduce((sum, c) => sum + (c.totalSpent || 0), 0).toFixed(0)}
             </p>
           </div>
-          <div className="p-4 bg-white dark:bg-slate-800 backdrop-blur-xl rounded-xl border border-slate-200 dark:border-slate-700">
-            <p className="text-slate-500 dark:text-slate-400 text-sm mb-1">Avg Customer Value</p>
-            <p className="text-2xl font-bold text-slate-900 dark:text-white">
+          <div className="stat-card p-4 rounded-xl">
+            <p className="text-secondary-contrast text-sm mb-1 font-medium">Avg Customer Value</p>
+            <p className="text-2xl font-bold text-primary-contrast">
               ${customers.length > 0 ?
                 (customers.reduce((sum, c) => sum + (c.totalSpent || 0), 0) / customers.length).toFixed(0) :
                 '0'}
             </p>
           </div>
-          <div className="p-4 bg-white dark:bg-slate-800 backdrop-blur-xl rounded-xl border border-slate-200 dark:border-slate-700">
-            <p className="text-slate-500 dark:text-slate-400 text-sm mb-1">VIP Customers</p>
-            <p className="text-2xl font-bold text-yellow-400">
+          <div className="stat-card p-4 rounded-xl">
+            <p className="text-secondary-contrast text-sm mb-1 font-medium">VIP Customers</p>
+            <p className="text-2xl font-bold text-amber-500 dark:text-yellow-400">
               {customers.filter(c => ['gold', 'platinum'].includes(c.membershipTier)).length}
             </p>
           </div>
         </div>
 
         {/* Filters */}
-        <div className="bg-white dark:bg-slate-800 backdrop-blur-xl rounded-xl border border-slate-200 dark:border-slate-700 p-4 mb-6">
+        <div className="card-elevated rounded-xl p-4 mb-6">
           <div className="grid md:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm mb-2 text-slate-900 dark:text-white">Search</label>
@@ -370,14 +370,14 @@ export default function CustomersManagement() {
         {/* Customers Table */}
         {loading ? (
           <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-accent-500"/>
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-blue-500 dark:border-accent-500"/>
           </div>
         ) : filteredCustomers.length === 0 ? (
-          <div className="bg-white dark:bg-slate-800 backdrop-blur-xl rounded-xl border border-slate-200 dark:border-slate-700 p-12 text-center">
-            <p className="text-slate-500 dark:text-slate-400">No customers found</p>
+          <div className="card-elevated rounded-xl p-12 text-center">
+            <p className="text-secondary-contrast">No customers found</p>
           </div>
         ) : (
-          <div className="bg-white dark:bg-slate-800 backdrop-blur-xl rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+          <div className="table-container rounded-xl overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="border-b border-slate-200 dark:border-slate-700">
@@ -394,7 +394,7 @@ export default function CustomersManagement() {
                 </thead>
                 <tbody>
                   {filteredCustomers.map((customer, idx) => (
-                    <tr key={customer.id || idx} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700">
+                    <tr key={customer.id || idx} className="table-row hover:bg-blue-50/50 dark:hover:bg-slate-700">
                       <td className="p-4">
                         <div className="font-semibold text-slate-900 dark:text-white">{customer.name || 'Unknown'}</div>
                         <div className="text-sm text-slate-500 dark:text-slate-400">{customer.email}</div>
@@ -403,16 +403,16 @@ export default function CustomersManagement() {
                         {customer.phone || 'No phone'}
                       </td>
                       <td className="p-4 text-center">
-                        <span className="px-3 py-1 bg-accent-600/20 text-accent-500 dark:text-accent-400 rounded-full text-sm">
+                        <span className="px-3 py-1 badge-info rounded-full text-sm">
                           {customer.totalOrders || 0}
                         </span>
                       </td>
                       <td className="p-4 text-center">
-                        <span className="px-3 py-1 bg-blue-600/20 text-blue-400 rounded-full text-sm">
+                        <span className="px-3 py-1 bg-blue-600/20 text-blue-600 dark:text-blue-400 rounded-full text-sm border border-blue-500/20">
                           {customer.eventCount || 0}
                         </span>
                       </td>
-                      <td className="p-4 text-right font-semibold text-slate-900 dark:text-white">
+                      <td className="p-4 text-right font-semibold text-money">
                         ${formatCurrency(customer.totalSpent || 0)}
                       </td>
                       <td className="p-4 text-center">
@@ -426,7 +426,7 @@ export default function CustomersManagement() {
                       <td className="p-4 text-center">
                         <button
                           onClick={() => handleViewDetails(customer)}
-                          className="px-3 py-1 bg-accent-600/20 text-accent-500 dark:text-accent-400 rounded-lg hover:bg-accent-600/30 text-sm"
+                          className="px-3 py-1 btn-accent rounded-lg text-sm"
                         >
                           View Details
                         </button>
@@ -441,8 +441,8 @@ export default function CustomersManagement() {
 
         {/* Customer Details Modal */}
         {showDetailsModal && selectedCustomer && (
-          <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
-            <div className="bg-white dark:bg-slate-800 rounded-xl p-6 w-full max-w-5xl my-8 max-h-[90vh] overflow-y-auto">
+          <div className="fixed inset-0 bg-black/60 dark:bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
+            <div className="bg-white dark:bg-slate-800 rounded-xl p-6 w-full max-w-5xl my-8 max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200 dark:border-slate-700">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Customer Details</h2>
                 <button
@@ -458,10 +458,10 @@ export default function CustomersManagement() {
               </div>
 
               {/* Customer Header */}
-              <div className="bg-white dark:bg-slate-800 rounded-xl p-4 mb-6 border border-slate-200 dark:border-slate-700">
+              <div className="bg-slate-100 dark:bg-slate-900 rounded-xl p-4 mb-6 border border-slate-200 dark:border-slate-700">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-4">
-                    <div className="w-20 h-20 bg-accent-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
+                    <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white text-2xl font-bold shadow-lg shadow-blue-500/30">
                       {selectedCustomer.name?.charAt(0)?.toUpperCase() || selectedCustomer.email?.charAt(0)?.toUpperCase() || '?'}
                     </div>
                     <div>
@@ -494,8 +494,8 @@ export default function CustomersManagement() {
               </div>
 
               {/* Personal Information */}
-              <div className="bg-white dark:bg-slate-800 rounded-xl p-4 mb-6 border border-slate-200 dark:border-slate-700">
-                <h3 className="font-semibold mb-3 text-accent-500 dark:text-accent-400">Personal Information</h3>
+              <div className="bg-slate-100 dark:bg-slate-900 rounded-xl p-4 mb-6 border border-slate-200 dark:border-slate-700">
+                <h3 className="font-semibold mb-3 text-blue-600 dark:text-accent-400">Personal Information</h3>
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-slate-500 dark:text-slate-400">Name</p>
@@ -568,8 +568,8 @@ export default function CustomersManagement() {
               </div>
 
               {/* Address */}
-              <div className="bg-white dark:bg-slate-800 rounded-xl p-4 mb-6 border border-slate-200 dark:border-slate-700">
-                <h3 className="font-semibold mb-3 text-accent-500 dark:text-accent-400">Address</h3>
+              <div className="bg-slate-100 dark:bg-slate-900 rounded-xl p-4 mb-6 border border-slate-200 dark:border-slate-700">
+                <h3 className="font-semibold mb-3 text-blue-600 dark:text-accent-400">Address</h3>
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="md:col-span-2">
                     <p className="text-sm text-slate-500 dark:text-slate-400">Street Address</p>
@@ -618,8 +618,8 @@ export default function CustomersManagement() {
               </div>
 
               {/* Preferences */}
-              <div className="bg-white dark:bg-slate-800 rounded-xl p-4 mb-6 border border-slate-200 dark:border-slate-700">
-                <h3 className="font-semibold mb-3 text-accent-500 dark:text-accent-400">Preferences</h3>
+              <div className="bg-slate-100 dark:bg-slate-900 rounded-xl p-4 mb-6 border border-slate-200 dark:border-slate-700">
+                <h3 className="font-semibold mb-3 text-blue-600 dark:text-accent-400">Preferences</h3>
                 <div className="grid md:grid-cols-3 gap-4">
                   <label className="flex items-center gap-2">
                     <input
@@ -663,12 +663,12 @@ export default function CustomersManagement() {
               </div>
 
               {/* Tags */}
-              <div className="bg-white dark:bg-slate-800 rounded-xl p-4 mb-6 border border-slate-200 dark:border-slate-700">
+              <div className="bg-slate-100 dark:bg-slate-900 rounded-xl p-4 mb-6 border border-slate-200 dark:border-slate-700">
                 <div className="flex justify-between items-center mb-3">
-                  <h3 className="font-semibold text-accent-500 dark:text-accent-400">Tags</h3>
+                  <h3 className="font-semibold text-blue-600 dark:text-accent-400">Tags</h3>
                   <button
                     onClick={handleAddTag}
-                    className="px-3 py-1 bg-accent-600 text-white rounded text-sm hover:bg-accent-700"
+                    className="px-3 py-1 btn-accent rounded text-sm"
                   >
                     + Add Tag
                   </button>
@@ -693,50 +693,50 @@ export default function CustomersManagement() {
               </div>
 
               {/* Statistics */}
-              <div className="bg-white dark:bg-slate-800 rounded-xl p-4 mb-6 border border-slate-200 dark:border-slate-700">
-                <h3 className="font-semibold mb-3 text-accent-500 dark:text-accent-400">Statistics</h3>
+              <div className="bg-slate-100 dark:bg-slate-900 rounded-xl p-4 mb-6 border border-slate-200 dark:border-slate-700">
+                <h3 className="font-semibold mb-3 text-blue-600 dark:text-accent-400">Statistics</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Total Orders</p>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-white">{selectedCustomer.totalOrders || 0}</p>
+                  <div className="stat-card rounded-lg p-3">
+                    <p className="text-xs text-secondary-contrast font-medium">Total Orders</p>
+                    <p className="text-2xl font-bold text-primary-contrast">{selectedCustomer.totalOrders || 0}</p>
                   </div>
-                  <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Total Spent</p>
-                    <p className="text-2xl font-bold text-green-400">${formatCurrency(selectedCustomer.totalSpent || 0)}</p>
+                  <div className="stat-card rounded-lg p-3">
+                    <p className="text-xs text-secondary-contrast font-medium">Total Spent</p>
+                    <p className="text-2xl font-bold text-money">${formatCurrency(selectedCustomer.totalSpent || 0)}</p>
                   </div>
-                  <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Events Attended</p>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-white">{selectedCustomer.eventCount || 0}</p>
+                  <div className="stat-card rounded-lg p-3">
+                    <p className="text-xs text-secondary-contrast font-medium">Events Attended</p>
+                    <p className="text-2xl font-bold text-primary-contrast">{selectedCustomer.eventCount || 0}</p>
                   </div>
-                  <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Last Order</p>
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white">{formatDate(selectedCustomer.lastOrderDate)}</p>
+                  <div className="stat-card rounded-lg p-3">
+                    <p className="text-xs text-secondary-contrast font-medium">Last Order</p>
+                    <p className="text-sm font-semibold text-primary-contrast">{formatDate(selectedCustomer.lastOrderDate)}</p>
                   </div>
                 </div>
               </div>
 
               {/* Order History */}
-              <div className="bg-white dark:bg-slate-800 rounded-xl p-4 mb-6 border border-slate-200 dark:border-slate-700">
-                <h3 className="font-semibold mb-3 text-accent-500 dark:text-accent-400">Order History ({customerOrders.length})</h3>
+              <div className="bg-slate-100 dark:bg-slate-900 rounded-xl p-4 mb-6 border border-slate-200 dark:border-slate-700">
+                <h3 className="font-semibold mb-3 text-blue-600 dark:text-accent-400">Order History ({customerOrders.length})</h3>
                 {customerOrders.length > 0 ? (
                   <div className="space-y-3 max-h-96 overflow-y-auto">
                     {customerOrders.map((order, idx) => (
-                      <div key={order.id || idx} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+                      <div key={order.id || idx} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4 shadow-sm">
                         <div className="flex justify-between items-start mb-2">
                           <div>
                             <p className="font-semibold text-slate-900 dark:text-white">{order.eventName || 'Unknown Event'}</p>
                             <p className="text-sm text-slate-500 dark:text-slate-400">{order.venueName || ''}</p>
                           </div>
                           <div className="text-right">
-                            <p className="font-bold text-green-400">
+                            <p className="font-bold text-money">
                               ${formatCurrency(order.pricing?.total || order.totalAmount || order.total || 0)}
                             </p>
                             <span className={`px-2 py-1 rounded-full text-xs ${
                               order.status === 'confirmed' || order.status === 'completed'
-                                ? 'bg-green-600/20 text-green-400'
+                                ? 'badge-success'
                                 : order.status === 'cancelled' || order.status === 'refunded'
-                                ? 'bg-red-600/20 text-red-400'
-                                : 'bg-yellow-600/20 text-yellow-400'
+                                ? 'badge-error'
+                                : 'badge-warning'
                             }`}>
                               {order.status || 'pending'}
                             </span>
@@ -761,7 +761,7 @@ export default function CustomersManagement() {
                           <div>
                             <button
                               onClick={() => router.push(`/admin/orders`)}
-                              className="px-3 py-1 bg-accent-600/20 text-accent-500 dark:text-accent-400 rounded text-xs hover:bg-accent-600/30"
+                              className="px-3 py-1 badge-info rounded text-xs hover:opacity-80"
                             >
                               View Order
                             </button>
@@ -789,8 +789,8 @@ export default function CustomersManagement() {
               </div>
 
               {/* Notes */}
-              <div className="bg-white dark:bg-slate-800 rounded-xl p-4 mb-6 border border-slate-200 dark:border-slate-700">
-                <h3 className="font-semibold mb-3 text-accent-500 dark:text-accent-400">Internal Notes</h3>
+              <div className="bg-slate-100 dark:bg-slate-900 rounded-xl p-4 mb-6 border border-slate-200 dark:border-slate-700">
+                <h3 className="font-semibold mb-3 text-blue-600 dark:text-accent-400">Internal Notes</h3>
                 {editingField === 'notes' ? (
                   <div>
                     <textarea
@@ -814,8 +814,8 @@ export default function CustomersManagement() {
 
               {/* Account Information */}
               {(selectedCustomer.uid || selectedCustomer.stripeCustomerId) && (
-                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 mb-6 border border-slate-200 dark:border-slate-700">
-                  <h3 className="font-semibold mb-3 text-accent-500 dark:text-accent-400">Account Information</h3>
+                <div className="bg-slate-100 dark:bg-slate-900 rounded-xl p-4 mb-6 border border-slate-200 dark:border-slate-700">
+                  <h3 className="font-semibold mb-3 text-blue-600 dark:text-accent-400">Account Information</h3>
                   <div className="grid md:grid-cols-2 gap-4">
                     {selectedCustomer.uid && (
                       <div>
@@ -834,8 +834,8 @@ export default function CustomersManagement() {
               )}
 
               {/* Timestamps */}
-              <div className="bg-white dark:bg-slate-800 rounded-xl p-4 mb-6 border border-slate-200 dark:border-slate-700">
-                <h3 className="font-semibold mb-3 text-accent-500 dark:text-accent-400">Timestamps</h3>
+              <div className="bg-slate-100 dark:bg-slate-900 rounded-xl p-4 mb-6 border border-slate-200 dark:border-slate-700">
+                <h3 className="font-semibold mb-3 text-blue-600 dark:text-accent-400">Timestamps</h3>
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-slate-500 dark:text-slate-400">Customer Since</p>
