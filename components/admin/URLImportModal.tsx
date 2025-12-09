@@ -225,7 +225,7 @@ export default function URLImportModal({ onClose, onImport }: URLImportModalProp
                     </div>
                   )}
 
-                  {extractedData.venue && (
+                  {extractedData.venue && extractedData.venue.name ? (
                     <div className="p-3 bg-gray-850 rounded-lg">
                       <p className="text-xs text-gray-400 mb-1">Venue</p>
                       <p className="text-white">{extractedData.venue.name}</p>
@@ -233,18 +233,51 @@ export default function URLImportModal({ onClose, onImport }: URLImportModalProp
                         <p className="text-gray-400 text-xs mt-1">{extractedData.venue.address}</p>
                       )}
                     </div>
+                  ) : (
+                    <div className="p-3 bg-yellow-600/20 rounded-lg">
+                      <p className="text-xs text-yellow-400 mb-1">Venue (Not Found)</p>
+                      <p className="text-yellow-300 text-sm">
+                        Venue could not be extracted from the URL.
+                        You can search for it in Step 2 using the venue search feature.
+                      </p>
+                    </div>
                   )}
 
                   {/* Images Section */}
                   {hasImages && (
                     <div className="p-3 bg-gray-850 rounded-lg">
                       <p className="text-xs text-gray-400 mb-2">Images Found</p>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 mb-2">
                         <span className="text-green-400 text-sm">✓</span>
                         <span className="text-white text-sm">
                           {(extractedData.images?.gallery?.length || 0) +
                             (extractedData.images?.cover ? 1 : 0)} image(s) will be imported
                         </span>
+                      </div>
+                      {/* Image previews */}
+                      <div className="flex gap-2 flex-wrap">
+                        {extractedData.images?.cover && (
+                          <img
+                            src={extractedData.images.cover}
+                            alt="Cover"
+                            className="w-16 h-16 object-cover rounded border border-gray-700"
+                            onError={(e) => (e.currentTarget.style.display = 'none')}
+                          />
+                        )}
+                        {extractedData.images?.gallery?.slice(0, 4).map((url, idx) => (
+                          <img
+                            key={idx}
+                            src={url}
+                            alt={`Gallery ${idx + 1}`}
+                            className="w-16 h-16 object-cover rounded border border-gray-700"
+                            onError={(e) => (e.currentTarget.style.display = 'none')}
+                          />
+                        ))}
+                        {(extractedData.images?.gallery?.length || 0) > 4 && (
+                          <div className="w-16 h-16 rounded border border-gray-700 bg-gray-800 flex items-center justify-center text-xs text-gray-400">
+                            +{(extractedData.images?.gallery?.length || 0) - 4}
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}

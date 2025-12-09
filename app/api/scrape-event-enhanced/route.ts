@@ -1,5 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+// Try to get event data from Ticketmaster's public embed/widget API
+async function fetchTicketmasterEventData(eventId: string): Promise<any> {
+  try {
+    // Ticketmaster embed endpoint (publicly accessible)
+    const embedUrl = `https://www.ticketmaster.com/json/event/${eventId}`
+    const response = await fetch(embedUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
+        'Referer': 'https://www.ticketmaster.com/'
+      }
+    })
+
+    if (response.ok) {
+      const data = await response.json()
+      if (data && data.event) {
+        return {
+          eventName: data.event.name,
+          venueName: data.event.venue?.name,
+          venueCity: data.event.venue?.city,
+          venueState: data.event.venue?.state,
+          venueAddress: data.event.venue?.address,
+          eventDate: data.event.dates?.start?.localDate,
+          eventTime: data.event.dates?.start?.localTime?.slice(0, 5),
+          imageUrls: data.event.images?.map((img: any) => img.url).filter(Boolean) || []
+        }
+      }
+    }
+  } catch (e) {
+    console.log('Ticketmaster JSON API failed:', e)
+  }
+  return null
+}
+
 // Fetch and parse HTML from URL to extract venue and other details
 async function fetchAndParseHTML(url: string): Promise<{
   venueName?: string
@@ -191,11 +225,33 @@ export async function POST(req: NextRequest) {
     // TICKETMASTER PARSER
     // Example: https://www.ticketmaster.com/vir-das-hey-stranger-dallas-texas-04-09-2026/event/0C00635C995E4CE1
     if (domain.includes('ticketmaster.com')) {
-      // First, try to fetch and parse actual HTML for accurate venue info
-      const parsedData = await fetchAndParseHTML(url)
-
       const pathParts = url.split('/')
       const eventSlug = pathParts.find((p: string) => p.includes('-') && !p.includes('event')) || ''
+
+      // Extract event ID from URL (e.g., 0C00635C995E4CE1)
+      const eventIdMatch = url.match(/\/event\/([A-Z0-9]+)/i)
+      const eventId = eventIdMatch ? eventIdMatch[1] : ''
+
+      // Try multiple data sources in order of reliability
+      let parsedData: any = {}
+
+      // 1. Try Ticketmaster JSON API first (most reliable if available)
+      if (eventId) {
+        const tmApiData = await fetchTicketmasterEventData(eventId)
+        if (tmApiData && tmApiData.venueName) {
+          parsedData = tmApiData
+          console.log('Got data from Ticketmaster API:', tmApiData.venueName)
+        }
+      }
+
+      // 2. Fall back to HTML parsing
+      if (!parsedData.venueName) {
+        const htmlData = await fetchAndParseHTML(url)
+        if (htmlData.venueName) {
+          parsedData = { ...parsedData, ...htmlData }
+          console.log('Got data from HTML parsing:', htmlData.venueName)
+        }
+      }
 
       let slugParts = eventSlug.split('-')
 
@@ -255,9 +311,17 @@ export async function POST(req: NextRequest) {
         description = `Experience an incredible performance! ${eventName} brings an unforgettable night of entertainment to ${city}. Join us for world-class production and spectacular performances.`
       }
 
-      // Use venue from HTML parsing, or generate a generic fallback
-      const venueName = parsedData.venueName || `${city} ${type === 'sports' ? 'Stadium' : type === 'comedy' ? 'Comedy Club' : 'Arena'}`
+      // Use venue from API/HTML parsing - DO NOT generate fallback, show empty if not found
+      // This lets the user know the venue wasn't scraped and they should enter it manually
+      const venueName = parsedData.venueName || ''
       const venueAddress = parsedData.venueAddress || ''
+
+      // If we still don't have venue, try lookup API
+      let venueFromLookup: any = null
+      if (!venueName && eventName) {
+        // Don't auto-generate venue - leave empty for user to fill in or use lookup
+        console.log('No venue found from scraping, user should use venue lookup')
+      }
 
       eventData = {
         title: eventName,
