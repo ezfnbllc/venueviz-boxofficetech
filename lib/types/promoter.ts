@@ -28,16 +28,20 @@ export interface PaymentGateway {
   id?: string
   promoterId: string
   provider: 'stripe' | 'square' | 'paypal' | 'boxofficetech'
-  credentials: {
+  environment: 'sandbox' | 'live'
+  credentials?: {
     publishableKey?: string
     secretKey?: string
     apiKey?: string
     merchantId?: string
     accessToken?: string
+    clientId?: string
+    webhookSecret?: string
   }
   isActive: boolean
-  createdAt?: string
-  updatedAt?: string
+  createdAt?: Date | any
+  updatedAt?: Date | any
+  validatedAt?: Date | any
   testMode?: boolean
 }
 
@@ -46,7 +50,22 @@ export interface PromoterDocument {
   promoterId: string
   type: 'tax' | 'contract' | 'insurance' | 'other'
   name: string
+  fileName?: string
   url: string
   uploadedAt: string
   status: 'pending' | 'approved' | 'rejected'
+}
+
+export interface Commission {
+  id: string
+  promoterId: string
+  eventId: string
+  eventName: string
+  totalSales: number
+  commissionRate: number
+  amountOwed: number
+  paymentStatus: 'pending' | 'paid' | 'processing'
+  paidAt?: string
+  createdAt: string
+  updatedAt: string
 }

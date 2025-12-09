@@ -1,16 +1,86 @@
 'use client'
+import { useEffect, useRef, useMemo } from 'react'
 import { useEventWizardStore } from '@/lib/store/eventWizardStore'
+
+// Get current date/time in a specific timezone
+function getCurrentTimeInTimezone(timezone: string): string {
+  try {
+    const now = new Date()
+    // Format in the target timezone
+    const options: Intl.DateTimeFormatOptions = {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }
+    const parts = new Intl.DateTimeFormat('en-CA', options).formatToParts(now)
+    const values: Record<string, string> = {}
+    parts.forEach(p => { values[p.type] = p.value })
+
+    // Format: YYYY-MM-DDTHH:mm
+    return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`
+  } catch (e) {
+    // Fallback to local time if timezone is invalid
+    return new Date().toISOString().slice(0, 16)
+  }
+}
 
 export default function Step7Sales() {
   const { formData, updateFormData } = useEventWizardStore()
-  
+  const initializedRef = useRef(false)
+
+  // Get the event timezone from Step 3
+  const eventTimezone = useMemo(() =>
+    formData.schedule?.timezone || 'America/Chicago',
+    [formData.schedule?.timezone]
+  )
+
+  // Auto-set default sales dates
+  useEffect(() => {
+    if (initializedRef.current) return
+    if (formData.sales?.salesStartDate && formData.sales?.salesEndDate) return
+
+    initializedRef.current = true
+
+    // Get current date/time in the event's timezone for sales start
+    const salesStartDate = getCurrentTimeInTimezone(eventTimezone)
+
+    // Get event date/time for sales end
+    let salesEndDate = ''
+    const firstPerformance = formData.schedule?.performances?.[0]
+    if (firstPerformance?.date) {
+      const eventDate = firstPerformance.date
+      const eventTime = firstPerformance.startTime || '19:00'
+      salesEndDate = `${eventDate}T${eventTime}`
+    }
+
+    updateFormData('sales', {
+      ...formData.sales,
+      salesStartDate: formData.sales?.salesStartDate || salesStartDate,
+      salesEndDate: formData.sales?.salesEndDate || salesEndDate
+    })
+  }, [formData.schedule?.performances, formData.sales, eventTimezone])
+
   const updateSalesField = (field: string, value: any) => {
     updateFormData('sales', {
       ...formData.sales,
       [field]: value
     })
   }
-  
+
+  // Auto-set sales end to event date button
+  const autoSetSalesEnd = () => {
+    const firstPerformance = formData.schedule?.performances?.[0]
+    if (firstPerformance?.date) {
+      const eventDate = firstPerformance.date
+      const eventTime = firstPerformance.startTime || '19:00'
+      updateSalesField('salesEndDate', `${eventDate}T${eventTime}`)
+    }
+  }
+
   return (
     <div>
       <h3 className="text-xl font-bold mb-4">Sales Configuration</h3>
@@ -22,6 +92,9 @@ export default function Step7Sales() {
           <div>
             <label className="block text-sm font-medium mb-2">
               Sales Start Date
+              <span className="text-xs text-gray-400 ml-2">
+                ({eventTimezone.split('/')[1]?.replace('_', ' ') || eventTimezone})
+              </span>
             </label>
             <input
               type="datetime-local"
@@ -32,9 +105,18 @@ export default function Step7Sales() {
           </div>
           
           <div>
-            <label className="block text-sm font-medium mb-2">
-              Sales End Date
-            </label>
+            <div className="flex justify-between items-center mb-2">
+              <label className="block text-sm font-medium">
+                Sales End Date
+              </label>
+              <button
+                type="button"
+                onClick={autoSetSalesEnd}
+                className="text-xs px-2 py-1 bg-purple-600/30 text-purple-300 rounded hover:bg-purple-600/50"
+              >
+                Use event start
+              </button>
+            </div>
             <input
               type="datetime-local"
               value={formData.sales?.salesEndDate || ''}

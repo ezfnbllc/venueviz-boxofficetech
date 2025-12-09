@@ -171,23 +171,35 @@ export default function Step9Review() {
             <div className="space-y-3">
               {formData.schedule?.performances?.length > 0 ? (
                 <>
-                  {formData.schedule.performances.slice(0, 3).map((perf: any, idx: number) => (
-                    <div key={idx} className="pb-3 border-b border-white/10 last:border-0">
-                      <p className="font-medium text-sm">{formatDate(perf.date)}</p>
-                      {perf.doorTime && (
-                        <p className="text-xs text-gray-400 mt-1">
-                          Doors: {perf.doorTime} | Show: {perf.showTime || 'TBA'}
+                  {formData.schedule.performances.slice(0, 3).map((perf: any, idx: number) => {
+                    // Format date with time
+                    const dateStr = perf.date ? new Date(perf.date).toLocaleDateString('en-US', {
+                      weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
+                    }) : 'TBD'
+                    const startTime = perf.startTime || perf.showTime
+                    const doorsTime = perf.doorsOpen || perf.doorTime
+
+                    return (
+                      <div key={idx} className="pb-3 border-b border-white/10 last:border-0">
+                        <p className="font-medium text-sm">
+                          {dateStr}{startTime ? `, ${startTime}` : ''}
                         </p>
-                      )}
-                      <div className="flex gap-2 mt-2">
-                        <span className={`text-xs px-2 py-1 rounded ${
-                          perf.status === 'onsale' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
-                        }`}>
-                          {perf.status || 'Scheduled'}
-                        </span>
+                        {(doorsTime || startTime) && (
+                          <p className="text-xs text-gray-400 mt-1">
+                            {doorsTime ? `Doors: ${doorsTime}` : ''}{doorsTime && startTime ? ' | ' : ''}{startTime ? `Show: ${startTime}` : ''}
+                            {perf.endTime ? ` | End: ${perf.endTime}` : ''}
+                          </p>
+                        )}
+                        <div className="flex gap-2 mt-2">
+                          <span className={`text-xs px-2 py-1 rounded ${
+                            perf.status === 'onsale' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
+                          }`}>
+                            {perf.status || 'Scheduled'}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                   {formData.schedule.performances.length > 3 && (
                     <p className="text-xs text-gray-500">
                       +{formData.schedule.performances.length - 3} more performances
@@ -247,7 +259,7 @@ export default function Step9Review() {
                       {formData.pricing.tiers.slice(0, 5).map((tier: any, idx: number) => (
                         <div key={idx} className="flex justify-between items-center text-sm">
                           <span>{tier.name || `Tier ${idx + 1}`}</span>
-                          <span className="font-medium">${tier.price || 0}</span>
+                          <span className="font-medium">${tier.basePrice || tier.price || 0}</span>
                         </div>
                       ))}
                       {formData.pricing.tiers.length > 5 && (

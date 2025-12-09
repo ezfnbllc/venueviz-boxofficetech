@@ -1,18 +1,22 @@
-import { 
-  collection, 
-  addDoc, 
-  getDocs, 
-  doc, 
-  getDoc, 
-  updateDoc, 
-  deleteDoc, 
-  query, 
-  where, 
-  orderBy, 
+import {
+  collection,
+  addDoc,
+  getDocs,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  orderBy,
   limit,
-  Timestamp 
+  Timestamp
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+
+// Helper to check if code is running in browser (prevents SSR/build-time Firebase calls)
+const isBrowser = typeof window !== 'undefined'
 
 export class AdminService {
   
@@ -224,9 +228,24 @@ export class AdminService {
 
   static async createEvent(eventData: any) {
     try {
+      // Remove undefined values that Firebase doesn't accept
+      const cleanData = JSON.parse(JSON.stringify(eventData))
+
+      // Deep clean undefined values
+      const deepClean = (obj: any) => {
+        Object.keys(obj).forEach(key => {
+          if (obj[key] === undefined) {
+            delete obj[key]
+          } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+            deepClean(obj[key])
+          }
+        })
+      }
+      deepClean(cleanData)
+
       const eventsRef = collection(db, 'events')
       const docRef = await addDoc(eventsRef, {
-        ...eventData,
+        ...cleanData,
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now()
       })
@@ -687,6 +706,9 @@ export class AdminService {
 
   // ============ PROMOTERS ============
   static async getPromoters() {
+    // Skip during SSR/build to avoid Firebase permission errors
+    if (!isBrowser) return []
+
     try {
       const promotersRef = collection(db, 'promoters')
       const snapshot = await getDocs(promotersRef)
@@ -752,6 +774,36 @@ export class AdminService {
       return true
     } catch (error) {
       console.error('Error deleting promoter:', error)
+      throw error
+    }
+  }
+
+  // ============ USERS ============
+  static async createUser(userData: any) {
+    try {
+      const userRef = doc(db, 'users', userData.uid)
+      await setDoc(userRef, {
+        ...userData,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      })
+      return userData.uid
+    } catch (error) {
+      console.error('Error creating user:', error)
+      throw error
+    }
+  }
+
+  static async updateUser(userId: string, data: any) {
+    try {
+      const userRef = doc(db, 'users', userId)
+      await updateDoc(userRef, {
+        ...data,
+        updatedAt: Timestamp.now()
+      })
+      return true
+    } catch (error) {
+      console.error('Error updating user:', error)
       throw error
     }
   }

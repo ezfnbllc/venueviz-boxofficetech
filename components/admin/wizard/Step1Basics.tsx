@@ -18,6 +18,7 @@ export default function Step1Basics() {
   const [uploadingCover, setUploadingCover] = useState(false)
   const [uploadingGallery, setUploadingGallery] = useState(false)
   const [performerInput, setPerformerInput] = useState('')
+  const [adjustingDescription, setAdjustingDescription] = useState(false)
 
   const performers = formData.basics?.performers || []
   const gallery = formData.basics?.images?.gallery || []
@@ -53,16 +54,27 @@ export default function Step1Basics() {
   }
 
   const handleURLImport = (data: AIExtractedData) => {
-    updateFormData('basics', {
+    // Save to basics (including scraped date/time for Step3 to pick up)
+    const basicsData: any = {
       name: data.name,
       description: data.description,
       category: data.category,
       type: data.category,
-      tags: data.tags,
-      performers: data.performers,
-      images: data.images || formData.basics?.images
-    })
-    
+      tags: data.tags || [],
+      performers: data.performers || [],
+      images: data.images || formData.basics?.images,
+      // Save scraped date/time for Step3 Schedule
+      scrapedDate: data.date || '',
+      scrapedTime: data.time || ''
+    }
+
+    // Only set scrapedVenue if venue data exists (to avoid Firebase undefined errors)
+    if (data.venue && data.venue.name) {
+      basicsData.scrapedVenue = data.venue
+    }
+
+    updateFormData('basics', basicsData)
+
     setAiConfidence(data.confidence)
     setTimeout(() => setAiConfidence(null), 10000)
   }
@@ -77,9 +89,39 @@ export default function Step1Basics() {
       performers: data.performers,
       images: data.images || formData.basics?.images
     })
-    
+
     setAiConfidence(data.confidence)
     setTimeout(() => setAiConfidence(null), 10000)
+  }
+
+  // Description Adjustment
+  const handleAdjustDescription = async (action: 'lengthen' | 'shorten' | 'professional') => {
+    const description = formData.basics?.description
+    if (!description?.trim()) {
+      alert('Please enter a description first')
+      return
+    }
+
+    setAdjustingDescription(true)
+    try {
+      const response = await fetch('/api/ai/adjust-description', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description, action })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        updateFormData('basics', { description: data.description })
+      } else {
+        throw new Error('Failed to adjust description')
+      }
+    } catch (error) {
+      console.error('Description adjustment error:', error)
+      alert('Failed to adjust description')
+    } finally {
+      setAdjustingDescription(false)
+    }
   }
 
   // Manual Image Upload
@@ -203,14 +245,45 @@ export default function Step1Basics() {
 
       {/* Description */}
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
-          Description <span className="text-red-400">*</span>
-        </label>
+        <div className="flex justify-between items-center mb-2">
+          <label className="block text-sm font-medium text-gray-300">
+            Description <span className="text-red-400">*</span>
+          </label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => handleAdjustDescription('shorten')}
+              disabled={adjustingDescription || !formData.basics?.description}
+              className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 rounded text-gray-300
+                       disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {adjustingDescription ? '...' : '↓ Shorten'}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleAdjustDescription('lengthen')}
+              disabled={adjustingDescription || !formData.basics?.description}
+              className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 rounded text-gray-300
+                       disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {adjustingDescription ? '...' : '↑ Lengthen'}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleAdjustDescription('professional')}
+              disabled={adjustingDescription || !formData.basics?.description}
+              className="px-3 py-1 text-xs bg-purple-600 hover:bg-purple-700 rounded text-white
+                       disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {adjustingDescription ? '...' : '✨ Polish'}
+            </button>
+          </div>
+        </div>
         <textarea
           value={formData.basics?.description || ''}
           onChange={(e) => updateFormData('basics', { description: e.target.value })}
           rows={5}
-          className="w-full px-4 py-2.5 bg-gray-850 border border-gray-800 rounded-lg 
+          className="w-full px-4 py-2.5 bg-gray-850 border border-gray-800 rounded-lg
                    focus:bg-gray-800 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500/50
                    transition-all text-white placeholder-gray-500"
           placeholder="Enter event description..."

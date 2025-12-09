@@ -3,8 +3,6 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useEventWizardStore } from '@/lib/store/eventWizardStore'
 import { AdminService } from '@/lib/admin/adminService'
-import { Timestamp, doc, getDoc } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
 import { auth } from '@/lib/firebase'
 
 import Step1Basics from './wizard/Step1Basics'
@@ -18,34 +16,14 @@ import Step8Communications from './wizard/Step8Communications'
 import Step9Review from './wizard/Step9Review'
 
 export default function EventWizard({ onClose, eventId }: { onClose: () => void, eventId?: string }) {
-
-  
-  // Load event data if editing
-  useEffect(() => {
-    const loadEventData = async () => {
-      if (eventId) {
-        try {
-          console.log('Loading event data for:', eventId)
-          const eventDoc = await getDoc(doc(db, 'events', eventId))
-          if (eventDoc.exists()) {
-            const eventData = eventDoc.data()
-            console.log('Loaded event data:', eventData)
-            // Data is already loaded via loadEventData
-          }
-        } catch (error) {
-          console.error('Error loading event:', error)
-        }
-      }
-    }
-    loadEventData()
-  }, [eventId])
   const router = useRouter()
   const {
-currentStep,
+    currentStep,
     setCurrentStep,
     nextStep,
     prevStep,
     formData,
+    updateFormData,
     validation,
     setValidation,
     resetWizard,
@@ -83,50 +61,44 @@ currentStep,
   
   useEffect(() => {
     const initializeWizard = async () => {
-      console.log('[WIZARD INIT] Starting initialization')
       setLoading(true)
-      
+
       try {
         const user = auth.currentUser
         if (user) {
           const idTokenResult = await user.getIdTokenResult()
           setUserRole(idTokenResult.claims.role || 'admin')
         }
-        
+
         if (eventId) {
           if (loadedEventRef.current === eventId) {
-            console.log('[WIZARD INIT] Event already loaded:', eventId)
             setLoading(false)
             return
           }
-          
-          console.log('[WIZARD INIT] Loading event:', eventId)
+
           const event = await AdminService.getEvent(eventId)
-          
+
           if (event) {
-            console.log('[WIZARD INIT] Event data retrieved:', event.name)
             loadedEventRef.current = eventId
             loadEventData({ ...event, id: eventId })
             setEventId(eventId)
           } else {
-            console.error('[WIZARD INIT] Event not found:', eventId)
             alert('Event not found')
             onClose()
           }
         } else {
-          console.log('[WIZARD INIT] New event mode')
           loadedEventRef.current = null
           resetWizard()
         }
       } catch (error) {
-        console.error('[WIZARD INIT] Error:', error)
+        console.error('Error loading event:', error)
         alert('Error loading event')
         onClose()
       } finally {
         setLoading(false)
       }
     }
-    
+
     initializeWizard()
   }, [eventId])
   
@@ -275,7 +247,7 @@ currentStep,
       </div>
     )
   }
-  
+
   const steps = [
     { number: 1, title: 'Basics', icon: '📝', description: 'Event details' },
     { number: 2, title: 'Venue', icon: '🏛️', description: 'Location setup' },
@@ -385,15 +357,18 @@ currentStep,
         <div className="flex-1 overflow-y-auto bg-gray-950 p-6">
           <div className="max-w-5xl mx-auto">
             <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-              {currentStep === 1 && <Step1Basics data={formData} updateData={updateData} />}
-              {currentStep === 2 && <Step2Venue data={formData} updateData={updateData} />}
-              {currentStep === 3 && <Step3Schedule data={formData} updateData={updateData} />}
-              {currentStep === 4 && <Step4Pricing data={formData} updateData={updateData} />}
-              {currentStep === 5 && <Step5Promoter data={formData} updateData={updateData} />}
-              {currentStep === 6 && <Step6Promotions data={formData} updateData={updateData} />}
-              {currentStep === 7 && <Step7Sales data={formData} updateData={updateData} />}
-              {currentStep === 8 && <Step8Communications data={formData} updateData={updateData} />}
-              {currentStep === 9 && <Step9Review data={formData} updateData={updateData} />}
+              {currentStep === 1 && <Step1Basics />}
+              {currentStep === 2 && <Step2Venue />}
+              {currentStep === 3 && <Step3Schedule />}
+              {currentStep === 4 && <Step4Pricing />}
+              {currentStep === 5 && <Step5Promoter />}
+              {currentStep === 6 && <Step6Promotions />}
+              {currentStep === 7 && <Step7Sales />}
+              {currentStep === 8 && <Step8Communications />}
+              {currentStep === 9 && <Step9Review />}
+              {(currentStep < 1 || currentStep > 9) && (
+                <div className="text-red-400 p-4">Invalid step: {currentStep}</div>
+              )}
             </div>
           </div>
         </div>
