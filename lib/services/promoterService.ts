@@ -1,6 +1,6 @@
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, Timestamp, getDoc, setDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { PromoterProfile, PaymentGateway } from '@/lib/types/promoter'
+import { PromoterProfile, PaymentGateway, PromoterDocument, Commission } from '@/lib/types/promoter'
 
 // Helper to check if code is running in browser (prevents SSR/build-time Firebase calls)
 const isBrowser = typeof window !== 'undefined'
@@ -251,6 +251,110 @@ export class PromoterService {
     } catch (error) {
       console.error('Error fetching payment gateway:', error)
       return null
+    }
+  }
+
+  // Get commissions for promoter (calculated from events and orders)
+  static async getCommissions(promoterId: string): Promise<Commission[]> {
+    if (!isBrowser) return []
+
+    try {
+      // Get promoter to get commission rate
+      const promoter = await this.getPromoter(promoterId)
+      const commissionRate = promoter?.commission || 10
+
+      // Get all events for this promoter
+      const eventsRef = collection(db, 'events')
+      const eventsQuery = query(eventsRef, where('promoterId', '==', promoterId))
+      const eventsSnap = await getDocs(eventsQuery)
+
+      const events = eventsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+
+      if (events.length === 0) return []
+
+      // Get all orders
+      const ordersRef = collection(db, 'orders')
+      const ordersSnap = await getDocs(ordersRef)
+
+      // Group orders by eventId
+      const ordersByEvent: Record<string, { totalSales: number; paid: boolean }> = {}
+      events.forEach(e => {
+        ordersByEvent[e.id] = { totalSales: 0, paid: false }
+      })
+
+      ordersSnap.docs.forEach(doc => {
+        const order = doc.data()
+        if (ordersByEvent[order.eventId] !== undefined) {
+          ordersByEvent[order.eventId].totalSales += order.pricing?.total || order.totalAmount || order.total || 0
+          if (order.commissionPaid) {
+            ordersByEvent[order.eventId].paid = true
+          }
+        }
+      })
+
+      // Build commission records
+      const commissions: Commission[] = events.map(event => {
+        const eventSales = ordersByEvent[event.id]?.totalSales || 0
+        const amountOwed = eventSales * (commissionRate / 100)
+
+        return {
+          id: event.id,
+          promoterId,
+          eventId: event.id,
+          eventName: event.name || 'Unnamed Event',
+          totalSales: Math.round(eventSales * 100) / 100,
+          commissionRate,
+          amountOwed: Math.round(amountOwed * 100) / 100,
+          paymentStatus: ordersByEvent[event.id]?.paid ? 'paid' : (eventSales > 0 ? 'pending' : 'pending'),
+          createdAt: event.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+          updatedAt: event.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString()
+        } as Commission
+      })
+
+      // Sort by amount owed descending
+      return commissions.sort((a, b) => b.amountOwed - a.amountOwed)
+    } catch (error) {
+      console.error('Error fetching commissions:', error)
+      return []
+    }
+  }
+
+  // Get promoter documents
+  static async getPromoterDocuments(promoterId: string): Promise<PromoterDocument[]> {
+    if (!isBrowser) return []
+
+    try {
+      const docsRef = collection(db, 'promoter_documents')
+      const q = query(docsRef, where('promoterId', '==', promoterId))
+      const snapshot = await getDocs(q)
+
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        fileName: doc.data().fileName || doc.data().name
+      })) as PromoterDocument[]
+    } catch (error) {
+      console.error('Error fetching promoter documents:', error)
+      return []
+    }
+  }
+
+  // Upload promoter document
+  static async uploadDocument(promoterId: string, documentData: Partial<PromoterDocument>): Promise<string> {
+    try {
+      const docsRef = collection(db, 'promoter_documents')
+      const docRef = await addDoc(docsRef, {
+        ...documentData,
+        promoterId,
+        status: 'pending',
+        uploadedAt: Timestamp.now(),
+        createdAt: Timestamp.now()
+      })
+
+      return docRef.id
+    } catch (error) {
+      console.error('Error uploading document:', error)
+      throw error
     }
   }
 }

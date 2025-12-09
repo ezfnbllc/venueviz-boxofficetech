@@ -50,7 +50,22 @@ export interface PromoterDocument {
   promoterId: string
   type: 'tax' | 'contract' | 'insurance' | 'other'
   name: string
+  fileName?: string
   url: string
   uploadedAt: string
   status: 'pending' | 'approved' | 'rejected'
+}
+
+export interface Commission {
+  id: string
+  promoterId: string
+  eventId: string
+  eventName: string
+  totalSales: number
+  commissionRate: number
+  amountOwed: number
+  paymentStatus: 'pending' | 'paid' | 'processing'
+  paidAt?: string
+  createdAt: string
+  updatedAt: string
 }
