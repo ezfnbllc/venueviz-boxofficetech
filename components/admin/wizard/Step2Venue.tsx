@@ -86,6 +86,8 @@ export default function Step2Venue() {
   })
   const [uploadingImages, setUploadingImages] = useState(false)
   const [savingVenue, setSavingVenue] = useState(false)
+  const [lookingUpVenue, setLookingUpVenue] = useState(false)
+  const [lookupMessage, setLookupMessage] = useState('')
 
   const searchInputRef = useRef<HTMLInputElement>(null)
   const initializedRef = useRef(false)
@@ -295,6 +297,73 @@ export default function Step2Venue() {
       console.error('Error uploading images:', error)
     }
     setUploadingImages(false)
+  }
+
+  // AI-powered venue lookup to auto-fill address and details
+  const handleLookupVenue = async () => {
+    if (!venueFormData.name.trim()) {
+      setLookupMessage('Please enter a venue name first')
+      return
+    }
+
+    setLookingUpVenue(true)
+    setLookupMessage('Looking up venue details...')
+
+    try {
+      const response = await fetch('/api/lookup-venue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          venueName: venueFormData.name,
+          city: venueFormData.city || undefined,
+          state: venueFormData.state || undefined
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success && data.venue) {
+        const venue = data.venue
+
+        // Update form with AI-found details
+        setVenueFormData(prev => ({
+          ...prev,
+          name: venue.name || prev.name,
+          streetAddress1: venue.address || prev.streetAddress1,
+          city: venue.city || prev.city,
+          state: venue.state || prev.state,
+          zipCode: venue.zip || prev.zipCode,
+          capacity: venue.capacity || prev.capacity,
+          type: venue.type || prev.type,
+          contactPhone: venue.phone || prev.contactPhone,
+          website: venue.website || prev.website,
+          description: venue.description || prev.description,
+          amenities: [
+            ...(venue.features?.hasParking ? ['Parking'] : []),
+            ...(venue.features?.isAccessible ? ['Wheelchair Accessible'] : []),
+            ...(venue.features?.hasVIP ? ['VIP Boxes'] : []),
+            ...(venue.features?.hasFood ? ['Food Service'] : []),
+            ...(venue.features?.hasBars ? ['Bar'] : [])
+          ]
+        }))
+
+        const confidence = venue.confidence === 'high' ? '(High confidence)'
+          : venue.confidence === 'medium' ? '(Medium confidence)'
+          : '(Low confidence - please verify)'
+
+        setLookupMessage(`Found venue details! ${confidence}`)
+        setTimeout(() => setLookupMessage(''), 5000)
+      } else {
+        setLookupMessage('Could not find venue details. Please enter manually.')
+        setTimeout(() => setLookupMessage(''), 5000)
+      }
+    } catch (error) {
+      console.error('Venue lookup error:', error)
+      setLookupMessage('Error looking up venue. Please enter details manually.')
+      setTimeout(() => setLookupMessage(''), 5000)
+    }
+
+    setLookingUpVenue(false)
   }
 
   const handleCreateVenue = async () => {
@@ -609,13 +678,40 @@ export default function Step2Venue() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm mb-2">Venue Name *</label>
-                  <input
-                    type="text"
-                    value={venueFormData.name}
-                    onChange={(e) => setVenueFormData({ ...venueFormData, name: e.target.value })}
-                    className="w-full px-4 py-2 bg-white/10 rounded-lg"
-                    placeholder="Enter venue name"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={venueFormData.name}
+                      onChange={(e) => setVenueFormData({ ...venueFormData, name: e.target.value })}
+                      className="flex-1 px-4 py-2 bg-white/10 rounded-lg"
+                      placeholder="Enter venue name"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleLookupVenue}
+                      disabled={lookingUpVenue || !venueFormData.name.trim()}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:opacity-50 rounded-lg text-sm whitespace-nowrap flex items-center gap-2"
+                    >
+                      {lookingUpVenue ? (
+                        <>
+                          <span className="animate-spin">⟳</span>
+                          Looking up...
+                        </>
+                      ) : (
+                        <>
+                          🔍 Lookup Details
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  {lookupMessage && (
+                    <p className={`text-xs mt-2 ${lookupMessage.includes('Found') ? 'text-green-400' : lookupMessage.includes('Error') || lookupMessage.includes('not find') ? 'text-yellow-400' : 'text-blue-400'}`}>
+                      {lookupMessage}
+                    </p>
+                  )}
+                  <p className="text-xs text-gray-400 mt-1">
+                    Enter the venue name and click "Lookup Details" to auto-fill address and other information
+                  </p>
                 </div>
 
                 <div>

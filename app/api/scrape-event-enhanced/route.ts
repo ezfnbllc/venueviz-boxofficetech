@@ -1,5 +1,114 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+// Fetch and parse HTML from URL to extract venue and other details
+async function fetchAndParseHTML(url: string): Promise<{
+  venueName?: string
+  venueCity?: string
+  venueState?: string
+  venueAddress?: string
+  eventName?: string
+  eventDate?: string
+  eventTime?: string
+  imageUrls?: string[]
+}> {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Cache-Control': 'no-cache'
+      }
+    })
+
+    if (!response.ok) {
+      console.log('Failed to fetch URL:', response.status)
+      return {}
+    }
+
+    const html = await response.text()
+    const result: any = {}
+
+    // Extract venue name from various patterns
+    // Ticketmaster: Look for venue in JSON-LD or meta tags
+    const jsonLdMatch = html.match(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi)
+    if (jsonLdMatch) {
+      for (const match of jsonLdMatch) {
+        try {
+          const jsonContent = match.replace(/<script[^>]*>|<\/script>/gi, '')
+          const data = JSON.parse(jsonContent)
+
+          // Check for Event schema
+          if (data['@type'] === 'Event' || data['@type'] === 'MusicEvent' || data['@type'] === 'ComedyEvent') {
+            if (data.location) {
+              result.venueName = data.location.name
+              if (data.location.address) {
+                if (typeof data.location.address === 'string') {
+                  result.venueAddress = data.location.address
+                } else {
+                  result.venueAddress = data.location.address.streetAddress
+                  result.venueCity = data.location.address.addressLocality
+                  result.venueState = data.location.address.addressRegion
+                }
+              }
+            }
+            if (data.name) result.eventName = data.name
+            if (data.startDate) {
+              const date = new Date(data.startDate)
+              result.eventDate = date.toISOString().split('T')[0]
+              result.eventTime = date.toTimeString().slice(0, 5)
+            }
+            if (data.image) {
+              result.imageUrls = Array.isArray(data.image) ? data.image : [data.image]
+            }
+          }
+        } catch (e) {
+          // Continue to next JSON-LD block
+        }
+      }
+    }
+
+    // Fallback: Look for venue in meta tags
+    if (!result.venueName) {
+      const venueMetaMatch = html.match(/property="event:venue"[^>]*content="([^"]+)"/i) ||
+                            html.match(/name="venue"[^>]*content="([^"]+)"/i)
+      if (venueMetaMatch) {
+        result.venueName = venueMetaMatch[1]
+      }
+    }
+
+    // Look for venue in common HTML patterns
+    if (!result.venueName) {
+      // Ticketmaster specific selectors
+      const tmVenueMatch = html.match(/class="[^"]*venue-name[^"]*"[^>]*>([^<]+)</i) ||
+                          html.match(/data-testid="venue-name"[^>]*>([^<]+)</i) ||
+                          html.match(/<span[^>]*class="[^"]*location[^"]*"[^>]*>([^<]+)</i)
+      if (tmVenueMatch) {
+        result.venueName = tmVenueMatch[1].trim()
+      }
+    }
+
+    // Extract images
+    if (!result.imageUrls || result.imageUrls.length === 0) {
+      const imageMatches = html.matchAll(/og:image"[^>]*content="([^"]+)"/gi)
+      const images: string[] = []
+      for (const match of imageMatches) {
+        if (match[1] && !images.includes(match[1])) {
+          images.push(match[1])
+        }
+      }
+      if (images.length > 0) {
+        result.imageUrls = images
+      }
+    }
+
+    return result
+  } catch (error) {
+    console.error('Error fetching/parsing HTML:', error)
+    return {}
+  }
+}
+
 // US State name to abbreviation mapping
 const stateAbbreviations: Record<string, string> = {
   'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR', 'california': 'CA',
@@ -82,29 +191,39 @@ export async function POST(req: NextRequest) {
     // TICKETMASTER PARSER
     // Example: https://www.ticketmaster.com/vir-das-hey-stranger-dallas-texas-04-09-2026/event/0C00635C995E4CE1
     if (domain.includes('ticketmaster.com')) {
+      // First, try to fetch and parse actual HTML for accurate venue info
+      const parsedData = await fetchAndParseHTML(url)
+
       const pathParts = url.split('/')
       const eventSlug = pathParts.find((p: string) => p.includes('-') && !p.includes('event')) || ''
 
       let slugParts = eventSlug.split('-')
 
       // Extract date (format: MM-DD-YYYY at end of slug)
-      let eventDate = ''
-      const lastThree = slugParts.slice(-3)
-      if (lastThree.length === 3) {
-        const [mm, dd, yyyy] = lastThree
-        if (/^\d{2}$/.test(mm) && /^\d{2}$/.test(dd) && /^\d{4}$/.test(yyyy)) {
-          eventDate = `${yyyy}-${mm}-${dd}`
+      let eventDate = parsedData.eventDate || ''
+      if (!eventDate) {
+        const lastThree = slugParts.slice(-3)
+        if (lastThree.length === 3) {
+          const [mm, dd, yyyy] = lastThree
+          if (/^\d{2}$/.test(mm) && /^\d{2}$/.test(dd) && /^\d{4}$/.test(yyyy)) {
+            eventDate = `${yyyy}-${mm}-${dd}`
+            slugParts = slugParts.slice(0, -3)
+          }
+        }
+      } else {
+        // Still need to remove date from slug for name parsing
+        const lastThree = slugParts.slice(-3)
+        if (lastThree.length === 3 && /^\d{2}$/.test(lastThree[0]) && /^\d{2}$/.test(lastThree[1]) && /^\d{4}$/.test(lastThree[2])) {
           slugParts = slugParts.slice(0, -3)
         }
       }
 
       // Extract state (last part after removing date)
-      let state = 'TX'
-      let city = 'Dallas'
+      let state = parsedData.venueState || 'TX'
+      let city = parsedData.venueCity || 'Dallas'
 
-      if (slugParts.length >= 2) {
+      if (!parsedData.venueCity && slugParts.length >= 2) {
         const lastPart = slugParts[slugParts.length - 1].toLowerCase()
-        const secondLast = slugParts[slugParts.length - 2].toLowerCase()
 
         // Check for full state name
         if (stateAbbreviations[lastPart]) {
@@ -122,8 +241,8 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Remaining parts are the event name
-      const eventName = formatTitle(slugParts)
+      // Use parsed event name or construct from remaining slug parts
+      const eventName = parsedData.eventName || formatTitle(slugParts)
       const { type, category } = detectEventType(eventName)
 
       // Generate description based on event type
@@ -136,13 +255,17 @@ export async function POST(req: NextRequest) {
         description = `Experience an incredible performance! ${eventName} brings an unforgettable night of entertainment to ${city}. Join us for world-class production and spectacular performances.`
       }
 
+      // Use venue from HTML parsing, or generate a generic fallback
+      const venueName = parsedData.venueName || `${city} ${type === 'sports' ? 'Stadium' : type === 'comedy' ? 'Comedy Club' : 'Arena'}`
+      const venueAddress = parsedData.venueAddress || ''
+
       eventData = {
         title: eventName,
         description,
         date: eventDate,
-        time: type === 'comedy' ? '20:00' : '19:30',
-        venueName: `${city} ${type === 'sports' ? 'Stadium' : type === 'comedy' ? 'Comedy Club' : 'Arena'}`,
-        venueAddress: '123 Entertainment Way',
+        time: parsedData.eventTime || (type === 'comedy' ? '20:00' : '19:30'),
+        venueName,
+        venueAddress,
         venueCity: city,
         venueState: state,
         venueCapacity: type === 'sports' ? 50000 : type === 'comedy' ? 500 : 20000,
@@ -158,13 +281,17 @@ export async function POST(req: NextRequest) {
         ],
         performers: [eventName],
         type: category,
-        capacity: type === 'sports' ? 50000 : type === 'comedy' ? 500 : 20000
+        capacity: type === 'sports' ? 50000 : type === 'comedy' ? 500 : 20000,
+        imageUrls: parsedData.imageUrls || []
       }
     }
 
     // STUBHUB PARSER
     // Example: https://www.stubhub.com/world-cup-arlington-tickets-6-14-2026/event/153021218/?...
     else if (domain.includes('stubhub.com')) {
+      // First, try to fetch and parse actual HTML for accurate venue info
+      const parsedData = await fetchAndParseHTML(url)
+
       const pathParts = url.split('/')
       const eventSlug = pathParts.find((p: string) => p.includes('-tickets-')) || ''
 
@@ -172,8 +299,8 @@ export async function POST(req: NextRequest) {
       const [eventCityPart, datePart] = eventSlug.split('-tickets-')
 
       // Parse date (format: M-DD-YYYY or MM-DD-YYYY)
-      let eventDate = ''
-      if (datePart) {
+      let eventDate = parsedData.eventDate || ''
+      if (!eventDate && datePart) {
         const dateMatch = datePart.match(/^(\d{1,2})-(\d{1,2})-(\d{4})/)
         if (dateMatch) {
           const [, month, day, year] = dateMatch
@@ -185,13 +312,13 @@ export async function POST(req: NextRequest) {
       const slugParts = eventCityPart ? eventCityPart.split('-') : []
 
       // Last part before '-tickets-' is usually the city
-      let city = 'Dallas'
-      if (slugParts.length >= 2) {
+      let city = parsedData.venueCity || 'Dallas'
+      if (!parsedData.venueCity && slugParts.length >= 2) {
         city = slugParts.pop() || 'Dallas'
         city = city.charAt(0).toUpperCase() + city.slice(1)
       }
 
-      const eventName = formatTitle(slugParts)
+      const eventName = parsedData.eventName || formatTitle(slugParts)
       const { type, category } = detectEventType(eventName)
 
       // Generate appropriate description
@@ -202,15 +329,19 @@ export async function POST(req: NextRequest) {
         description = `Experience ${eventName} live in ${city}! Secure your tickets for this highly anticipated event and be part of something special.`
       }
 
+      const venueName = parsedData.venueName || `${city} ${type === 'sports' ? 'Stadium' : 'Arena'}`
+      const venueAddress = parsedData.venueAddress || ''
+      const state = parsedData.venueState || 'TX'
+
       eventData = {
         title: eventName,
         description,
         date: eventDate,
-        time: type === 'sports' ? '18:00' : '20:00',
-        venueName: `${city} ${type === 'sports' ? 'Stadium' : 'Arena'}`,
-        venueAddress: '456 Sports Blvd',
+        time: parsedData.eventTime || (type === 'sports' ? '18:00' : '20:00'),
+        venueName,
+        venueAddress,
         venueCity: city,
-        venueState: 'TX', // Default, could be improved with city lookup
+        venueState: state,
         venueCapacity: type === 'sports' ? 80000 : 20000,
         pricing: [
           { level: 'Field/Floor', price: 500, serviceFee: 50, tax: 8, sections: ['Field'] },
@@ -220,7 +351,8 @@ export async function POST(req: NextRequest) {
         ],
         performers: [eventName],
         type: category,
-        capacity: type === 'sports' ? 80000 : 20000
+        capacity: type === 'sports' ? 80000 : 20000,
+        imageUrls: parsedData.imageUrls || []
       }
     }
 
