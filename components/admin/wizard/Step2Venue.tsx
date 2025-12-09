@@ -53,6 +53,31 @@ interface VenueWizardFormData {
   images: string[]
 }
 
+interface LayoutWizardFormData {
+  name: string
+  type: 'seating_chart' | 'general_admission'
+  gaLevels: Array<{
+    id: string
+    name: string
+    capacity: number
+    type: 'standing' | 'seated' | 'mixed'
+    price: number
+  }>
+  sections: Array<{
+    id: string
+    name: string
+    rows: number
+    seatsPerRow: number
+    price: number
+  }>
+  priceCategories: Array<{
+    id: string
+    name: string
+    price: number
+    color: string
+  }>
+}
+
 export default function Step2Venue() {
   const { formData, updateFormData } = useEventWizardStore()
   const [venues, setVenues] = useState<any[]>([])
@@ -88,6 +113,24 @@ export default function Step2Venue() {
   const [savingVenue, setSavingVenue] = useState(false)
   const [lookingUpVenue, setLookingUpVenue] = useState(false)
   const [lookupMessage, setLookupMessage] = useState('')
+
+  // Create layout sub-wizard state
+  const [showLayoutWizard, setShowLayoutWizard] = useState(false)
+  const [layoutWizardStep, setLayoutWizardStep] = useState(1)
+  const [layoutFormData, setLayoutFormData] = useState<LayoutWizardFormData>({
+    name: '',
+    type: 'general_admission',
+    gaLevels: [
+      { id: 'ga-1', name: 'General Admission', capacity: 500, type: 'standing', price: 50 }
+    ],
+    sections: [
+      { id: 'sec-1', name: 'Section A', rows: 10, seatsPerRow: 20, price: 75 }
+    ],
+    priceCategories: [
+      { id: 'cat-1', name: 'Standard', price: 50, color: '#8B5CF6' }
+    ]
+  })
+  const [savingLayout, setSavingLayout] = useState(false)
 
   const searchInputRef = useRef<HTMLInputElement>(null)
   const initializedRef = useRef(false)
@@ -411,6 +454,159 @@ export default function Step2Venue() {
     setSavingVenue(false)
   }
 
+  // Layout wizard helper functions
+  const addGALevel = () => {
+    const newId = `ga-${Date.now()}`
+    setLayoutFormData({
+      ...layoutFormData,
+      gaLevels: [...layoutFormData.gaLevels, {
+        id: newId,
+        name: `Level ${layoutFormData.gaLevels.length + 1}`,
+        capacity: 100,
+        type: 'standing',
+        price: 50
+      }]
+    })
+  }
+
+  const removeGALevel = (id: string) => {
+    if (layoutFormData.gaLevels.length > 1) {
+      setLayoutFormData({
+        ...layoutFormData,
+        gaLevels: layoutFormData.gaLevels.filter(l => l.id !== id)
+      })
+    }
+  }
+
+  const updateGALevel = (id: string, field: string, value: any) => {
+    setLayoutFormData({
+      ...layoutFormData,
+      gaLevels: layoutFormData.gaLevels.map(l =>
+        l.id === id ? { ...l, [field]: value } : l
+      )
+    })
+  }
+
+  const addSection = () => {
+    const newId = `sec-${Date.now()}`
+    setLayoutFormData({
+      ...layoutFormData,
+      sections: [...layoutFormData.sections, {
+        id: newId,
+        name: `Section ${String.fromCharCode(65 + layoutFormData.sections.length)}`,
+        rows: 10,
+        seatsPerRow: 20,
+        price: 75
+      }]
+    })
+  }
+
+  const removeSection = (id: string) => {
+    if (layoutFormData.sections.length > 1) {
+      setLayoutFormData({
+        ...layoutFormData,
+        sections: layoutFormData.sections.filter(s => s.id !== id)
+      })
+    }
+  }
+
+  const updateSection = (id: string, field: string, value: any) => {
+    setLayoutFormData({
+      ...layoutFormData,
+      sections: layoutFormData.sections.map(s =>
+        s.id === id ? { ...s, [field]: value } : s
+      )
+    })
+  }
+
+  const handleCreateLayout = async () => {
+    if (!formData.venue.venueId) {
+      alert('Please select a venue first')
+      return
+    }
+
+    setSavingLayout(true)
+    try {
+      let totalCapacity = 0
+      let layoutData: any = {
+        venueId: formData.venue.venueId,
+        name: layoutFormData.name || 'Default Layout',
+        type: layoutFormData.type,
+        priceCategories: layoutFormData.priceCategories
+      }
+
+      if (layoutFormData.type === 'general_admission') {
+        // Build GA levels
+        const gaLevels = layoutFormData.gaLevels.map(level => {
+          totalCapacity += level.capacity
+          return {
+            id: level.id,
+            name: level.name,
+            capacity: level.capacity,
+            type: level.type,
+            standingCapacity: level.type === 'standing' ? level.capacity : 0,
+            seatedCapacity: level.type === 'seated' ? level.capacity : 0
+          }
+        })
+        layoutData.gaLevels = gaLevels
+
+        // Update price categories based on GA levels
+        layoutData.priceCategories = layoutFormData.gaLevels.map((level, idx) => ({
+          id: `cat-${level.id}`,
+          name: level.name,
+          price: level.price,
+          color: ['#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#3B82F6'][idx % 5]
+        }))
+      } else {
+        // Build seating chart sections
+        const sections = layoutFormData.sections.map(section => {
+          const sectionCapacity = section.rows * section.seatsPerRow
+          totalCapacity += sectionCapacity
+          return {
+            id: section.id,
+            name: section.name,
+            capacity: sectionCapacity,
+            rows: Array.from({ length: section.rows }, (_, rowIdx) => ({
+              id: `${section.id}-row-${rowIdx + 1}`,
+              label: `Row ${rowIdx + 1}`,
+              seatCount: section.seatsPerRow
+            }))
+          }
+        })
+        layoutData.sections = sections
+
+        // Update price categories based on sections
+        layoutData.priceCategories = layoutFormData.sections.map((section, idx) => ({
+          id: `cat-${section.id}`,
+          name: section.name,
+          price: section.price,
+          color: ['#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#3B82F6'][idx % 5]
+        }))
+      }
+
+      layoutData.totalCapacity = totalCapacity
+
+      const newLayoutId = await AdminService.createLayout(layoutData)
+
+      // Reload layouts and select the new one
+      await loadLayouts(formData.venue.venueId)
+      handleLayoutChange(newLayoutId)
+      setShowLayoutWizard(false)
+      setLayoutWizardStep(1)
+      setLayoutFormData({
+        name: '',
+        type: 'general_admission',
+        gaLevels: [{ id: 'ga-1', name: 'General Admission', capacity: 500, type: 'standing', price: 50 }],
+        sections: [{ id: 'sec-1', name: 'Section A', rows: 10, seatsPerRow: 20, price: 75 }],
+        priceCategories: [{ id: 'cat-1', name: 'Standard', price: 50, color: '#8B5CF6' }]
+      })
+    } catch (error) {
+      console.error('Error creating layout:', error)
+      alert('Error creating layout')
+    }
+    setSavingLayout(false)
+  }
+
   const totalAvailableCapacity = formData.venue.availableSections
     ?.filter((s: any) => s.available)
     ?.reduce((sum: number, s: any) => sum + (s.capacity || 0), 0) || 0
@@ -533,9 +729,15 @@ export default function Step2Venue() {
           ) : (
             <div className="p-4 bg-yellow-600/20 rounded-lg">
               <p className="text-yellow-400 text-sm mb-2">No layouts available for this venue</p>
-              <p className="text-gray-400 text-xs">
-                Go to Venues Management to create a layout for this venue, or select a different venue.
+              <p className="text-gray-400 text-xs mb-3">
+                Create a layout to define seating sections or general admission areas for this venue.
               </p>
+              <button
+                onClick={() => setShowLayoutWizard(true)}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm"
+              >
+                + Create Layout
+              </button>
             </div>
           )}
         </div>
@@ -976,6 +1178,324 @@ export default function Step2Venue() {
                     className="px-6 py-2 bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50"
                   >
                     {savingVenue ? 'Creating...' : 'Create Venue'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Layout Creation Sub-Wizard Modal */}
+      {showLayoutWizard && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-gray-900 rounded-xl p-6 w-full max-w-2xl my-8">
+            {/* Header */}
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold">Create New Layout</h2>
+              <button
+                onClick={() => {
+                  setShowLayoutWizard(false)
+                  setLayoutWizardStep(1)
+                }}
+                className="text-gray-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Progress Steps */}
+            <div className="flex justify-between mb-6">
+              {['Layout Type', 'Configure', 'Review'].map((step, idx) => (
+                <div
+                  key={idx}
+                  className={`flex-1 text-center ${idx + 1 <= layoutWizardStep ? 'text-purple-400' : 'text-gray-600'}`}
+                >
+                  <div className={`w-8 h-8 mx-auto mb-2 rounded-full flex items-center justify-center text-sm ${
+                    idx + 1 <= layoutWizardStep ? 'bg-purple-600' : 'bg-gray-700'
+                  }`}>
+                    {idx + 1}
+                  </div>
+                  <span className="text-xs">{step}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Step 1: Layout Type */}
+            {layoutWizardStep === 1 && (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm mb-2">Layout Name *</label>
+                  <input
+                    type="text"
+                    value={layoutFormData.name}
+                    onChange={(e) => setLayoutFormData({ ...layoutFormData, name: e.target.value })}
+                    className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                    placeholder="e.g., Main Hall, Concert Setup"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm mb-3">Layout Type *</label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <button
+                      type="button"
+                      onClick={() => setLayoutFormData({ ...layoutFormData, type: 'general_admission' })}
+                      className={`p-4 rounded-lg border-2 text-left transition-all ${
+                        layoutFormData.type === 'general_admission'
+                          ? 'border-purple-600 bg-purple-600/20'
+                          : 'border-gray-700 hover:border-gray-600'
+                      }`}
+                    >
+                      <div className="text-2xl mb-2">🎫</div>
+                      <div className="font-semibold">General Admission</div>
+                      <div className="text-xs text-gray-400 mt-1">
+                        First come, first served. Define capacity levels/areas.
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setLayoutFormData({ ...layoutFormData, type: 'seating_chart' })}
+                      className={`p-4 rounded-lg border-2 text-left transition-all ${
+                        layoutFormData.type === 'seating_chart'
+                          ? 'border-purple-600 bg-purple-600/20'
+                          : 'border-gray-700 hover:border-gray-600'
+                      }`}
+                    >
+                      <div className="text-2xl mb-2">💺</div>
+                      <div className="font-semibold">Assigned Seating</div>
+                      <div className="text-xs text-gray-400 mt-1">
+                        Reserved seats with sections, rows, and seat numbers.
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => setLayoutWizardStep(2)}
+                    disabled={!layoutFormData.name.trim()}
+                    className="px-6 py-2 bg-purple-600 rounded-lg disabled:opacity-50"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: Configure */}
+            {layoutWizardStep === 2 && (
+              <div className="space-y-4">
+                {layoutFormData.type === 'general_admission' ? (
+                  <>
+                    <div className="flex justify-between items-center">
+                      <label className="text-sm font-medium">GA Levels / Areas</label>
+                      <button
+                        type="button"
+                        onClick={addGALevel}
+                        className="text-sm text-purple-400 hover:text-purple-300"
+                      >
+                        + Add Level
+                      </button>
+                    </div>
+
+                    <div className="space-y-3 max-h-64 overflow-y-auto">
+                      {layoutFormData.gaLevels.map((level, idx) => (
+                        <div key={level.id} className="p-3 bg-white/5 rounded-lg">
+                          <div className="flex justify-between items-start mb-2">
+                            <span className="text-xs text-gray-400">Level {idx + 1}</span>
+                            {layoutFormData.gaLevels.length > 1 && (
+                              <button
+                                onClick={() => removeGALevel(level.id)}
+                                className="text-red-400 hover:text-red-300 text-xs"
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <input
+                              type="text"
+                              value={level.name}
+                              onChange={(e) => updateGALevel(level.id, 'name', e.target.value)}
+                              className="px-3 py-1 bg-white/10 rounded text-sm"
+                              placeholder="Level name"
+                            />
+                            <input
+                              type="number"
+                              value={level.capacity}
+                              onChange={(e) => updateGALevel(level.id, 'capacity', parseInt(e.target.value) || 0)}
+                              className="px-3 py-1 bg-white/10 rounded text-sm"
+                              placeholder="Capacity"
+                            />
+                            <select
+                              value={level.type}
+                              onChange={(e) => updateGALevel(level.id, 'type', e.target.value)}
+                              className="px-3 py-1 bg-white/10 rounded text-sm"
+                            >
+                              <option value="standing">Standing</option>
+                              <option value="seated">Seated</option>
+                              <option value="mixed">Mixed</option>
+                            </select>
+                            <div className="flex items-center gap-1">
+                              <span className="text-gray-400 text-sm">$</span>
+                              <input
+                                type="number"
+                                value={level.price}
+                                onChange={(e) => updateGALevel(level.id, 'price', parseInt(e.target.value) || 0)}
+                                className="flex-1 px-3 py-1 bg-white/10 rounded text-sm"
+                                placeholder="Price"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex justify-between items-center">
+                      <label className="text-sm font-medium">Seating Sections</label>
+                      <button
+                        type="button"
+                        onClick={addSection}
+                        className="text-sm text-purple-400 hover:text-purple-300"
+                      >
+                        + Add Section
+                      </button>
+                    </div>
+
+                    <div className="space-y-3 max-h-64 overflow-y-auto">
+                      {layoutFormData.sections.map((section, idx) => (
+                        <div key={section.id} className="p-3 bg-white/5 rounded-lg">
+                          <div className="flex justify-between items-start mb-2">
+                            <span className="text-xs text-gray-400">Section {idx + 1}</span>
+                            {layoutFormData.sections.length > 1 && (
+                              <button
+                                onClick={() => removeSection(section.id)}
+                                className="text-red-400 hover:text-red-300 text-xs"
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <input
+                              type="text"
+                              value={section.name}
+                              onChange={(e) => updateSection(section.id, 'name', e.target.value)}
+                              className="px-3 py-1 bg-white/10 rounded text-sm"
+                              placeholder="Section name"
+                            />
+                            <div className="flex items-center gap-1">
+                              <span className="text-gray-400 text-sm">$</span>
+                              <input
+                                type="number"
+                                value={section.price}
+                                onChange={(e) => updateSection(section.id, 'price', parseInt(e.target.value) || 0)}
+                                className="flex-1 px-3 py-1 bg-white/10 rounded text-sm"
+                                placeholder="Price"
+                              />
+                            </div>
+                            <input
+                              type="number"
+                              value={section.rows}
+                              onChange={(e) => updateSection(section.id, 'rows', parseInt(e.target.value) || 1)}
+                              className="px-3 py-1 bg-white/10 rounded text-sm"
+                              placeholder="Rows"
+                            />
+                            <input
+                              type="number"
+                              value={section.seatsPerRow}
+                              onChange={(e) => updateSection(section.id, 'seatsPerRow', parseInt(e.target.value) || 1)}
+                              className="px-3 py-1 bg-white/10 rounded text-sm"
+                              placeholder="Seats/Row"
+                            />
+                          </div>
+                          <p className="text-xs text-gray-400 mt-2">
+                            Capacity: {section.rows * section.seatsPerRow} seats
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                <div className="flex justify-between">
+                  <button
+                    onClick={() => setLayoutWizardStep(1)}
+                    className="px-6 py-2 bg-gray-700 rounded-lg"
+                  >
+                    Back
+                  </button>
+                  <button
+                    onClick={() => setLayoutWizardStep(3)}
+                    className="px-6 py-2 bg-purple-600 rounded-lg"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: Review & Create */}
+            {layoutWizardStep === 3 && (
+              <div className="space-y-4">
+                <div className="p-4 bg-purple-600/20 rounded-lg">
+                  <h4 className="font-semibold mb-3">Layout Summary</h4>
+                  <div className="text-sm text-gray-300 space-y-2">
+                    <p><strong>Name:</strong> {layoutFormData.name}</p>
+                    <p><strong>Type:</strong> {layoutFormData.type === 'general_admission' ? 'General Admission' : 'Assigned Seating'}</p>
+                    <p><strong>Total Capacity:</strong> {
+                      layoutFormData.type === 'general_admission'
+                        ? layoutFormData.gaLevels.reduce((sum, l) => sum + l.capacity, 0)
+                        : layoutFormData.sections.reduce((sum, s) => sum + (s.rows * s.seatsPerRow), 0)
+                    }</p>
+                  </div>
+                </div>
+
+                {layoutFormData.type === 'general_admission' ? (
+                  <div>
+                    <h5 className="text-sm font-medium mb-2">GA Levels</h5>
+                    <div className="space-y-2">
+                      {layoutFormData.gaLevels.map(level => (
+                        <div key={level.id} className="flex justify-between text-sm p-2 bg-white/5 rounded">
+                          <span>{level.name}</span>
+                          <span className="text-gray-400">{level.capacity} capacity • ${level.price}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <h5 className="text-sm font-medium mb-2">Sections</h5>
+                    <div className="space-y-2">
+                      {layoutFormData.sections.map(section => (
+                        <div key={section.id} className="flex justify-between text-sm p-2 bg-white/5 rounded">
+                          <span>{section.name}</span>
+                          <span className="text-gray-400">
+                            {section.rows * section.seatsPerRow} seats ({section.rows} rows × {section.seatsPerRow}) • ${section.price}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-between">
+                  <button
+                    onClick={() => setLayoutWizardStep(2)}
+                    className="px-6 py-2 bg-gray-700 rounded-lg"
+                  >
+                    Back
+                  </button>
+                  <button
+                    onClick={handleCreateLayout}
+                    disabled={savingLayout}
+                    className="px-6 py-2 bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {savingLayout ? 'Creating...' : 'Create Layout'}
                   </button>
                 </div>
               </div>
