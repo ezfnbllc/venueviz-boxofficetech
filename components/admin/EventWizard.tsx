@@ -237,11 +237,11 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
   
   if (loading) {
     return (
-      <div className="fixed inset-0 bg-gray-950 z-50 flex items-center justify-center">
-        <div className="bg-gray-900 rounded-xl p-8 border border-gray-800 shadow-xl">
+      <div className="fixed inset-0 gradient-mesh-dark z-50 flex items-center justify-center">
+        <div className="glass-card-elevated rounded-2xl p-8">
           <div className="flex flex-col items-center space-y-4">
-            <div className="w-12 h-12 border-3 border-purple-500/50 border-t-purple-500 rounded-full animate-spin"></div>
-            <p className="text-gray-300">Loading event...</p>
+            <div className="w-12 h-12 border-3 border-blue-500/50 border-t-blue-500 rounded-full animate-spin"></div>
+            <p className="text-slate-300">Loading event...</p>
           </div>
         </div>
       </div>
@@ -265,33 +265,33 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
   return (
     <>
       {/* Subtle Backdrop */}
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40" />
-      
+      <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-40" />
+
       {/* Main Modal */}
-      <div className="fixed inset-0 z-50 flex flex-col bg-gray-950">
+      <div className="fixed inset-0 z-50 flex flex-col gradient-mesh-dark">
         {/* Header */}
-        <div className="bg-gray-900 border-b border-gray-800">
+        <div className="glass-dark border-b border-white/10">
           {/* Subtle gradient overlay */}
-          <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 to-blue-500/5 pointer-events-none"></div>
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-transparent to-violet-500/10 pointer-events-none"></div>
           
           <div className="relative px-6 py-4">
             {/* Title and Close Button */}
             <div className="flex justify-between items-center mb-4">
               <div>
-                <h2 className="text-2xl font-bold text-white">
+                <h2 className="text-2xl font-bold text-high-contrast">
                   {isEditing ? 'Edit Event' : 'Create New Event'}
                 </h2>
                 {isEditing && formData.basics?.name && (
-                  <p className="text-gray-400 text-sm mt-1">
+                  <p className="text-slate-400 text-sm mt-1">
                     {formData.basics.name}
                   </p>
                 )}
               </div>
-              <button 
-                onClick={onClose} 
-                className="p-2 rounded-lg hover:bg-gray-800 transition-colors group"
+              <button
+                onClick={onClose}
+                className="glass-btn p-2 rounded-lg group"
               >
-                <svg className="w-5 h-5 text-gray-400 group-hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-5 h-5 text-slate-400 group-hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
@@ -299,13 +299,13 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
             
             {/* Progress Bar */}
             <div className="mb-4">
-              <div className="flex justify-between text-xs text-gray-500 mb-1">
+              <div className="flex justify-between text-xs text-slate-400 mb-1">
                 <span>Step {currentStep} of {steps.length}</span>
                 <span>{Math.round(progressPercentage)}% Complete</span>
               </div>
-              <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-gradient-to-r from-purple-500 to-blue-500 rounded-full transition-all duration-500 ease-out"
+              <div className="h-2 bg-slate-800/60 rounded-full overflow-hidden backdrop-blur-sm">
+                <div
+                  className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-500 ease-out shadow-lg shadow-blue-500/30"
                   style={{ width: `${progressPercentage}%` }}
                 />
               </div>
@@ -316,19 +316,19 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
               {steps.map((step) => {
                 const isActive = currentStep === step.number
                 const isCompleted = currentStep > step.number
-                
+
                 return (
                   <button
                     key={step.number}
                     onClick={() => setCurrentStep(step.number)}
                     className={`
-                      relative flex items-center gap-2 px-3 py-2 rounded-lg
+                      relative flex items-center gap-2 px-3 py-2 rounded-xl
                       transition-all duration-200 whitespace-nowrap min-w-fit
-                      ${isActive 
-                        ? 'bg-purple-600 text-white shadow-lg' 
+                      ${isActive
+                        ? 'glass-btn-accent text-white shadow-lg shadow-blue-500/20'
                         : isCompleted
-                        ? 'bg-gray-800 text-gray-300 hover:bg-gray-750'
-                        : 'bg-gray-850 text-gray-500 hover:bg-gray-800'
+                        ? 'glass-btn text-slate-200'
+                        : 'glass-btn text-slate-500'
                       }
                     `}
                   >
@@ -337,12 +337,12 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
                       <div className="text-xs font-semibold">
                         {step.number}. {step.title}
                       </div>
-                      <div className={`text-[10px] ${isActive ? 'text-purple-200' : 'text-gray-600'} hidden sm:block`}>
+                      <div className={`text-[10px] ${isActive ? 'text-blue-200' : 'text-slate-500'} hidden sm:block`}>
                         {step.description}
                       </div>
                     </div>
                     {isCompleted && (
-                      <svg className="absolute -top-1 -right-1 w-4 h-4 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="absolute -top-1 -right-1 w-4 h-4 text-emerald-400 drop-shadow-lg" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                       </svg>
                     )}
@@ -354,9 +354,9 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
         </div>
         
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto bg-gray-950 p-6">
+        <div className="flex-1 overflow-y-auto p-6">
           <div className="max-w-5xl mx-auto">
-            <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
+            <div className="glass-card-elevated rounded-2xl p-6">
               {currentStep === 1 && <Step1Basics />}
               {currentStep === 2 && <Step2Venue />}
               {currentStep === 3 && <Step3Schedule />}
@@ -374,46 +374,46 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
         </div>
         
         {/* Footer */}
-        <div className="bg-gray-900 border-t border-gray-800 px-6 py-4">
+        <div className="glass-dark border-t border-white/10 px-6 py-4">
           <div className="flex justify-between items-center">
             <button
               onClick={prevStep}
               disabled={currentStep === 1}
               className={`
-                px-6 py-2 rounded-lg font-medium transition-all
+                px-6 py-2.5 rounded-xl font-medium transition-all
                 ${currentStep === 1
-                  ? 'bg-gray-800 text-gray-600 cursor-not-allowed opacity-50'
-                  : 'bg-gray-800 text-gray-300 hover:bg-gray-750'
+                  ? 'glass-btn text-slate-600 cursor-not-allowed opacity-50'
+                  : 'glass-btn text-slate-200'
                 }
               `}
             >
               ← Previous
             </button>
-            
+
             <div className="flex items-center gap-4">
               {validation && Object.keys(validation).length > 0 && (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-red-950/50 border border-red-900/50 rounded-lg">
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-red-500/10 border border-red-500/30 rounded-xl backdrop-blur-sm">
                   <svg className="w-4 h-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <span className="text-red-400 text-sm">
+                  <span className="text-red-400 text-sm font-medium">
                     {Object.values(validation)[0] as string}
                   </span>
                 </div>
               )}
-              
+
               {saving && (
-                <div className="flex items-center gap-2 text-yellow-500 text-sm">
-                  <div className="w-3 h-3 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
+                <div className="flex items-center gap-2 text-amber-400 text-sm">
+                  <div className="w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
                   <span>Saving...</span>
                 </div>
               )}
             </div>
-            
+
             {currentStep < 9 ? (
               <button
                 onClick={handleNext}
-                className="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-all"
+                className="glass-btn-accent px-6 py-2.5 text-white rounded-xl font-medium shadow-lg shadow-blue-500/25"
               >
                 Next →
               </button>
@@ -421,7 +421,7 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
               <button
                 onClick={handleSaveAndPublish}
                 disabled={saving}
-                className="px-6 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-all"
+                className="glass-success px-6 py-2.5 text-emerald-50 rounded-xl font-medium shadow-lg shadow-emerald-500/25 hover:bg-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 {saving ? 'Publishing...' : (isEditing ? 'Update Event' : 'Save & Publish')}
               </button>

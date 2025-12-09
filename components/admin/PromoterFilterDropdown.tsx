@@ -39,7 +39,7 @@ export default function PromoterFilterDropdown() {
     <div className="relative">
       <button
         onClick={() => setShowDropdown(!showDropdown)}
-        className="flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg transition-all border border-slate-200 dark:border-slate-600 text-sm text-slate-900 dark:text-white"
+        className="glass-btn flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm text-slate-700 dark:text-slate-200 font-medium"
         disabled={loading}
       >
         <span>
@@ -59,17 +59,17 @@ export default function PromoterFilterDropdown() {
             className="fixed inset-0 z-40"
             onClick={() => setShowDropdown(false)}
           />
-          <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-2xl z-50 max-h-96 overflow-y-auto">
+          <div className="absolute right-0 mt-2 w-72 glass-card-elevated rounded-xl z-50 max-h-96 overflow-y-auto">
             <div className="p-2">
               <button
                 onClick={() => {
                   setSelectedPromoterId('all')
                   setShowDropdown(false)
                 }}
-                className={`w-full text-left px-3 py-2 rounded-lg transition-all ${
+                className={`w-full text-left px-3 py-2.5 rounded-xl transition-all ${
                   selectedPromoterId === 'all'
-                    ? 'bg-accent-600 text-white'
-                    : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
+                    ? 'glass-btn-accent text-white'
+                    : 'glass-btn text-slate-700 dark:text-slate-300'
                 }`}
               >
                 🌐 All Promoters
@@ -77,7 +77,7 @@ export default function PromoterFilterDropdown() {
 
               {promoters.length > 0 && (
                 <>
-                  <div className="border-t border-slate-200 dark:border-slate-700 my-2"></div>
+                  <div className="border-t border-white/10 my-2"></div>
                   {promoters.map((promoter) => (
                     <button
                       key={promoter.id}
@@ -85,16 +85,16 @@ export default function PromoterFilterDropdown() {
                         setSelectedPromoterId(promoter.id)
                         setShowDropdown(false)
                       }}
-                      className={`w-full text-left px-3 py-2 rounded-lg transition-all flex items-center gap-3 ${
+                      className={`w-full text-left px-3 py-2.5 rounded-xl transition-all flex items-center gap-3 ${
                         selectedPromoterId === promoter.id
-                          ? 'bg-accent-600 text-white'
-                          : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
+                          ? 'glass-btn-accent text-white'
+                          : 'glass-btn text-slate-700 dark:text-slate-300'
                       }`}
                     >
                       {promoter.logo ? (
-                        <img src={promoter.logo} alt="" className="w-8 h-8 rounded object-cover" />
+                        <img src={promoter.logo} alt="" className="w-8 h-8 rounded-lg object-cover ring-1 ring-white/20" />
                       ) : (
-                        <div className="w-8 h-8 bg-accent-600 rounded flex items-center justify-center text-sm font-bold text-white">
+                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center text-sm font-bold text-white shadow-lg shadow-blue-500/30">
                           {promoter.name?.charAt(0)?.toUpperCase() || '?'}
                         </div>
                       )}
@@ -105,10 +105,10 @@ export default function PromoterFilterDropdown() {
                         )}
                       </div>
                       {promoter.brandingType === 'advanced' && (
-                        <span className={`text-xs px-2 py-0.5 rounded ${
+                        <span className={`text-xs px-2 py-0.5 rounded-lg font-medium ${
                           selectedPromoterId === promoter.id
                             ? 'bg-white/20 text-white'
-                            : 'bg-accent-100 dark:bg-accent-900/30 text-accent-700 dark:text-accent-400'
+                            : 'bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/30'
                         }`}>
                           Premium
                         </span>

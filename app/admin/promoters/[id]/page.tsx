@@ -75,7 +75,7 @@ export default function PromoterDetailPage() {
   if (authLoading || loading) {
     return (
       <div className="flex justify-center py-12">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-purple-500"/>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-blue-500"/>
       </div>
     )
   }
@@ -83,10 +83,10 @@ export default function PromoterDetailPage() {
   if (!promoter) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-400">Promoter not found</p>
+        <p className="text-slate-400">Promoter not found</p>
         <button
           onClick={() => router.push('/admin/promoters')}
-          className="mt-4 px-4 py-2 bg-purple-600 rounded-lg"
+          className="mt-4 px-5 py-2.5 glass-btn-accent text-white rounded-xl font-medium"
         >
           Back to Promoters
         </button>
@@ -106,86 +106,88 @@ export default function PromoterDetailPage() {
   return (
     <div className="max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => router.push('/admin/promoters')}
-            className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-          >
-            ← Back
-          </button>
-
+      <div className="glass-card rounded-2xl p-6 mb-8">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            {promoter.logo ? (
-              <img
-                src={promoter.logo}
-                alt={promoter.name}
-                className="w-16 h-16 rounded-xl object-cover"
-              />
-            ) : (
-              <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center text-white font-bold text-2xl">
-                {promoter.name?.charAt(0)?.toUpperCase() || '?'}
-              </div>
-            )}
+            <button
+              onClick={() => router.push('/admin/promoters')}
+              className="glass-btn p-2.5 rounded-xl text-slate-300 hover:text-white"
+            >
+              ← Back
+            </button>
 
-            <div>
-              <h1 className="text-3xl font-bold">{promoter.name}</h1>
-              <div className="flex items-center gap-2 mt-1">
-                <span className={`px-2 py-0.5 rounded text-xs ${
-                  promoter.active
-                    ? 'bg-green-600/20 text-green-400'
-                    : 'bg-red-600/20 text-red-400'
-                }`}>
-                  {promoter.active ? 'Active' : 'Inactive'}
-                </span>
-                <span className={`px-2 py-0.5 rounded text-xs ${
-                  promoter.brandingType === 'advanced'
-                    ? 'bg-purple-600/20 text-purple-400'
-                    : 'bg-gray-600/20 text-gray-400'
-                }`}>
-                  {promoter.brandingType || 'basic'} branding
-                </span>
-                {promoter.slug && (
-                  <a
-                    href={`/p/${promoter.slug}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-purple-400 hover:underline"
-                  >
-                    /p/{promoter.slug}
-                  </a>
-                )}
+            <div className="flex items-center gap-4">
+              {promoter.logo ? (
+                <img
+                  src={promoter.logo}
+                  alt={promoter.name}
+                  className="w-16 h-16 rounded-xl object-cover ring-2 ring-white/10"
+                />
+              ) : (
+                <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-2xl shadow-lg shadow-blue-500/30">
+                  {promoter.name?.charAt(0)?.toUpperCase() || '?'}
+                </div>
+              )}
+
+              <div>
+                <h1 className="text-3xl font-bold text-high-contrast">{promoter.name}</h1>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className={`px-2.5 py-1 rounded-lg text-xs font-medium backdrop-blur-sm ${
+                    promoter.active
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                  }`}>
+                    {promoter.active ? 'Active' : 'Inactive'}
+                  </span>
+                  <span className={`px-2.5 py-1 rounded-lg text-xs font-medium backdrop-blur-sm ${
+                    promoter.brandingType === 'advanced'
+                      ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                      : 'bg-slate-500/20 text-slate-400 border border-slate-500/30'
+                  }`}>
+                    {promoter.brandingType || 'basic'} branding
+                  </span>
+                  {promoter.slug && (
+                    <a
+                      href={`/p/${promoter.slug}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-blue-400 hover:text-blue-300 hover:underline transition-colors"
+                    >
+                      /p/{promoter.slug}
+                    </a>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Color Scheme Preview */}
-        {promoter.colorScheme && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-400 mr-2">Brand Colors:</span>
-            {['primary', 'secondary', 'accent'].map(key => (
-              <div
-                key={key}
-                className="w-8 h-8 rounded-lg border border-white/20"
-                style={{ backgroundColor: promoter.colorScheme?.[key as keyof typeof promoter.colorScheme] }}
-                title={key}
-              />
-            ))}
-          </div>
-        )}
+          {/* Color Scheme Preview */}
+          {promoter.colorScheme && (
+            <div className="flex items-center gap-3 glass-btn px-4 py-2 rounded-xl">
+              <span className="text-sm text-slate-400">Brand Colors:</span>
+              {['primary', 'secondary', 'accent'].map(key => (
+                <div
+                  key={key}
+                  className="w-8 h-8 rounded-lg ring-2 ring-white/20 shadow-lg"
+                  style={{ backgroundColor: promoter.colorScheme?.[key as keyof typeof promoter.colorScheme] }}
+                  title={key}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex gap-2 mb-6 border-b border-white/10 pb-2 overflow-x-auto">
+      <div className="flex gap-2 mb-6 pb-2 overflow-x-auto">
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
               activeTab === tab.id
-                ? 'bg-purple-600 text-white'
-                : 'text-gray-400 hover:text-white hover:bg-white/10'
+                ? 'glass-btn-accent text-white shadow-lg shadow-blue-500/20'
+                : 'glass-btn text-slate-400 hover:text-white'
             }`}
           >
             <span>{tab.icon}</span>
@@ -195,7 +197,7 @@ export default function PromoterDetailPage() {
       </div>
 
       {/* Tab Content */}
-      <div className="min-h-[400px]">
+      <div className="glass-card rounded-2xl p-6 min-h-[400px]">
         {activeTab === 'overview' && (
           <PromoterOverview
             promoterId={promoterId}

@@ -83,19 +83,19 @@ export default function AdminLayout({
   ]
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-50 transition-colors duration-200">
+    <div className="min-h-screen gradient-mesh-light dark:gradient-mesh-dark text-slate-900 dark:text-slate-50 transition-colors duration-200">
       {/* Header */}
-      <header className="bg-white/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-40 backdrop-blur-sm">
+      <header className="glass-light dark:glass-dark border-b border-slate-200/50 dark:border-white/10 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             {/* Left - Logo & Nav */}
             <div className="flex items-center gap-8">
-              <Link href="/admin" className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-accent-600 rounded-lg flex items-center justify-center">
+              <Link href="/admin" className="flex items-center gap-3 group">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30 group-hover:scale-105 transition-transform">
                   <span className="text-2xl">🏢</span>
                 </div>
                 <div>
-                  <h1 className="text-xl font-bold text-accent-600 dark:text-accent-400">
+                  <h1 className="text-xl font-bold text-blue-600 dark:text-blue-400">
                     VenueViz
                   </h1>
                   <p className="text-xs text-slate-500 dark:text-slate-400">Admin</p>
@@ -110,10 +110,10 @@ export default function AdminLayout({
                     <Link
                       key={item.href}
                       href={item.href}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
                         isActive
-                          ? 'bg-accent-600 text-white shadow-lg shadow-accent-500/30'
-                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700/50'
+                          ? 'glass-btn-accent text-white shadow-lg shadow-blue-500/25'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white glass-btn'
                       }`}
                     >
                       <span className="text-lg">{item.icon}</span>
@@ -129,7 +129,7 @@ export default function AdminLayout({
               {/* Theme Toggle */}
               <button
                 onClick={toggleTheme}
-                className="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition-colors"
+                className="glass-btn p-2.5 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
               >
                 {theme === 'dark' ? (
@@ -149,7 +149,7 @@ export default function AdminLayout({
               <div className="relative" ref={userMenuRef}>
                 <button
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
-                  className="w-10 h-10 rounded-full bg-accent-600 flex items-center justify-center hover:scale-105 transition-transform"
+                  className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center hover:scale-105 transition-transform shadow-lg shadow-blue-500/30"
                 >
                   <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
@@ -158,18 +158,18 @@ export default function AdminLayout({
 
                 {/* User Dropdown */}
                 {userMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl overflow-hidden">
-                    <div className="p-4 border-b border-slate-200 dark:border-slate-700">
+                  <div className="absolute right-0 mt-2 w-64 glass-card-elevated rounded-xl overflow-hidden">
+                    <div className="p-4 border-b border-white/10">
                       <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{user.email}</p>
                       {isAdmin && (
-                        <span className="inline-block mt-1 px-2 py-0.5 bg-accent-100 dark:bg-accent-900/30 text-accent-700 dark:text-accent-400 text-xs rounded-full">
+                        <span className="inline-block mt-1 px-2.5 py-1 bg-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-medium rounded-lg border border-blue-500/30">
                           Master Admin
                         </span>
                       )}
                     </div>
                     <button
                       onClick={() => signOut()}
-                      className="w-full px-4 py-3 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+                      className="w-full px-4 py-3 text-left text-sm text-red-500 dark:text-red-400 hover:bg-red-500/10 transition-colors font-medium"
                     >
                       🚪 Logout
                     </button>
