@@ -1,5 +1,52 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+// Ticketmaster Discovery API (best option when API key is available)
+const TM_API_KEY = process.env.TICKETMASTER_API_KEY || ''
+
+async function fetchFromTicketmasterAPI(eventId: string): Promise<any> {
+  if (!TM_API_KEY) return null
+
+  try {
+    const url = `https://app.ticketmaster.com/discovery/v2/events/${eventId}.json?apikey=${TM_API_KEY}`
+    const response = await fetch(url)
+
+    if (!response.ok) {
+      console.log('Ticketmaster Discovery API error:', response.status)
+      return null
+    }
+
+    const data = await response.json()
+    const venue = data._embedded?.venues?.[0]
+    const images = data.images
+      ?.filter((img: any) => img.width >= 300)
+      ?.sort((a: any, b: any) => (b.width || 0) - (a.width || 0))
+      ?.slice(0, 5)
+      ?.map((img: any) => img.url) || []
+
+    return {
+      eventName: data.name,
+      venueName: venue?.name,
+      venueCity: venue?.city?.name,
+      venueState: venue?.state?.stateCode || venue?.state?.name,
+      venueAddress: venue?.address?.line1,
+      venueZip: venue?.postalCode,
+      eventDate: data.dates?.start?.localDate,
+      eventTime: data.dates?.start?.localTime?.slice(0, 5),
+      timezone: data.dates?.timezone,
+      imageUrls: images,
+      priceRange: data.priceRanges?.[0] ? {
+        min: data.priceRanges[0].min,
+        max: data.priceRanges[0].max
+      } : null,
+      performers: data._embedded?.attractions?.map((a: any) => a.name) || [],
+      source: 'ticketmaster_discovery_api'
+    }
+  } catch (e) {
+    console.log('Ticketmaster Discovery API failed:', e)
+    return null
+  }
+}
+
 // Try to get event data from Ticketmaster's public embed/widget API
 async function fetchTicketmasterEventData(eventId: string): Promise<any> {
   try {
@@ -24,7 +71,8 @@ async function fetchTicketmasterEventData(eventId: string): Promise<any> {
           venueAddress: data.event.venue?.address,
           eventDate: data.event.dates?.start?.localDate,
           eventTime: data.event.dates?.start?.localTime?.slice(0, 5),
-          imageUrls: data.event.images?.map((img: any) => img.url).filter(Boolean) || []
+          imageUrls: data.event.images?.map((img: any) => img.url).filter(Boolean) || [],
+          source: 'ticketmaster_embed_api'
         }
       }
     }
@@ -235,16 +283,25 @@ export async function POST(req: NextRequest) {
       // Try multiple data sources in order of reliability
       let parsedData: any = {}
 
-      // 1. Try Ticketmaster JSON API first (most reliable if available)
-      if (eventId) {
-        const tmApiData = await fetchTicketmasterEventData(eventId)
-        if (tmApiData && tmApiData.venueName) {
-          parsedData = tmApiData
-          console.log('Got data from Ticketmaster API:', tmApiData.venueName)
+      // 1. Try Ticketmaster Discovery API first (most reliable, requires API key)
+      if (eventId && TM_API_KEY) {
+        const discoveryData = await fetchFromTicketmasterAPI(eventId)
+        if (discoveryData && discoveryData.venueName) {
+          parsedData = discoveryData
+          console.log('Got data from Ticketmaster Discovery API:', discoveryData.venueName)
         }
       }
 
-      // 2. Fall back to HTML parsing
+      // 2. Try Ticketmaster embed/widget API (public, no key required)
+      if (!parsedData.venueName && eventId) {
+        const tmApiData = await fetchTicketmasterEventData(eventId)
+        if (tmApiData && tmApiData.venueName) {
+          parsedData = { ...parsedData, ...tmApiData }
+          console.log('Got data from Ticketmaster embed API:', tmApiData.venueName)
+        }
+      }
+
+      // 3. Fall back to HTML parsing
       if (!parsedData.venueName) {
         const htmlData = await fetchAndParseHTML(url)
         if (htmlData.venueName) {
