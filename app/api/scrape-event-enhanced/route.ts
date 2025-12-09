@@ -16,34 +16,82 @@ async function fetchFromTicketmasterAPI(eventId: string): Promise<any> {
     }
 
     const data = await response.json()
-    const venue = data._embedded?.venues?.[0]
-    const images = data.images
-      ?.filter((img: any) => img.width >= 300)
-      ?.sort((a: any, b: any) => (b.width || 0) - (a.width || 0))
-      ?.slice(0, 5)
-      ?.map((img: any) => img.url) || []
-
-    return {
-      eventName: data.name,
-      venueName: venue?.name,
-      venueCity: venue?.city?.name,
-      venueState: venue?.state?.stateCode || venue?.state?.name,
-      venueAddress: venue?.address?.line1,
-      venueZip: venue?.postalCode,
-      eventDate: data.dates?.start?.localDate,
-      eventTime: data.dates?.start?.localTime?.slice(0, 5),
-      timezone: data.dates?.timezone,
-      imageUrls: images,
-      priceRange: data.priceRanges?.[0] ? {
-        min: data.priceRanges[0].min,
-        max: data.priceRanges[0].max
-      } : null,
-      performers: data._embedded?.attractions?.map((a: any) => a.name) || [],
-      source: 'ticketmaster_discovery_api'
-    }
+    return parseTicketmasterEventData(data)
   } catch (e) {
     console.log('Ticketmaster Discovery API failed:', e)
     return null
+  }
+}
+
+// Search Ticketmaster Discovery API by keyword (fallback for legacy event IDs)
+async function searchTicketmasterAPI(keyword: string, eventDate?: string): Promise<any> {
+  if (!TM_API_KEY || !keyword) return null
+
+  try {
+    // Clean up keyword - extract main event name
+    const cleanKeyword = keyword
+      .replace(/-/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+
+    let searchUrl = `https://app.ticketmaster.com/discovery/v2/events.json?apikey=${TM_API_KEY}&keyword=${encodeURIComponent(cleanKeyword)}&size=5&sort=relevance,desc`
+
+    // Add date filter if available
+    if (eventDate) {
+      searchUrl += `&startDateTime=${eventDate}T00:00:00Z&endDateTime=${eventDate}T23:59:59Z`
+    }
+
+    console.log('Searching Ticketmaster API with keyword:', cleanKeyword)
+    const response = await fetch(searchUrl)
+
+    if (!response.ok) {
+      console.log('Ticketmaster Discovery API search error:', response.status)
+      return null
+    }
+
+    const data = await response.json()
+    const events = data._embedded?.events
+
+    if (!events || events.length === 0) {
+      console.log('No events found in Ticketmaster search')
+      return null
+    }
+
+    // Return the first (most relevant) result
+    console.log('Found', events.length, 'events, using:', events[0].name)
+    return parseTicketmasterEventData(events[0])
+  } catch (e) {
+    console.log('Ticketmaster Discovery API search failed:', e)
+    return null
+  }
+}
+
+// Parse Ticketmaster event data into our format
+function parseTicketmasterEventData(data: any): any {
+  const venue = data._embedded?.venues?.[0]
+  const images = data.images
+    ?.filter((img: any) => img.width >= 300)
+    ?.sort((a: any, b: any) => (b.width || 0) - (a.width || 0))
+    ?.slice(0, 5)
+    ?.map((img: any) => img.url) || []
+
+  return {
+    eventName: data.name,
+    venueName: venue?.name,
+    venueCity: venue?.city?.name,
+    venueState: venue?.state?.stateCode || venue?.state?.name,
+    venueAddress: venue?.address?.line1,
+    venueZip: venue?.postalCode,
+    eventDate: data.dates?.start?.localDate,
+    eventTime: data.dates?.start?.localTime?.slice(0, 5),
+    timezone: data.dates?.timezone,
+    imageUrls: images,
+    priceRange: data.priceRanges?.[0] ? {
+      min: data.priceRanges[0].min,
+      max: data.priceRanges[0].max
+    } : null,
+    performers: data._embedded?.attractions?.map((a: any) => a.name) || [],
+    source: 'ticketmaster_discovery_api'
   }
 }
 
@@ -287,12 +335,52 @@ export async function POST(req: NextRequest) {
       // Try multiple data sources in order of reliability
       let parsedData: any = {}
 
+      // Extract event name and date from slug for search fallback
+      let slugParts = eventSlug.split('-')
+      let extractedDate = ''
+      const lastThree = slugParts.slice(-3)
+      if (lastThree.length === 3) {
+        const [mm, dd, yyyy] = lastThree
+        if (/^\d{2}$/.test(mm) && /^\d{2}$/.test(dd) && /^\d{4}$/.test(yyyy)) {
+          extractedDate = `${yyyy}-${mm}-${dd}`
+        }
+      }
+
+      // Extract search keyword from slug (event name without city/state/date)
+      let searchKeyword = ''
+      if (eventSlug) {
+        // Remove date parts
+        let keywordParts = [...slugParts]
+        if (extractedDate) {
+          keywordParts = keywordParts.slice(0, -3)
+        }
+        // Remove city and state (usually last 2 parts before date)
+        if (keywordParts.length > 2) {
+          const possibleState = keywordParts[keywordParts.length - 1].toLowerCase()
+          if (stateAbbreviations[possibleState] || possibleState.length === 2) {
+            keywordParts.pop() // Remove state
+            keywordParts.pop() // Remove city
+          }
+        }
+        searchKeyword = keywordParts.join(' ')
+      }
+
       // 1. Try Ticketmaster Discovery API first (most reliable, requires API key)
       if (eventId && TM_API_KEY) {
         const discoveryData = await fetchFromTicketmasterAPI(eventId)
         if (discoveryData && discoveryData.venueName) {
           parsedData = discoveryData
           console.log('Got data from Ticketmaster Discovery API:', discoveryData.venueName)
+        }
+      }
+
+      // 1b. If direct ID lookup failed, try searching by event name
+      if (!parsedData.venueName && searchKeyword && TM_API_KEY) {
+        console.log('Direct ID lookup failed, trying search with:', searchKeyword)
+        const searchData = await searchTicketmasterAPI(searchKeyword, extractedDate)
+        if (searchData && searchData.venueName) {
+          parsedData = searchData
+          console.log('Got data from Ticketmaster Discovery API search:', searchData.venueName)
         }
       }
 
@@ -314,25 +402,12 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      let slugParts = eventSlug.split('-')
+      // Use extracted date or parsed date
+      let eventDate = parsedData.eventDate || extractedDate
 
-      // Extract date (format: MM-DD-YYYY at end of slug)
-      let eventDate = parsedData.eventDate || ''
-      if (!eventDate) {
-        const lastThree = slugParts.slice(-3)
-        if (lastThree.length === 3) {
-          const [mm, dd, yyyy] = lastThree
-          if (/^\d{2}$/.test(mm) && /^\d{2}$/.test(dd) && /^\d{4}$/.test(yyyy)) {
-            eventDate = `${yyyy}-${mm}-${dd}`
-            slugParts = slugParts.slice(0, -3)
-          }
-        }
-      } else {
-        // Still need to remove date from slug for name parsing
-        const lastThree = slugParts.slice(-3)
-        if (lastThree.length === 3 && /^\d{2}$/.test(lastThree[0]) && /^\d{2}$/.test(lastThree[1]) && /^\d{4}$/.test(lastThree[2])) {
-          slugParts = slugParts.slice(0, -3)
-        }
+      // Remove date from slugParts for name parsing
+      if (extractedDate) {
+        slugParts = slugParts.slice(0, -3)
       }
 
       // Extract state (last part after removing date)
