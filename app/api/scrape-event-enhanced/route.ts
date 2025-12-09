@@ -34,32 +34,67 @@ async function searchTicketmasterAPI(keyword: string, eventDate?: string): Promi
       .replace(/\s+/g, ' ')
       .trim()
 
-    let searchUrl = `https://app.ticketmaster.com/discovery/v2/events.json?apikey=${TM_API_KEY}&keyword=${encodeURIComponent(cleanKeyword)}&size=5&sort=relevance,desc`
+    // Try multiple search strategies
+    const searchStrategies = [
+      // Strategy 1: Full keyword with date range (wider range)
+      () => {
+        let url = `https://app.ticketmaster.com/discovery/v2/events.json?apikey=${TM_API_KEY}&keyword=${encodeURIComponent(cleanKeyword)}&size=10&sort=date,asc`
+        if (eventDate) {
+          // Widen the date range to account for timezone differences
+          const date = new Date(eventDate)
+          const startDate = new Date(date)
+          startDate.setDate(startDate.getDate() - 1)
+          const endDate = new Date(date)
+          endDate.setDate(endDate.getDate() + 1)
+          url += `&startDateTime=${startDate.toISOString().split('T')[0]}T00:00:00Z&endDateTime=${endDate.toISOString().split('T')[0]}T23:59:59Z`
+        }
+        return url
+      },
+      // Strategy 2: Full keyword without date filter
+      () => `https://app.ticketmaster.com/discovery/v2/events.json?apikey=${TM_API_KEY}&keyword=${encodeURIComponent(cleanKeyword)}&size=10&sort=relevance,desc`,
+      // Strategy 3: First part of keyword (e.g., team name only)
+      () => {
+        const parts = cleanKeyword.split(/\s+vs\.?\s+|\s+v\.?\s+/i)
+        const mainKeyword = parts[0].trim()
+        let url = `https://app.ticketmaster.com/discovery/v2/events.json?apikey=${TM_API_KEY}&keyword=${encodeURIComponent(mainKeyword)}&size=10`
+        if (eventDate) {
+          url += `&startDateTime=${eventDate}T00:00:00Z&endDateTime=${eventDate}T23:59:59Z`
+        }
+        return url
+      }
+    ]
 
-    // Add date filter if available
-    if (eventDate) {
-      searchUrl += `&startDateTime=${eventDate}T00:00:00Z&endDateTime=${eventDate}T23:59:59Z`
+    for (let i = 0; i < searchStrategies.length; i++) {
+      const searchUrl = searchStrategies[i]()
+      console.log(`Ticketmaster search strategy ${i + 1}:`, searchUrl.replace(TM_API_KEY, '***'))
+
+      const response = await fetch(searchUrl)
+
+      if (!response.ok) {
+        console.log('Ticketmaster Discovery API search error:', response.status)
+        continue
+      }
+
+      const data = await response.json()
+      const events = data._embedded?.events
+
+      if (events && events.length > 0) {
+        // If we have a date, try to find the best matching event
+        if (eventDate && events.length > 1) {
+          const matchingEvent = events.find((e: any) => e.dates?.start?.localDate === eventDate)
+          if (matchingEvent) {
+            console.log('Found exact date match:', matchingEvent.name)
+            return parseTicketmasterEventData(matchingEvent)
+          }
+        }
+
+        console.log('Found', events.length, 'events, using:', events[0].name)
+        return parseTicketmasterEventData(events[0])
+      }
     }
 
-    console.log('Searching Ticketmaster API with keyword:', cleanKeyword)
-    const response = await fetch(searchUrl)
-
-    if (!response.ok) {
-      console.log('Ticketmaster Discovery API search error:', response.status)
-      return null
-    }
-
-    const data = await response.json()
-    const events = data._embedded?.events
-
-    if (!events || events.length === 0) {
-      console.log('No events found in Ticketmaster search')
-      return null
-    }
-
-    // Return the first (most relevant) result
-    console.log('Found', events.length, 'events, using:', events[0].name)
-    return parseTicketmasterEventData(events[0])
+    console.log('No events found in Ticketmaster search after all strategies')
+    return null
   } catch (e) {
     console.log('Ticketmaster Discovery API search failed:', e)
     return null
