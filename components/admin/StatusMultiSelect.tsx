@@ -8,11 +8,11 @@ interface StatusMultiSelectProps {
 }
 
 const statusOptions = [
-  { value: 'active', label: 'Active/Published', color: 'text-green-400' },
-  { value: 'draft', label: 'Draft', color: 'text-gray-400' },
-  { value: 'cancelled', label: 'Cancelled', color: 'text-red-400' },
-  { value: 'completed', label: 'Completed', color: 'text-blue-400' },
-  { value: 'postponed', label: 'Postponed', color: 'text-yellow-400' }
+  { value: 'active', label: 'Active/Published', color: 'text-green-600 dark:text-green-400' },
+  { value: 'draft', label: 'Draft', color: 'text-slate-500 dark:text-slate-400' },
+  { value: 'cancelled', label: 'Cancelled', color: 'text-red-600 dark:text-red-400' },
+  { value: 'completed', label: 'Completed', color: 'text-blue-600 dark:text-blue-400' },
+  { value: 'postponed', label: 'Postponed', color: 'text-yellow-600 dark:text-yellow-400' }
 ]
 
 export default function StatusMultiSelect({ selectedStatuses, onChange }: StatusMultiSelectProps) {
@@ -51,13 +51,13 @@ export default function StatusMultiSelect({ selectedStatuses, onChange }: Status
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="px-4 py-2 bg-white/10 rounded-lg hover:bg-white/20 transition-colors flex items-center gap-2"
+        className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 text-slate-900 dark:text-white"
       >
         <span>{getDisplayText()}</span>
-        <svg 
-          className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} 
-          fill="none" 
-          viewBox="0 0 24 24" 
+        <svg
+          className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          fill="none"
+          viewBox="0 0 24 24"
           stroke="currentColor"
         >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -65,18 +65,18 @@ export default function StatusMultiSelect({ selectedStatuses, onChange }: Status
       </button>
 
       {isOpen && (
-        <div className="absolute top-full mt-2 w-64 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50">
+        <div className="absolute top-full mt-2 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50">
           <div className="p-2 space-y-1">
             {statusOptions.map(status => (
-              <label 
+              <label
                 key={status.value}
-                className="flex items-center gap-3 px-3 py-2 hover:bg-white/5 rounded cursor-pointer"
+                className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 rounded cursor-pointer"
               >
                 <input
                   type="checkbox"
                   checked={selectedStatuses.includes(status.value)}
                   onChange={() => toggleStatus(status.value)}
-                  className="w-4 h-4 text-purple-600 bg-white/10 border-gray-600 rounded focus:ring-purple-500"
+                  className="w-4 h-4 text-accent-600 bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded focus:ring-accent-500"
                 />
                 <span className={`flex-1 ${status.color}`}>
                   {status.label}
@@ -84,17 +84,17 @@ export default function StatusMultiSelect({ selectedStatuses, onChange }: Status
               </label>
             ))}
           </div>
-          
-          <div className="border-t border-gray-700 p-2 flex gap-2">
+
+          <div className="border-t border-slate-200 dark:border-slate-700 p-2 flex gap-2">
             <button
               onClick={() => onChange(statusOptions.map(s => s.value))}
-              className="flex-1 px-3 py-1 text-xs bg-white/5 hover:bg-white/10 rounded"
+              className="flex-1 px-3 py-1 text-xs bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded text-slate-700 dark:text-slate-300"
             >
               Select All
             </button>
             <button
               onClick={() => onChange(['active'])}
-              className="flex-1 px-3 py-1 text-xs bg-white/5 hover:bg-white/10 rounded"
+              className="flex-1 px-3 py-1 text-xs bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded text-slate-700 dark:text-slate-300"
             >
               Clear
             </button>

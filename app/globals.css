@@ -1,3 +1,80 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    /* Light mode colors */
+    --color-background: 248 250 252;      /* slate-50 */
+    --color-surface: 255 255 255;         /* white */
+    --color-surface-elevated: 241 245 249; /* slate-100 */
+    --color-border: 226 232 240;          /* slate-200 */
+    --color-border-subtle: 241 245 249;   /* slate-100 */
+    --color-text-primary: 15 23 42;       /* slate-900 */
+    --color-text-secondary: 100 116 139;  /* slate-500 */
+    --color-text-muted: 148 163 184;      /* slate-400 */
+    --color-accent: 37 99 235;            /* blue-600 */
+    --color-accent-hover: 29 78 216;      /* blue-700 */
+    --color-accent-subtle: 219 234 254;   /* blue-100 */
+  }
+
+  .dark {
+    /* Dark mode colors */
+    --color-background: 15 23 42;         /* slate-900 */
+    --color-surface: 30 41 59;            /* slate-800 */
+    --color-surface-elevated: 51 65 85;   /* slate-700 */
+    --color-border: 51 65 85;             /* slate-700 */
+    --color-border-subtle: 71 85 105;     /* slate-600 */
+    --color-text-primary: 248 250 252;    /* slate-50 */
+    --color-text-secondary: 148 163 184;  /* slate-400 */
+    --color-text-muted: 100 116 139;      /* slate-500 */
+    --color-accent: 59 130 246;           /* blue-500 */
+    --color-accent-hover: 37 99 235;      /* blue-600 */
+    --color-accent-subtle: 30 58 138;     /* blue-900 */
+  }
+
+  /* Smooth theme transitions */
+  html {
+    transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+  }
+}
+
+@layer utilities {
+  /* Custom utility classes using CSS variables */
+  .bg-theme-background {
+    background-color: rgb(var(--color-background));
+  }
+  .bg-theme-surface {
+    background-color: rgb(var(--color-surface));
+  }
+  .bg-theme-surface-elevated {
+    background-color: rgb(var(--color-surface-elevated));
+  }
+  .border-theme {
+    border-color: rgb(var(--color-border));
+  }
+  .border-theme-subtle {
+    border-color: rgb(var(--color-border-subtle));
+  }
+  .text-theme-primary {
+    color: rgb(var(--color-text-primary));
+  }
+  .text-theme-secondary {
+    color: rgb(var(--color-text-secondary));
+  }
+  .text-theme-muted {
+    color: rgb(var(--color-text-muted));
+  }
+  .bg-theme-accent {
+    background-color: rgb(var(--color-accent));
+  }
+  .bg-theme-accent-hover:hover {
+    background-color: rgb(var(--color-accent-hover));
+  }
+  .bg-theme-accent-subtle {
+    background-color: rgb(var(--color-accent-subtle));
+  }
+  .text-theme-accent {
+    color: rgb(var(--color-accent));
+  }
+}

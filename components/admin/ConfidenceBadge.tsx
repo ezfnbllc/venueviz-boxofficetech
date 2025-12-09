@@ -7,10 +7,10 @@ interface ConfidenceBadgeProps {
 
 export default function ConfidenceBadge({ confidence, showLabel = true }: ConfidenceBadgeProps) {
   const getColor = () => {
-    if (confidence >= 90) return 'bg-green-500/20 text-green-400 border-green-500/30'
-    if (confidence >= 70) return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
-    if (confidence >= 50) return 'bg-orange-500/20 text-orange-400 border-orange-500/30'
-    return 'bg-red-500/20 text-red-400 border-red-500/30'
+    if (confidence >= 90) return 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-500/30'
+    if (confidence >= 70) return 'bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-500/30'
+    if (confidence >= 50) return 'bg-orange-100 dark:bg-orange-500/20 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-500/30'
+    return 'bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400 border-red-200 dark:border-red-500/30'
   }
 
   const getLabel = () => {
