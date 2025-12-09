@@ -276,9 +276,13 @@ export async function POST(req: NextRequest) {
       const pathParts = url.split('/')
       const eventSlug = pathParts.find((p: string) => p.includes('-') && !p.includes('event')) || ''
 
-      // Extract event ID from URL (e.g., 0C00635C995E4CE1)
-      const eventIdMatch = url.match(/\/event\/([A-Z0-9]+)/i)
+      // Extract event ID from URL - supports multiple formats:
+      // Long: /event/0C006266EC5C396A
+      // Short: /event/Z7r9jZ1A7_kF9
+      const eventIdMatch = url.match(/\/event\/([A-Za-z0-9_-]+)/i)
       const eventId = eventIdMatch ? eventIdMatch[1] : ''
+
+      console.log('Ticketmaster URL detected, event ID:', eventId, 'API key configured:', !!TM_API_KEY)
 
       // Try multiple data sources in order of reliability
       let parsedData: any = {}
