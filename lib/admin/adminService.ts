@@ -4,6 +4,7 @@ import {
   getDocs,
   doc,
   getDoc,
+  setDoc,
   updateDoc,
   deleteDoc,
   query,
@@ -773,6 +774,36 @@ export class AdminService {
       return true
     } catch (error) {
       console.error('Error deleting promoter:', error)
+      throw error
+    }
+  }
+
+  // ============ USERS ============
+  static async createUser(userData: any) {
+    try {
+      const userRef = doc(db, 'users', userData.uid)
+      await setDoc(userRef, {
+        ...userData,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      })
+      return userData.uid
+    } catch (error) {
+      console.error('Error creating user:', error)
+      throw error
+    }
+  }
+
+  static async updateUser(userId: string, data: any) {
+    try {
+      const userRef = doc(db, 'users', userId)
+      await updateDoc(userRef, {
+        ...data,
+        updatedAt: Timestamp.now()
+      })
+      return true
+    } catch (error) {
+      console.error('Error updating user:', error)
       throw error
     }
   }

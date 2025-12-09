@@ -28,16 +28,20 @@ export interface PaymentGateway {
   id?: string
   promoterId: string
   provider: 'stripe' | 'square' | 'paypal' | 'boxofficetech'
-  credentials: {
+  environment: 'sandbox' | 'live'
+  credentials?: {
     publishableKey?: string
     secretKey?: string
     apiKey?: string
     merchantId?: string
     accessToken?: string
+    clientId?: string
+    webhookSecret?: string
   }
   isActive: boolean
-  createdAt?: string
-  updatedAt?: string
+  createdAt?: Date | any
+  updatedAt?: Date | any
+  validatedAt?: Date | any
   testMode?: boolean
 }
 
