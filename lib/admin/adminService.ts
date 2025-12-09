@@ -227,9 +227,24 @@ export class AdminService {
 
   static async createEvent(eventData: any) {
     try {
+      // Remove undefined values that Firebase doesn't accept
+      const cleanData = JSON.parse(JSON.stringify(eventData))
+
+      // Deep clean undefined values
+      const deepClean = (obj: any) => {
+        Object.keys(obj).forEach(key => {
+          if (obj[key] === undefined) {
+            delete obj[key]
+          } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+            deepClean(obj[key])
+          }
+        })
+      }
+      deepClean(cleanData)
+
       const eventsRef = collection(db, 'events')
       const docRef = await addDoc(eventsRef, {
-        ...eventData,
+        ...cleanData,
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now()
       })

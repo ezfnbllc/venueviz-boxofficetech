@@ -1,10 +1,42 @@
 'use client'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useMemo } from 'react'
 import { useEventWizardStore } from '@/lib/store/eventWizardStore'
+
+// Get current date/time in a specific timezone
+function getCurrentTimeInTimezone(timezone: string): string {
+  try {
+    const now = new Date()
+    // Format in the target timezone
+    const options: Intl.DateTimeFormatOptions = {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }
+    const parts = new Intl.DateTimeFormat('en-CA', options).formatToParts(now)
+    const values: Record<string, string> = {}
+    parts.forEach(p => { values[p.type] = p.value })
+
+    // Format: YYYY-MM-DDTHH:mm
+    return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`
+  } catch (e) {
+    // Fallback to local time if timezone is invalid
+    return new Date().toISOString().slice(0, 16)
+  }
+}
 
 export default function Step7Sales() {
   const { formData, updateFormData } = useEventWizardStore()
   const initializedRef = useRef(false)
+
+  // Get the event timezone from Step 3
+  const eventTimezone = useMemo(() =>
+    formData.schedule?.timezone || 'America/Chicago',
+    [formData.schedule?.timezone]
+  )
 
   // Auto-set default sales dates
   useEffect(() => {
@@ -13,9 +45,8 @@ export default function Step7Sales() {
 
     initializedRef.current = true
 
-    // Get current date/time for sales start
-    const now = new Date()
-    const salesStartDate = now.toISOString().slice(0, 16) // Format: YYYY-MM-DDTHH:mm
+    // Get current date/time in the event's timezone for sales start
+    const salesStartDate = getCurrentTimeInTimezone(eventTimezone)
 
     // Get event date/time for sales end
     let salesEndDate = ''
@@ -31,7 +62,7 @@ export default function Step7Sales() {
       salesStartDate: formData.sales?.salesStartDate || salesStartDate,
       salesEndDate: formData.sales?.salesEndDate || salesEndDate
     })
-  }, [formData.schedule?.performances, formData.sales])
+  }, [formData.schedule?.performances, formData.sales, eventTimezone])
 
   const updateSalesField = (field: string, value: any) => {
     updateFormData('sales', {
@@ -61,6 +92,9 @@ export default function Step7Sales() {
           <div>
             <label className="block text-sm font-medium mb-2">
               Sales Start Date
+              <span className="text-xs text-gray-400 ml-2">
+                ({eventTimezone.split('/')[1]?.replace('_', ' ') || eventTimezone})
+              </span>
             </label>
             <input
               type="datetime-local"

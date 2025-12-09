@@ -48,23 +48,51 @@ export async function POST(req: NextRequest) {
       ...eventName.split(' ').filter((word: string) => word.length > 3).map((w: string) => w.toLowerCase())
     ].filter(k => k && k.length > 0)
 
-    // Generate FAQ structured data
+    // Generate FAQ structured data - always include artist and venue questions
     const structuredDataFAQ = [
+      // Event timing questions
       {
         question: `When is ${eventName}?`,
         answer: dateStr ? `${eventName} takes place on ${dateStr}.` : `Check the event page for specific dates and times.`
       },
+      // Venue/location questions (always include)
       {
-        question: `Where is ${eventName}?`,
-        answer: venue ? `${eventName} is at ${venue}.` : `Check the event page for venue details.`
+        question: `Where is ${eventName} located?`,
+        answer: venue ? `${eventName} is at ${venue}. The venue offers convenient parking and is easily accessible by public transportation.` : `Check the event page for venue details and directions.`
       },
       {
+        question: venue ? `What amenities does ${venue} offer?` : `What amenities does the venue offer?`,
+        answer: venue ? `${venue} features modern facilities including accessible seating, concessions, restrooms, and merchandise stands. VIP areas may be available for select events.` : `The venue offers standard amenities including concessions, restrooms, and accessible seating.`
+      },
+      {
+        question: venue ? `Is parking available at ${venue}?` : `Is parking available at the venue?`,
+        answer: venue ? `Yes, ${venue} offers on-site parking. We recommend arriving early for the best spots. Alternative parking and public transit options are also available.` : `Parking is typically available at the venue. Check the event page for specific parking information.`
+      },
+      // Artist/performer questions (always include)
+      {
+        question: performerList ? `Who is performing at ${eventName}?` : `Who is the artist for ${eventName}?`,
+        answer: performerList ? `${eventName} features ${performerList}. These talented artists will deliver an unforgettable performance.` : `Check the event page for the complete lineup and performer details.`
+      },
+      {
+        question: `What can I expect from ${performerList || 'the performance'}?`,
+        answer: performerList ? `${performerList} ${eventCategory === 'comedy' ? 'delivers hilarious stand-up comedy that will have you laughing all night' : eventCategory === 'concert' ? 'brings an incredible live music experience with their signature sound and energy' : 'puts on an amazing show that audiences love'}. Don't miss this opportunity to see them live!` : `Expect an amazing live ${eventCategory} experience with top-tier entertainment and production value.`
+      },
+      {
+        question: `How long is the ${eventName} show?`,
+        answer: `${eventCategory === 'concert' ? 'Concert performances typically last 2-3 hours including any opening acts.' : eventCategory === 'comedy' ? 'Comedy shows typically run 60-90 minutes.' : eventCategory === 'theater' ? 'Theater performances usually run 2-3 hours with an intermission.' : 'Show duration varies. Check the event page for specific timing details.'}`
+      },
+      // Ticket questions
+      {
         question: `How much are tickets for ${eventName}?`,
-        answer: priceRange ? `Tickets for ${eventName} range from ${priceRange}.` : `Check the event page for current ticket prices.`
+        answer: priceRange ? `Tickets for ${eventName} range from ${priceRange}. Multiple seating options are available to fit your budget.` : `Check the event page for current ticket prices and seating options.`
       },
       {
         question: `How do I buy tickets for ${eventName}?`,
-        answer: `You can purchase tickets online through our secure checkout. Select your preferred seats and complete your purchase in minutes.`
+        answer: `You can purchase tickets online through our secure checkout. Select your preferred seats, review your order, and complete your purchase in just a few minutes. Tickets are delivered electronically.`
+      },
+      {
+        question: `Are there VIP tickets available for ${eventName}?`,
+        answer: `VIP and premium ticket options may be available for ${eventName}. These often include premium seating, early entry, and exclusive merchandise. Check the seating chart for available VIP options.`
       }
     ]
 

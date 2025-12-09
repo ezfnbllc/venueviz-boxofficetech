@@ -55,20 +55,25 @@ export default function Step1Basics() {
 
   const handleURLImport = (data: AIExtractedData) => {
     // Save to basics (including scraped date/time for Step3 to pick up)
-    updateFormData('basics', {
+    const basicsData: any = {
       name: data.name,
       description: data.description,
       category: data.category,
       type: data.category,
-      tags: data.tags,
-      performers: data.performers,
+      tags: data.tags || [],
+      performers: data.performers || [],
       images: data.images || formData.basics?.images,
       // Save scraped date/time for Step3 Schedule
-      scrapedDate: data.date,
-      scrapedTime: data.time,
-      // Save venue info for Step2
-      scrapedVenue: data.venue
-    })
+      scrapedDate: data.date || '',
+      scrapedTime: data.time || ''
+    }
+
+    // Only set scrapedVenue if venue data exists (to avoid Firebase undefined errors)
+    if (data.venue && data.venue.name) {
+      basicsData.scrapedVenue = data.venue
+    }
+
+    updateFormData('basics', basicsData)
 
     setAiConfidence(data.confidence)
     setTimeout(() => setAiConfidence(null), 10000)
