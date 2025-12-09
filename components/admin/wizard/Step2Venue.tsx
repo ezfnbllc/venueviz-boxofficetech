@@ -613,11 +613,11 @@ export default function Step2Venue() {
 
   return (
     <div>
-      <h3 className="text-xl font-bold mb-4">Venue & Layout Selection</h3>
+      <h3 className="text-xl font-bold mb-4 text-slate-900 dark:text-white">Venue & Layout Selection</h3>
 
       {/* Venue Search */}
       <div className="mb-6 relative">
-        <label className="block text-sm font-medium mb-2">
+        <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">
           Select Venue *
         </label>
         <div className="flex gap-2">
@@ -632,7 +632,7 @@ export default function Step2Venue() {
               }}
               onFocus={() => setShowDropdown(true)}
               placeholder="Search venues..."
-              className="w-full px-4 py-2 bg-white/10 rounded-lg focus:bg-white/20 outline-none"
+              className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg focus:bg-white dark:focus:bg-slate-700 outline-none text-slate-900 dark:text-white"
             />
 
             {/* Selected venue indicator */}
@@ -644,23 +644,23 @@ export default function Step2Venue() {
 
             {/* Dropdown */}
             {showDropdown && (
-              <div className="absolute z-10 w-full mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-xl max-h-64 overflow-y-auto">
+              <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl max-h-64 overflow-y-auto">
                 {filteredVenues.length > 0 ? (
                   filteredVenues.map(venue => (
                     <button
                       key={venue.id}
                       onClick={() => handleVenueChange(venue.id)}
-                      className={`w-full px-4 py-3 text-left hover:bg-purple-600/20 transition-colors
-                        ${venue.id === formData.venue.venueId ? 'bg-purple-600/30' : ''}`}
+                      className={`w-full px-4 py-3 text-left hover:bg-blue-50 dark:hover:bg-blue-600/20 transition-colors
+                        ${venue.id === formData.venue.venueId ? 'bg-blue-100 dark:bg-blue-600/30' : ''}`}
                     >
-                      <div className="font-medium">{venue.name}</div>
-                      <div className="text-xs text-gray-400">
+                      <div className="font-medium text-slate-900 dark:text-white">{venue.name}</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400">
                         {venue.city}, {venue.state} • Capacity: {venue.capacity}
                       </div>
                     </button>
                   ))
                 ) : (
-                  <div className="px-4 py-3 text-gray-400 text-sm">
+                  <div className="px-4 py-3 text-slate-500 dark:text-slate-400 text-sm">
                     No venues found matching "{searchQuery}"
                   </div>
                 )}
@@ -672,11 +672,11 @@ export default function Step2Venue() {
                     setShowVenueWizard(true)
                     setShowDropdown(false)
                   }}
-                  className="w-full px-4 py-3 text-left bg-purple-600/20 hover:bg-purple-600/30 border-t border-gray-700"
+                  className="w-full px-4 py-3 text-left bg-blue-50 dark:bg-blue-600/20 hover:bg-blue-100 dark:hover:bg-blue-600/30 border-t border-slate-200 dark:border-slate-700"
                 >
-                  <div className="font-medium text-purple-400">+ Create New Venue</div>
+                  <div className="font-medium text-blue-600 dark:text-blue-400">+ Create New Venue</div>
                   {searchQuery && (
-                    <div className="text-xs text-gray-400">
+                    <div className="text-xs text-slate-500 dark:text-slate-400">
                       Create "{searchQuery}" as a new venue
                     </div>
                   )}
@@ -691,7 +691,7 @@ export default function Step2Venue() {
               setShowVenueWizard(true)
               setShowDropdown(false)
             }}
-            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm whitespace-nowrap"
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm whitespace-nowrap text-white"
           >
             + New Venue
           </button>
@@ -709,14 +709,14 @@ export default function Step2Venue() {
       {/* Layout Selection */}
       {formData.venue.venueId && (
         <div className="mb-6">
-          <label className="block text-sm font-medium mb-2">
+          <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">
             Select Layout *
           </label>
           {layouts.length > 0 ? (
             <select
               value={formData.venue.layoutId}
               onChange={(e) => handleLayoutChange(e.target.value)}
-              className="w-full px-4 py-2 bg-white/10 rounded-lg focus:bg-white/20 outline-none"
+              className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg focus:bg-white dark:focus:bg-slate-700 outline-none text-slate-900 dark:text-white"
               required
             >
               <option value="">Select a layout</option>
@@ -727,14 +727,14 @@ export default function Step2Venue() {
               ))}
             </select>
           ) : (
-            <div className="p-4 bg-yellow-600/20 rounded-lg">
-              <p className="text-yellow-400 text-sm mb-2">No layouts available for this venue</p>
-              <p className="text-gray-400 text-xs mb-3">
+            <div className="p-4 bg-amber-50 dark:bg-yellow-600/20 border border-amber-200 dark:border-yellow-600/30 rounded-lg">
+              <p className="text-amber-700 dark:text-yellow-400 text-sm mb-2">No layouts available for this venue</p>
+              <p className="text-slate-500 dark:text-slate-400 text-xs mb-3">
                 Create a layout to define seating sections or general admission areas for this venue.
               </p>
               <button
                 onClick={() => setShowLayoutWizard(true)}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm"
               >
                 + Create Layout
               </button>
@@ -746,8 +746,8 @@ export default function Step2Venue() {
       {/* Layout Details */}
       {selectedLayout && formData.venue.availableSections && (
         <>
-          <div className="mb-6 p-4 bg-purple-600/20 rounded-lg">
-            <p className="text-sm text-gray-300">
+          <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-600/20 rounded-lg">
+            <p className="text-sm text-slate-700 dark:text-slate-300">
               <span className="font-semibold">Layout Type:</span> {
                 selectedLayout.type === 'seating_chart'
                   ? 'Assigned Seating (Reserved seats with price categories)'
@@ -756,7 +756,7 @@ export default function Step2Venue() {
             </p>
             {selectedLayout.priceCategories && selectedLayout.priceCategories.length > 0 && (
               <div className="mt-2">
-                <p className="text-sm font-semibold text-gray-300">Price Categories:</p>
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Price Categories:</p>
                 <div className="flex flex-wrap gap-2 mt-1">
                   {selectedLayout.priceCategories.map((cat: any) => (
                     <span
@@ -783,8 +783,8 @@ export default function Step2Venue() {
                   key={section.sectionId}
                   className={`p-4 rounded-lg border transition-all ${
                     section.available
-                      ? 'bg-purple-600/20 border-purple-600'
-                      : 'bg-gray-800 border-gray-700 opacity-60'
+                      ? 'bg-blue-50 dark:bg-blue-600/20 border-blue-600'
+                      : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 opacity-60'
                   }`}
                 >
                   <div className="flex items-center justify-between">
@@ -797,7 +797,7 @@ export default function Step2Venue() {
                       />
                       <div>
                         <p className="font-semibold">{section.sectionName}</p>
-                        <div className="text-sm text-gray-400 mt-1">
+                        <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">
                           {selectedLayout.type === 'seating_chart' ? (
                             <>
                               Capacity: {section.capacity} seats
@@ -829,7 +829,7 @@ export default function Step2Venue() {
               ))}
             </div>
 
-            <div className="mt-4 p-3 bg-purple-600/30 rounded-lg text-center">
+            <div className="mt-4 p-3 bg-blue-600/30 rounded-lg text-center">
               <p className="font-semibold">
                 Total Available Capacity: {totalAvailableCapacity} {
                   selectedLayout.type === 'seating_chart' ? 'seats' : 'attendees'
@@ -843,7 +843,7 @@ export default function Step2Venue() {
       {/* Venue Creation Sub-Wizard Modal */}
       {showVenueWizard && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-gray-900 rounded-xl p-6 w-full max-w-2xl my-8">
+          <div className="bg-white dark:bg-slate-900 rounded-xl p-6 w-full max-w-2xl my-8">
             {/* Header */}
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold">Create New Venue</h2>
@@ -852,7 +852,7 @@ export default function Step2Venue() {
                   setShowVenueWizard(false)
                   setVenueWizardStep(1)
                 }}
-                className="text-gray-400 hover:text-white"
+                className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               >
                 ✕
               </button>
@@ -863,10 +863,10 @@ export default function Step2Venue() {
               {['Basic Info', 'Location', 'Features', 'Images'].map((step, idx) => (
                 <div
                   key={idx}
-                  className={`flex-1 text-center ${idx + 1 <= venueWizardStep ? 'text-purple-400' : 'text-gray-600'}`}
+                  className={`flex-1 text-center ${idx + 1 <= venueWizardStep ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}
                 >
                   <div className={`w-8 h-8 mx-auto mb-2 rounded-full flex items-center justify-center text-sm ${
-                    idx + 1 <= venueWizardStep ? 'bg-purple-600' : 'bg-gray-700'
+                    idx + 1 <= venueWizardStep ? 'bg-blue-600' : 'bg-slate-200 dark:bg-slate-700'
                   }`}>
                     {idx + 1}
                   </div>
@@ -885,7 +885,7 @@ export default function Step2Venue() {
                       type="text"
                       value={venueFormData.name}
                       onChange={(e) => setVenueFormData({ ...venueFormData, name: e.target.value })}
-                      className="flex-1 px-4 py-2 bg-white/10 rounded-lg"
+                      className="flex-1 px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
                       placeholder="Enter venue name"
                     />
                     <button
@@ -911,7 +911,7 @@ export default function Step2Venue() {
                       {lookupMessage}
                     </p>
                   )}
-                  <p className="text-xs text-gray-400 mt-1">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                     Enter the venue name and click "Lookup Details" to auto-fill address and other information
                   </p>
                 </div>
@@ -921,7 +921,7 @@ export default function Step2Venue() {
                   <textarea
                     value={venueFormData.description}
                     onChange={(e) => setVenueFormData({ ...venueFormData, description: e.target.value })}
-                    className="w-full px-4 py-2 bg-white/10 rounded-lg h-24"
+                    className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white h-24"
                     placeholder="Enter venue description"
                   />
                 </div>
@@ -932,7 +932,7 @@ export default function Step2Venue() {
                     <select
                       value={venueFormData.type}
                       onChange={(e) => setVenueFormData({ ...venueFormData, type: e.target.value })}
-                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                      className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
                     >
                       <option value="theater">Theater</option>
                       <option value="arena">Arena</option>
@@ -949,7 +949,7 @@ export default function Step2Venue() {
                       type="number"
                       value={venueFormData.capacity}
                       onChange={(e) => setVenueFormData({ ...venueFormData, capacity: parseInt(e.target.value) || 0 })}
-                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                      className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
                       placeholder="1000"
                     />
                   </div>
@@ -959,7 +959,7 @@ export default function Step2Venue() {
                   <button
                     onClick={() => setVenueWizardStep(2)}
                     disabled={!venueFormData.name.trim()}
-                    className="px-6 py-2 bg-purple-600 rounded-lg disabled:opacity-50"
+                    className="px-6 py-2 bg-blue-600 rounded-lg disabled:opacity-50"
                   >
                     Next
                   </button>
@@ -976,7 +976,7 @@ export default function Step2Venue() {
                     type="text"
                     value={venueFormData.streetAddress1}
                     onChange={(e) => setVenueFormData({ ...venueFormData, streetAddress1: e.target.value })}
-                    className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                    className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
                     placeholder="123 Main Street"
                   />
                 </div>
@@ -988,7 +988,7 @@ export default function Step2Venue() {
                       type="text"
                       value={venueFormData.city}
                       onChange={(e) => setVenueFormData({ ...venueFormData, city: e.target.value })}
-                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                      className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
                     />
                   </div>
 
@@ -998,7 +998,7 @@ export default function Step2Venue() {
                       type="text"
                       value={venueFormData.state}
                       onChange={(e) => setVenueFormData({ ...venueFormData, state: e.target.value })}
-                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                      className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
                     />
                   </div>
 
@@ -1008,7 +1008,7 @@ export default function Step2Venue() {
                       type="text"
                       value={venueFormData.zipCode}
                       onChange={(e) => setVenueFormData({ ...venueFormData, zipCode: e.target.value })}
-                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                      className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
                     />
                   </div>
                 </div>
@@ -1020,7 +1020,7 @@ export default function Step2Venue() {
                       type="email"
                       value={venueFormData.contactEmail}
                       onChange={(e) => setVenueFormData({ ...venueFormData, contactEmail: e.target.value })}
-                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                      className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
                       placeholder="venue@example.com"
                     />
                   </div>
@@ -1031,7 +1031,7 @@ export default function Step2Venue() {
                       type="tel"
                       value={venueFormData.contactPhone}
                       onChange={(e) => setVenueFormData({ ...venueFormData, contactPhone: e.target.value })}
-                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                      className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
                       placeholder="(555) 123-4567"
                     />
                   </div>
@@ -1040,13 +1040,13 @@ export default function Step2Venue() {
                 <div className="flex justify-between">
                   <button
                     onClick={() => setVenueWizardStep(1)}
-                    className="px-6 py-2 bg-gray-700 rounded-lg"
+                    className="px-6 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg"
                   >
                     Back
                   </button>
                   <button
                     onClick={() => setVenueWizardStep(3)}
-                    className="px-6 py-2 bg-purple-600 rounded-lg"
+                    className="px-6 py-2 bg-blue-600 rounded-lg"
                   >
                     Next
                   </button>
@@ -1063,7 +1063,7 @@ export default function Step2Venue() {
                     type="number"
                     value={venueFormData.parkingCapacity}
                     onChange={(e) => setVenueFormData({ ...venueFormData, parkingCapacity: parseInt(e.target.value) || 0 })}
-                    className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                    className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
                     placeholder="500"
                   />
                 </div>
@@ -1074,7 +1074,7 @@ export default function Step2Venue() {
                     type="url"
                     value={venueFormData.website}
                     onChange={(e) => setVenueFormData({ ...venueFormData, website: e.target.value })}
-                    className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                    className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
                     placeholder="https://venue-website.com"
                   />
                 </div>
@@ -1103,13 +1103,13 @@ export default function Step2Venue() {
                 <div className="flex justify-between">
                   <button
                     onClick={() => setVenueWizardStep(2)}
-                    className="px-6 py-2 bg-gray-700 rounded-lg"
+                    className="px-6 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg"
                   >
                     Back
                   </button>
                   <button
                     onClick={() => setVenueWizardStep(4)}
-                    className="px-6 py-2 bg-purple-600 rounded-lg"
+                    className="px-6 py-2 bg-blue-600 rounded-lg"
                   >
                     Next
                   </button>
@@ -1127,11 +1127,11 @@ export default function Step2Venue() {
                     multiple
                     accept="image/*"
                     onChange={handleVenueImageUpload}
-                    className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                    className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
                     disabled={uploadingImages}
                   />
                   {uploadingImages && (
-                    <p className="text-xs text-purple-400 mt-2">Uploading images...</p>
+                    <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">Uploading images...</p>
                   )}
                 </div>
 
@@ -1155,9 +1155,9 @@ export default function Step2Venue() {
                 )}
 
                 {/* Summary */}
-                <div className="p-4 bg-purple-600/20 rounded-lg">
+                <div className="p-4 bg-blue-50 dark:bg-blue-600/20 rounded-lg">
                   <h4 className="font-semibold mb-2">Venue Summary</h4>
-                  <div className="text-sm text-gray-300 space-y-1">
+                  <div className="text-sm text-slate-700 dark:text-slate-300 space-y-1">
                     <p><strong>Name:</strong> {venueFormData.name}</p>
                     <p><strong>Type:</strong> {venueFormData.type}</p>
                     <p><strong>Capacity:</strong> {venueFormData.capacity}</p>
@@ -1168,7 +1168,7 @@ export default function Step2Venue() {
                 <div className="flex justify-between">
                   <button
                     onClick={() => setVenueWizardStep(3)}
-                    className="px-6 py-2 bg-gray-700 rounded-lg"
+                    className="px-6 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg"
                   >
                     Back
                   </button>
@@ -1189,7 +1189,7 @@ export default function Step2Venue() {
       {/* Layout Creation Sub-Wizard Modal */}
       {showLayoutWizard && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-gray-900 rounded-xl p-6 w-full max-w-2xl my-8">
+          <div className="bg-white dark:bg-slate-900 rounded-xl p-6 w-full max-w-2xl my-8">
             {/* Header */}
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold">Create New Layout</h2>
@@ -1198,7 +1198,7 @@ export default function Step2Venue() {
                   setShowLayoutWizard(false)
                   setLayoutWizardStep(1)
                 }}
-                className="text-gray-400 hover:text-white"
+                className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               >
                 ✕
               </button>
@@ -1209,10 +1209,10 @@ export default function Step2Venue() {
               {['Layout Type', 'Configure', 'Review'].map((step, idx) => (
                 <div
                   key={idx}
-                  className={`flex-1 text-center ${idx + 1 <= layoutWizardStep ? 'text-purple-400' : 'text-gray-600'}`}
+                  className={`flex-1 text-center ${idx + 1 <= layoutWizardStep ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}
                 >
                   <div className={`w-8 h-8 mx-auto mb-2 rounded-full flex items-center justify-center text-sm ${
-                    idx + 1 <= layoutWizardStep ? 'bg-purple-600' : 'bg-gray-700'
+                    idx + 1 <= layoutWizardStep ? 'bg-blue-600' : 'bg-slate-200 dark:bg-slate-700'
                   }`}>
                     {idx + 1}
                   </div>
@@ -1230,7 +1230,7 @@ export default function Step2Venue() {
                     type="text"
                     value={layoutFormData.name}
                     onChange={(e) => setLayoutFormData({ ...layoutFormData, name: e.target.value })}
-                    className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                    className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
                     placeholder="e.g., Main Hall, Concert Setup"
                   />
                 </div>
@@ -1243,13 +1243,13 @@ export default function Step2Venue() {
                       onClick={() => setLayoutFormData({ ...layoutFormData, type: 'general_admission' })}
                       className={`p-4 rounded-lg border-2 text-left transition-all ${
                         layoutFormData.type === 'general_admission'
-                          ? 'border-purple-600 bg-purple-600/20'
-                          : 'border-gray-700 hover:border-gray-600'
+                          ? 'border-blue-600 bg-blue-50 dark:bg-blue-600/20'
+                          : 'border-slate-200 dark:border-slate-700 hover:border-gray-600'
                       }`}
                     >
                       <div className="text-2xl mb-2">🎫</div>
                       <div className="font-semibold">General Admission</div>
-                      <div className="text-xs text-gray-400 mt-1">
+                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                         First come, first served. Define capacity levels/areas.
                       </div>
                     </button>
@@ -1259,13 +1259,13 @@ export default function Step2Venue() {
                       onClick={() => setLayoutFormData({ ...layoutFormData, type: 'seating_chart' })}
                       className={`p-4 rounded-lg border-2 text-left transition-all ${
                         layoutFormData.type === 'seating_chart'
-                          ? 'border-purple-600 bg-purple-600/20'
-                          : 'border-gray-700 hover:border-gray-600'
+                          ? 'border-blue-600 bg-blue-50 dark:bg-blue-600/20'
+                          : 'border-slate-200 dark:border-slate-700 hover:border-gray-600'
                       }`}
                     >
                       <div className="text-2xl mb-2">💺</div>
                       <div className="font-semibold">Assigned Seating</div>
-                      <div className="text-xs text-gray-400 mt-1">
+                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                         Reserved seats with sections, rows, and seat numbers.
                       </div>
                     </button>
@@ -1276,7 +1276,7 @@ export default function Step2Venue() {
                   <button
                     onClick={() => setLayoutWizardStep(2)}
                     disabled={!layoutFormData.name.trim()}
-                    className="px-6 py-2 bg-purple-600 rounded-lg disabled:opacity-50"
+                    className="px-6 py-2 bg-blue-600 rounded-lg disabled:opacity-50"
                   >
                     Next
                   </button>
@@ -1294,7 +1294,7 @@ export default function Step2Venue() {
                       <button
                         type="button"
                         onClick={addGALevel}
-                        className="text-sm text-purple-400 hover:text-purple-300"
+                        className="text-sm text-blue-600 dark:text-blue-400 hover:text-purple-300"
                       >
                         + Add Level
                       </button>
@@ -1302,9 +1302,9 @@ export default function Step2Venue() {
 
                     <div className="space-y-3 max-h-64 overflow-y-auto">
                       {layoutFormData.gaLevels.map((level, idx) => (
-                        <div key={level.id} className="p-3 bg-white/5 rounded-lg">
+                        <div key={level.id} className="p-3 bg-slate-100 dark:bg-slate-800 rounded-lg">
                           <div className="flex justify-between items-start mb-2">
-                            <span className="text-xs text-gray-400">Level {idx + 1}</span>
+                            <span className="text-xs text-slate-500 dark:text-slate-400">Level {idx + 1}</span>
                             {layoutFormData.gaLevels.length > 1 && (
                               <button
                                 onClick={() => removeGALevel(level.id)}
@@ -1339,7 +1339,7 @@ export default function Step2Venue() {
                               <option value="mixed">Mixed</option>
                             </select>
                             <div className="flex items-center gap-1">
-                              <span className="text-gray-400 text-sm">$</span>
+                              <span className="text-slate-500 dark:text-slate-400 text-sm">$</span>
                               <input
                                 type="number"
                                 value={level.price}
@@ -1360,7 +1360,7 @@ export default function Step2Venue() {
                       <button
                         type="button"
                         onClick={addSection}
-                        className="text-sm text-purple-400 hover:text-purple-300"
+                        className="text-sm text-blue-600 dark:text-blue-400 hover:text-purple-300"
                       >
                         + Add Section
                       </button>
@@ -1368,9 +1368,9 @@ export default function Step2Venue() {
 
                     <div className="space-y-3 max-h-64 overflow-y-auto">
                       {layoutFormData.sections.map((section, idx) => (
-                        <div key={section.id} className="p-3 bg-white/5 rounded-lg">
+                        <div key={section.id} className="p-3 bg-slate-100 dark:bg-slate-800 rounded-lg">
                           <div className="flex justify-between items-start mb-2">
-                            <span className="text-xs text-gray-400">Section {idx + 1}</span>
+                            <span className="text-xs text-slate-500 dark:text-slate-400">Section {idx + 1}</span>
                             {layoutFormData.sections.length > 1 && (
                               <button
                                 onClick={() => removeSection(section.id)}
@@ -1389,7 +1389,7 @@ export default function Step2Venue() {
                               placeholder="Section name"
                             />
                             <div className="flex items-center gap-1">
-                              <span className="text-gray-400 text-sm">$</span>
+                              <span className="text-slate-500 dark:text-slate-400 text-sm">$</span>
                               <input
                                 type="number"
                                 value={section.price}
@@ -1413,7 +1413,7 @@ export default function Step2Venue() {
                               placeholder="Seats/Row"
                             />
                           </div>
-                          <p className="text-xs text-gray-400 mt-2">
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
                             Capacity: {section.rows * section.seatsPerRow} seats
                           </p>
                         </div>
@@ -1425,13 +1425,13 @@ export default function Step2Venue() {
                 <div className="flex justify-between">
                   <button
                     onClick={() => setLayoutWizardStep(1)}
-                    className="px-6 py-2 bg-gray-700 rounded-lg"
+                    className="px-6 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg"
                   >
                     Back
                   </button>
                   <button
                     onClick={() => setLayoutWizardStep(3)}
-                    className="px-6 py-2 bg-purple-600 rounded-lg"
+                    className="px-6 py-2 bg-blue-600 rounded-lg"
                   >
                     Next
                   </button>
@@ -1442,9 +1442,9 @@ export default function Step2Venue() {
             {/* Step 3: Review & Create */}
             {layoutWizardStep === 3 && (
               <div className="space-y-4">
-                <div className="p-4 bg-purple-600/20 rounded-lg">
+                <div className="p-4 bg-blue-50 dark:bg-blue-600/20 rounded-lg">
                   <h4 className="font-semibold mb-3">Layout Summary</h4>
-                  <div className="text-sm text-gray-300 space-y-2">
+                  <div className="text-sm text-slate-700 dark:text-slate-300 space-y-2">
                     <p><strong>Name:</strong> {layoutFormData.name}</p>
                     <p><strong>Type:</strong> {layoutFormData.type === 'general_admission' ? 'General Admission' : 'Assigned Seating'}</p>
                     <p><strong>Total Capacity:</strong> {
@@ -1460,9 +1460,9 @@ export default function Step2Venue() {
                     <h5 className="text-sm font-medium mb-2">GA Levels</h5>
                     <div className="space-y-2">
                       {layoutFormData.gaLevels.map(level => (
-                        <div key={level.id} className="flex justify-between text-sm p-2 bg-white/5 rounded">
+                        <div key={level.id} className="flex justify-between text-sm p-2 bg-slate-100 dark:bg-slate-800 rounded">
                           <span>{level.name}</span>
-                          <span className="text-gray-400">{level.capacity} capacity • ${level.price}</span>
+                          <span className="text-slate-500 dark:text-slate-400">{level.capacity} capacity • ${level.price}</span>
                         </div>
                       ))}
                     </div>
@@ -1472,9 +1472,9 @@ export default function Step2Venue() {
                     <h5 className="text-sm font-medium mb-2">Sections</h5>
                     <div className="space-y-2">
                       {layoutFormData.sections.map(section => (
-                        <div key={section.id} className="flex justify-between text-sm p-2 bg-white/5 rounded">
+                        <div key={section.id} className="flex justify-between text-sm p-2 bg-slate-100 dark:bg-slate-800 rounded">
                           <span>{section.name}</span>
-                          <span className="text-gray-400">
+                          <span className="text-slate-500 dark:text-slate-400">
                             {section.rows * section.seatsPerRow} seats ({section.rows} rows × {section.seatsPerRow}) • ${section.price}
                           </span>
                         </div>
@@ -1486,7 +1486,7 @@ export default function Step2Venue() {
                 <div className="flex justify-between">
                   <button
                     onClick={() => setLayoutWizardStep(2)}
-                    className="px-6 py-2 bg-gray-700 rounded-lg"
+                    className="px-6 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg"
                   >
                     Back
                   </button>

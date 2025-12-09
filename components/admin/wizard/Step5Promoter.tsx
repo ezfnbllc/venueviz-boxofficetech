@@ -187,21 +187,21 @@ export default function Step5Promoter() {
       {/* Header */}
       <div>
         <h2 className="text-2xl font-bold mb-4">Promoter Information</h2>
-        <p className="text-gray-400">Select an existing promoter or create new</p>
+        <p className="text-slate-500 dark:text-slate-400">Select an existing promoter or create new</p>
       </div>
 
       {/* User Status */}
       {user && (
-        <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+        <div className="flex items-center justify-between p-3 bg-slate-100 dark:bg-slate-800 rounded-lg">
           <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-400">Logged in as:</span>
+            <span className="text-sm text-slate-500 dark:text-slate-400">Logged in as:</span>
             <span className="text-sm font-medium">{user.email}</span>
             {isMasterAdmin ? (
-              <span className="px-2 py-1 bg-purple-600/20 text-purple-400 text-xs rounded-full">
+              <span className="px-2 py-1 bg-blue-100 dark:bg-blue-600/20 text-blue-700 dark:text-blue-400 text-xs rounded-full">
                 🔑 Master Admin
               </span>
             ) : (
-              <span className="px-2 py-1 bg-gray-600/20 text-gray-400 text-xs rounded-full">
+              <span className="px-2 py-1 bg-gray-600/20 text-slate-500 dark:text-slate-400 text-xs rounded-full">
                 Standard User
               </span>
             )}
@@ -217,7 +217,7 @@ export default function Step5Promoter() {
           <select
             value={selectedPromoterId}
             onChange={(e) => handlePromoterSelect(e.target.value)}
-            className="flex-1 px-4 py-2 bg-white/10 rounded-lg"
+            className="flex-1 px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg"
           >
             <option value="">-- Select --</option>
             {promoters.map(p => (
@@ -231,7 +231,7 @@ export default function Step5Promoter() {
           {isNewPromoter && (
             <button
               onClick={saveNewPromoter}
-              className="px-6 py-2 bg-green-600 rounded-lg hover:bg-green-700"
+              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
             >
               Save
             </button>
@@ -250,7 +250,7 @@ export default function Step5Promoter() {
               type="text"
               value={promoterData.promoterName || ''}
               onChange={(e) => handleUpdate({ promoterName: e.target.value })}
-              className="w-full px-4 py-2 bg-white/10 rounded-lg"
+              className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg"
               disabled={!isNewPromoter && selectedPromoterId !== ''}
             />
           </div>
@@ -261,7 +261,7 @@ export default function Step5Promoter() {
               type="email"
               value={promoterData.promoterEmail || ''}
               onChange={(e) => handleUpdate({ promoterEmail: e.target.value })}
-              className="w-full px-4 py-2 bg-white/10 rounded-lg"
+              className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg"
               disabled={!isNewPromoter && selectedPromoterId !== ''}
             />
           </div>
@@ -272,7 +272,7 @@ export default function Step5Promoter() {
               type="tel"
               value={promoterData.promoterPhone || ''}
               onChange={(e) => handleUpdate({ promoterPhone: e.target.value })}
-              className="w-full px-4 py-2 bg-white/10 rounded-lg"
+              className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg"
               disabled={!isNewPromoter && selectedPromoterId !== ''}
             />
           </div>
@@ -283,7 +283,7 @@ export default function Step5Promoter() {
               type="url"
               value={promoterData.promoterWebsite || ''}
               onChange={(e) => handleUpdate({ promoterWebsite: e.target.value })}
-              className="w-full px-4 py-2 bg-white/10 rounded-lg"
+              className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg"
               disabled={!isNewPromoter && selectedPromoterId !== ''}
             />
           </div>
@@ -295,19 +295,19 @@ export default function Step5Promoter() {
         <h3 className="text-lg font-semibold flex items-center gap-2">
           Commission & Payment Terms
           {isMasterAdmin ? (
-            <span className="px-2 py-1 bg-purple-600/20 text-purple-400 text-xs rounded-full">
+            <span className="px-2 py-1 bg-blue-100 dark:bg-blue-600/20 text-blue-700 dark:text-blue-400 text-xs rounded-full">
               🔑 Master Admin Only
             </span>
           ) : (
-            <span className="px-2 py-1 bg-red-600/20 text-red-400 text-xs rounded-full">
+            <span className="px-2 py-1 bg-red-100 dark:bg-red-600/20 text-red-700 dark:text-red-400 text-xs rounded-full">
               🔒 Restricted
             </span>
           )}
         </h3>
         
         {!isMasterAdmin ? (
-          <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-700">
-            <p className="text-sm text-gray-500">
+          <div className="p-4 bg-slate-100 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
               Commission: {promoterData.commission || 0}% | Terms: {promoterData.paymentTerms || 'net-30'}
             </p>
           </div>
@@ -319,7 +319,7 @@ export default function Step5Promoter() {
                 type="number"
                 value={promoterData.commission || 0}
                 onChange={(e) => handleUpdate({ commission: parseFloat(e.target.value) || 0 })}
-                className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg"
                 min="0" max="100" step="0.01"
               />
             </div>
@@ -329,7 +329,7 @@ export default function Step5Promoter() {
               <select
                 value={promoterData.paymentTerms || 'net-30'}
                 onChange={(e) => handleUpdate({ paymentTerms: e.target.value })}
-                className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg"
               >
                 <option value="immediate">Immediate</option>
                 <option value="net-7">Net 7</option>

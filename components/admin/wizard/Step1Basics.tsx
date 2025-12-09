@@ -206,11 +206,11 @@ export default function Step1Basics() {
   return (
     <div className="space-y-6">
       {/* Header with AI Tools */}
-      <div className="border-b border-gray-800 pb-3">
+      <div className="border-b border-slate-200 dark:border-slate-700 pb-3">
         <div className="flex justify-between items-start">
           <div>
-            <h3 className="text-xl font-semibold text-white">Basic Information</h3>
-            <p className="text-gray-500 text-sm mt-1">Set up the foundational details of your event</p>
+            <h3 className="text-xl font-semibold text-slate-900 dark:text-white">Basic Information</h3>
+            <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Set up the foundational details of your event</p>
           </div>
           <div className="flex gap-2">
             <AIButton onClick={handleSmartFill} label="✨ Smart Fill" />
@@ -229,16 +229,16 @@ export default function Step1Basics() {
 
       {/* Event Name */}
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
-          Event Name <span className="text-red-400">*</span>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+          Event Name <span className="text-red-500">*</span>
         </label>
         <input
           type="text"
           value={formData.basics?.name || ''}
           onChange={(e) => updateFormData('basics', { name: e.target.value })}
-          className="w-full px-4 py-2.5 bg-gray-850 border border-gray-800 rounded-lg 
-                   focus:bg-gray-800 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500/50
-                   transition-all text-white placeholder-gray-500"
+          className="w-full px-4 py-2.5 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg
+                   focus:bg-white dark:focus:bg-slate-700 focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-500/50
+                   transition-all text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
           placeholder="Enter event name..."
         />
       </div>
@@ -246,15 +246,15 @@ export default function Step1Basics() {
       {/* Description */}
       <div>
         <div className="flex justify-between items-center mb-2">
-          <label className="block text-sm font-medium text-gray-300">
-            Description <span className="text-red-400">*</span>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            Description <span className="text-red-500">*</span>
           </label>
           <div className="flex gap-2">
             <button
               type="button"
               onClick={() => handleAdjustDescription('shorten')}
               disabled={adjustingDescription || !formData.basics?.description}
-              className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 rounded text-gray-300
+              className="px-3 py-1 text-xs bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded text-slate-700 dark:text-slate-300
                        disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {adjustingDescription ? '...' : '↓ Shorten'}
@@ -263,7 +263,7 @@ export default function Step1Basics() {
               type="button"
               onClick={() => handleAdjustDescription('lengthen')}
               disabled={adjustingDescription || !formData.basics?.description}
-              className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 rounded text-gray-300
+              className="px-3 py-1 text-xs bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded text-slate-700 dark:text-slate-300
                        disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {adjustingDescription ? '...' : '↑ Lengthen'}
@@ -272,7 +272,7 @@ export default function Step1Basics() {
               type="button"
               onClick={() => handleAdjustDescription('professional')}
               disabled={adjustingDescription || !formData.basics?.description}
-              className="px-3 py-1 text-xs bg-purple-600 hover:bg-purple-700 rounded text-white
+              className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 rounded text-white
                        disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {adjustingDescription ? '...' : '✨ Polish'}
@@ -283,23 +283,23 @@ export default function Step1Basics() {
           value={formData.basics?.description || ''}
           onChange={(e) => updateFormData('basics', { description: e.target.value })}
           rows={5}
-          className="w-full px-4 py-2.5 bg-gray-850 border border-gray-800 rounded-lg
-                   focus:bg-gray-800 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500/50
-                   transition-all text-white placeholder-gray-500"
+          className="w-full px-4 py-2.5 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg
+                   focus:bg-white dark:focus:bg-slate-700 focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-500/50
+                   transition-all text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
           placeholder="Enter event description..."
         />
       </div>
 
       {/* Category */}
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
-          Category <span className="text-red-400">*</span>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+          Category <span className="text-red-500">*</span>
         </label>
         <select
           value={formData.basics?.category || ''}
           onChange={(e) => updateFormData('basics', { category: e.target.value, type: e.target.value })}
-          className="w-full px-4 py-2.5 bg-gray-850 border border-gray-800 rounded-lg 
-                   focus:bg-gray-800 focus:border-purple-500 focus:outline-none text-white"
+          className="w-full px-4 py-2.5 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg
+                   focus:bg-white dark:focus:bg-slate-700 focus:border-blue-500 focus:outline-none text-slate-900 dark:text-white"
         >
           <option value="">Select category...</option>
           <option value="concert">Concert</option>
@@ -314,20 +314,20 @@ export default function Step1Basics() {
 
       {/* Tags */}
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">Tags</label>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Tags</label>
         <input
           type="text"
           value={formData.basics?.tags?.join(', ') || ''}
           onChange={(e) => updateFormData('basics', { tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean) })}
-          className="w-full px-4 py-2.5 bg-gray-850 border border-gray-800 rounded-lg 
-                   focus:bg-gray-800 focus:border-purple-500 focus:outline-none text-white"
+          className="w-full px-4 py-2.5 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg
+                   focus:bg-white dark:focus:bg-slate-700 focus:border-blue-500 focus:outline-none text-slate-900 dark:text-white"
           placeholder="indie, rock, live music (comma-separated)"
         />
       </div>
 
       {/* Performers */}
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
           Performers / Artists
         </label>
         <div className="flex gap-2 mb-3">
@@ -336,14 +336,14 @@ export default function Step1Basics() {
             value={performerInput}
             onChange={(e) => setPerformerInput(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddPerformer())}
-            className="flex-1 px-4 py-2.5 bg-gray-850 border border-gray-800 rounded-lg 
-                     focus:bg-gray-800 focus:border-purple-500 focus:outline-none text-white"
+            className="flex-1 px-4 py-2.5 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg
+                     focus:bg-white dark:focus:bg-slate-700 focus:border-blue-500 focus:outline-none text-slate-900 dark:text-white"
             placeholder="Add performer name..."
           />
           <button
             type="button"
             onClick={handleAddPerformer}
-            className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium"
+            className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium"
           >
             Add
           </button>
@@ -352,13 +352,13 @@ export default function Step1Basics() {
           {performers.map((performer: string, index: number) => (
             <span
               key={index}
-              className="px-3 py-1.5 bg-purple-950/30 border border-purple-900/30 text-purple-400 
+              className="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800/50 text-blue-700 dark:text-blue-400
                        rounded-lg flex items-center gap-2"
             >
               {performer}
               <button
                 onClick={() => handleRemovePerformer(index)}
-                className="text-gray-500 hover:text-red-400"
+                className="text-slate-400 hover:text-red-500"
               >
                 ✕
               </button>
@@ -369,7 +369,7 @@ export default function Step1Basics() {
 
       {/* Cover Image */}
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
           Cover Image
         </label>
         <div className="relative">
@@ -383,13 +383,13 @@ export default function Step1Basics() {
           />
           <label
             htmlFor="cover-upload"
-            className="block w-full px-4 py-3 bg-gray-850 border border-gray-800 rounded-lg 
-                     hover:bg-gray-800 hover:border-purple-500/50 transition-all
-                     text-gray-400 cursor-pointer text-center"
+            className="block w-full px-4 py-3 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg
+                     hover:bg-slate-200 dark:hover:bg-slate-700 hover:border-blue-500/50 transition-all
+                     text-slate-500 dark:text-slate-400 cursor-pointer text-center"
           >
             {uploadingCover ? (
               <div className="flex items-center justify-center gap-2">
-                <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                 <span>Uploading...</span>
               </div>
             ) : (
@@ -407,7 +407,7 @@ export default function Step1Basics() {
             <img
               src={coverImage}
               alt="Cover"
-              className="w-full max-w-sm h-40 object-cover rounded-lg border border-gray-800"
+              className="w-full max-w-sm h-40 object-cover rounded-lg border border-slate-200 dark:border-slate-700"
             />
             <button
               onClick={() => updateFormData('basics', { images: { ...formData.basics?.images, cover: '', thumbnail: '' } })}
@@ -421,7 +421,7 @@ export default function Step1Basics() {
 
       {/* Gallery Images */}
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
           Gallery Images
         </label>
         <div className="relative">
@@ -436,13 +436,13 @@ export default function Step1Basics() {
           />
           <label
             htmlFor="gallery-upload"
-            className="block w-full px-4 py-3 bg-gray-850 border border-gray-800 rounded-lg 
-                     hover:bg-gray-800 hover:border-purple-500/50 transition-all
-                     text-gray-400 cursor-pointer text-center"
+            className="block w-full px-4 py-3 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg
+                     hover:bg-slate-200 dark:hover:bg-slate-700 hover:border-blue-500/50 transition-all
+                     text-slate-500 dark:text-slate-400 cursor-pointer text-center"
           >
             {uploadingGallery ? (
               <div className="flex items-center justify-center gap-2">
-                <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                 <span>Uploading...</span>
               </div>
             ) : (
@@ -462,11 +462,11 @@ export default function Step1Basics() {
                 <img
                   src={image}
                   alt={`Gallery ${index + 1}`}
-                  className="w-full h-20 object-cover rounded-lg border border-gray-800"
+                  className="w-full h-20 object-cover rounded-lg border border-slate-200 dark:border-slate-700"
                 />
                 <button
                   onClick={() => handleRemoveGalleryImage(index)}
-                  className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 
+                  className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100
                            transition-opacity rounded-lg flex items-center justify-center"
                 >
                   <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">

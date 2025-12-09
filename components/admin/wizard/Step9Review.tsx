@@ -93,14 +93,14 @@ export default function Step9Review() {
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-purple-600/20 to-blue-600/20 rounded-lg p-6">
+      <div className="bg-gradient-to-r from-blue-100 to-indigo-100 dark:from-purple-600/20 dark:to-blue-600/20 rounded-lg p-6 border border-blue-200 dark:border-transparent">
         <h2 className="text-3xl font-bold mb-2">{formData.basics?.name || 'Untitled Event'}</h2>
-        <p className="text-gray-300">{formData.basics?.description || 'No description provided'}</p>
+        <p className="text-slate-600 dark:text-slate-300">{formData.basics?.description || 'No description provided'}</p>
         <div className="flex gap-3 mt-4">
-          <span className="px-3 py-1 bg-white/10 rounded-full text-sm">
+          <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-sm">
             {formData.basics?.category || 'General'}
           </span>
-          <span className="px-3 py-1 bg-white/10 rounded-full text-sm">
+          <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-sm">
             {formData.basics?.status || 'Draft'}
           </span>
           {formData.basics?.featured && (
@@ -118,42 +118,42 @@ export default function Step9Review() {
         <div className="space-y-6">
           
           {/* Venue & Location */}
-          <div className="bg-white/5 rounded-lg p-5">
+          <div className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-5">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
               📍 Venue & Location
             </h3>
             <div className="space-y-3">
               <div>
-                <span className="text-xs text-gray-400">Venue</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">Venue</span>
                 <p className="font-medium">{venueDetails?.name || formData.venue?.venueId || 'Not selected'}</p>
               </div>
               {venueDetails?.address && (
                 <div>
-                  <span className="text-xs text-gray-400">Address</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">Address</span>
                   <p className="text-sm">{formatAddress(venueDetails.address)}</p>
                 </div>
               )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <span className="text-xs text-gray-400">Layout Type</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">Layout Type</span>
                   <p className="text-sm">{formData.venue?.layoutType || 'General'}</p>
                 </div>
                 <div>
-                  <span className="text-xs text-gray-400">Total Capacity</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">Total Capacity</span>
                   <p className="text-sm">{getTotalCapacity().toLocaleString() || 'Not set'}</p>
                 </div>
               </div>
               {formData.venue?.availableSections?.length > 0 && (
                 <div>
-                  <span className="text-xs text-gray-400">Sections ({formData.venue.availableSections.length})</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">Sections ({formData.venue.availableSections.length})</span>
                   <div className="flex flex-wrap gap-2 mt-1">
                     {formData.venue.availableSections.slice(0, 5).map((section: any, idx: number) => (
-                      <span key={idx} className="text-xs px-2 py-1 bg-white/5 rounded">
+                      <span key={idx} className="text-xs px-2 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded">
                         {section.name} ({section.capacity})
                       </span>
                     ))}
                     {formData.venue.availableSections.length > 5 && (
-                      <span className="text-xs px-2 py-1 bg-white/5 rounded">
+                      <span className="text-xs px-2 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded">
                         +{formData.venue.availableSections.length - 5} more
                       </span>
                     )}
@@ -164,7 +164,7 @@ export default function Step9Review() {
           </div>
 
           {/* Schedule */}
-          <div className="bg-white/5 rounded-lg p-5">
+          <div className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-5">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
               📅 Schedule
             </h3>
@@ -180,19 +180,19 @@ export default function Step9Review() {
                     const doorsTime = perf.doorsOpen || perf.doorTime
 
                     return (
-                      <div key={idx} className="pb-3 border-b border-white/10 last:border-0">
+                      <div key={idx} className="pb-3 border-b border-slate-200 dark:border-slate-700 last:border-0">
                         <p className="font-medium text-sm">
                           {dateStr}{startTime ? `, ${startTime}` : ''}
                         </p>
                         {(doorsTime || startTime) && (
-                          <p className="text-xs text-gray-400 mt-1">
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                             {doorsTime ? `Doors: ${doorsTime}` : ''}{doorsTime && startTime ? ' | ' : ''}{startTime ? `Show: ${startTime}` : ''}
                             {perf.endTime ? ` | End: ${perf.endTime}` : ''}
                           </p>
                         )}
                         <div className="flex gap-2 mt-2">
                           <span className={`text-xs px-2 py-1 rounded ${
-                            perf.status === 'onsale' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
+                            perf.status === 'onsale' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-slate-500 dark:text-slate-400'
                           }`}>
                             {perf.status || 'Scheduled'}
                           </span>
@@ -201,40 +201,40 @@ export default function Step9Review() {
                     )
                   })}
                   {formData.schedule.performances.length > 3 && (
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
                       +{formData.schedule.performances.length - 3} more performances
                     </p>
                   )}
                 </>
               ) : (
-                <p className="text-sm text-gray-500">No performances scheduled</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">No performances scheduled</p>
               )}
             </div>
           </div>
 
           {/* Promoter */}
-          <div className="bg-white/5 rounded-lg p-5">
+          <div className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-5">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
               🤝 Promoter
             </h3>
             <div className="space-y-3">
               <div>
-                <span className="text-xs text-gray-400">Company/Name</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">Company/Name</span>
                 <p className="font-medium">{formData.promoter?.promoterName || 'Not assigned'}</p>
               </div>
               {formData.promoter?.promoterEmail && (
                 <div>
-                  <span className="text-xs text-gray-400">Email</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">Email</span>
                   <p className="text-sm">{formData.promoter.promoterEmail}</p>
                 </div>
               )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <span className="text-xs text-gray-400">Commission</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">Commission</span>
                   <p className="text-sm font-medium">{formData.promoter?.commission || 0}%</p>
                 </div>
                 <div>
-                  <span className="text-xs text-gray-400">Payment Terms</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">Payment Terms</span>
                   <p className="text-sm">{formData.promoter?.paymentTerms || 'Net-30'}</p>
                 </div>
               </div>
@@ -246,7 +246,7 @@ export default function Step9Review() {
         <div className="space-y-6">
           
           {/* Pricing */}
-          <div className="bg-white/5 rounded-lg p-5">
+          <div className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-5">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
               💰 Pricing & Fees
             </h3>
@@ -254,7 +254,7 @@ export default function Step9Review() {
               {formData.pricing?.tiers?.length > 0 ? (
                 <>
                   <div>
-                    <span className="text-xs text-gray-400">Price Tiers ({formData.pricing.tiers.length})</span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">Price Tiers ({formData.pricing.tiers.length})</span>
                     <div className="space-y-2 mt-2">
                       {formData.pricing.tiers.slice(0, 5).map((tier: any, idx: number) => (
                         <div key={idx} className="flex justify-between items-center text-sm">
@@ -263,32 +263,32 @@ export default function Step9Review() {
                         </div>
                       ))}
                       {formData.pricing.tiers.length > 5 && (
-                        <p className="text-xs text-gray-500">+{formData.pricing.tiers.length - 5} more tiers</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">+{formData.pricing.tiers.length - 5} more tiers</p>
                       )}
                     </div>
                   </div>
                   {formData.pricing?.fees && (
-                    <div className="pt-3 border-t border-white/10">
-                      <span className="text-xs text-gray-400">Fees</span>
+                    <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
+                      <span className="text-xs text-slate-500 dark:text-slate-400">Fees</span>
                       <div className="grid grid-cols-2 gap-2 mt-2">
                         {formData.pricing.fees.serviceFee > 0 && (
                           <div className="text-xs">
-                            <span className="text-gray-500">Service:</span> ${formData.pricing.fees.serviceFee}
+                            <span className="text-slate-500 dark:text-slate-400">Service:</span> ${formData.pricing.fees.serviceFee}
                           </div>
                         )}
                         {formData.pricing.fees.processingFee > 0 && (
                           <div className="text-xs">
-                            <span className="text-gray-500">Processing:</span> ${formData.pricing.fees.processingFee}
+                            <span className="text-slate-500 dark:text-slate-400">Processing:</span> ${formData.pricing.fees.processingFee}
                           </div>
                         )}
                         {formData.pricing.fees.facilityFee > 0 && (
                           <div className="text-xs">
-                            <span className="text-gray-500">Facility:</span> ${formData.pricing.fees.facilityFee}
+                            <span className="text-slate-500 dark:text-slate-400">Facility:</span> ${formData.pricing.fees.facilityFee}
                           </div>
                         )}
                         {formData.pricing.fees.salesTax > 0 && (
                           <div className="text-xs">
-                            <span className="text-gray-500">Tax:</span> {formData.pricing.fees.salesTax}%
+                            <span className="text-slate-500 dark:text-slate-400">Tax:</span> {formData.pricing.fees.salesTax}%
                           </div>
                         )}
                       </div>
@@ -296,33 +296,33 @@ export default function Step9Review() {
                   )}
                 </>
               ) : (
-                <p className="text-sm text-gray-500">No pricing configured</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">No pricing configured</p>
               )}
             </div>
           </div>
 
           {/* Promotions */}
-          <div className="bg-white/5 rounded-lg p-5">
+          <div className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-5">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
               🎟️ Active Promotions
             </h3>
             <div className="space-y-3">
               {linkedPromotionDetails.length > 0 && (
                 <div>
-                  <span className="text-xs text-gray-400">Linked Promotions</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">Linked Promotions</span>
                   <div className="space-y-2 mt-2">
                     {linkedPromotionDetails.map((promo) => (
                       <div key={promo.id} className="flex items-center justify-between text-sm">
                         <div>
                           <span className="font-medium">{promo.code}</span>
-                          <span className="text-gray-400 ml-2">
+                          <span className="text-slate-500 dark:text-slate-400 ml-2">
                             {promo.type === 'percentage' ? `${promo.value}%` : `$${promo.value}`} off
                           </span>
                         </div>
                         <span className={`text-xs px-2 py-1 rounded ${
                           promo.active !== false 
                             ? 'bg-green-500/20 text-green-400' 
-                            : 'bg-gray-500/20 text-gray-400'
+                            : 'bg-gray-500/20 text-slate-500 dark:text-slate-400'
                         }`}>
                           {promo.active !== false ? 'Active' : 'Inactive'}
                         </span>
@@ -333,13 +333,13 @@ export default function Step9Review() {
               )}
               {formData.promotions?.eventPromotions?.length > 0 && (
                 <div>
-                  <span className="text-xs text-gray-400">Event-Specific</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">Event-Specific</span>
                   <div className="space-y-2 mt-2">
                     {formData.promotions.eventPromotions.map((promo: any) => (
                       <div key={promo.id} className="flex items-center justify-between text-sm">
                         <div>
                           <span className="font-medium">{promo.code}</span>
-                          <span className="text-gray-400 ml-2">
+                          <span className="text-slate-500 dark:text-slate-400 ml-2">
                             {promo.type === 'percentage' ? `${promo.value}%` : `$${promo.value}`} off
                           </span>
                         </div>
@@ -352,19 +352,19 @@ export default function Step9Review() {
                 </div>
               )}
               {!linkedPromotionDetails.length && !formData.promotions?.eventPromotions?.length && (
-                <p className="text-sm text-gray-500">No promotions configured</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">No promotions configured</p>
               )}
             </div>
           </div>
 
           {/* Sales & Communications */}
-          <div className="bg-white/5 rounded-lg p-5">
+          <div className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-5">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
               ⚙️ Sales & Communications
             </h3>
             <div className="space-y-3">
               <div>
-                <span className="text-xs text-gray-400">Sales Channels</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">Sales Channels</span>
                 <p className="text-sm">
                   {formData.sales?.salesChannels?.length > 0 
                     ? formData.sales.salesChannels.join(', ')
@@ -372,7 +372,7 @@ export default function Step9Review() {
                 </p>
               </div>
               <div>
-                <span className="text-xs text-gray-400">Refund Policy</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">Refund Policy</span>
                 <p className="text-sm">{formData.sales?.refundPolicy || 'Standard policy'}</p>
               </div>
             </div>
@@ -381,7 +381,7 @@ export default function Step9Review() {
       </div>
 
       {/* Summary Status Bar */}
-      <div className="bg-gradient-to-r from-green-600/20 to-blue-600/20 rounded-lg p-4">
+      <div className="bg-gradient-to-r from-green-100 to-blue-100 dark:from-green-600/20 dark:to-blue-600/20 rounded-lg p-4 border border-green-200 dark:border-transparent">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="text-green-400">✓</span>
