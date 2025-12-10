@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { usePromoterAccess } from '@/lib/hooks/usePromoterAccess'
 
 interface LoyaltyMember {
   id: string
@@ -11,6 +12,7 @@ interface LoyaltyMember {
   lifetimePoints: number
   joinedAt: string
   lastActivity: string
+  promoterId?: string  // Added for promoter filtering
 }
 
 interface LoyaltyTier {
@@ -29,6 +31,7 @@ interface Reward {
   category: string
   redemptions: number
   available: boolean
+  promoterId?: string  // Added for promoter filtering
 }
 
 export default function LoyaltyPage() {
@@ -38,6 +41,9 @@ export default function LoyaltyPage() {
   const [rewards, setRewards] = useState<Reward[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTier, setSelectedTier] = useState<string>('all')
+
+  // Promoter access control
+  const { isAdmin, showAll, filterByPromoter, effectivePromoterId } = usePromoterAccess()
 
   const tiers: LoyaltyTier[] = [
     { name: 'Bronze', minPoints: 0, benefits: ['5% discount on tickets', 'Early access notifications'], memberCount: 1250, color: 'amber' },
@@ -86,12 +92,17 @@ export default function LoyaltyPage() {
     }
   }
 
-  const filteredMembers = members.filter(member => {
+  // First filter by promoter access, then apply search/tier filters
+  const promoterFilteredMembers = filterByPromoter(members)
+  const filteredMembers = promoterFilteredMembers.filter(member => {
     const matchesSearch = member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          member.email.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesTier = selectedTier === 'all' || member.tier === selectedTier
     return matchesSearch && matchesTier
   })
+
+  // Also filter rewards by promoter
+  const filteredRewards = filterByPromoter(rewards)
 
   if (loading) {
     return (
@@ -106,14 +117,18 @@ export default function LoyaltyPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Loyalty & Rewards</h1>
-          <p className="text-gray-400 mt-1">Manage your loyalty program and reward members</p>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Loyalty & Rewards</h1>
+          <p className="text-slate-600 dark:text-gray-400 mt-1">
+            {showAll ? 'Manage loyalty program across all promoters' : 'Manage your loyalty program and reward members'}
+          </p>
         </div>
         <div className="flex gap-2">
-          <button className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors">
-            + Add Reward
-          </button>
-          <button className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors">
+          {isAdmin && (
+            <button className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors">
+              + Add Reward
+            </button>
+          )}
+          <button className="px-4 py-2 bg-slate-200 dark:bg-white/10 hover:bg-slate-300 dark:hover:bg-white/20 text-slate-700 dark:text-white rounded-lg transition-colors">
             Export Data
           </button>
         </div>
@@ -318,7 +333,7 @@ export default function LoyaltyPage() {
       {activeTab === 'rewards' && (
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {rewards.map((reward) => (
+            {filteredRewards.map((reward) => (
               <div key={reward.id} className={`bg-white/5 backdrop-blur-xl rounded-xl p-6 border ${reward.available ? 'border-white/10' : 'border-red-500/30'}`}>
                 <div className="flex items-start justify-between mb-4">
                   <div>
@@ -379,9 +394,11 @@ export default function LoyaltyPage() {
                 </div>
               </div>
               <div className="flex gap-2 mt-4">
-                <button className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm transition-colors">
-                  Edit Tier
-                </button>
+                {isAdmin && (
+                  <button className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm transition-colors">
+                    Edit Tier
+                  </button>
+                )}
                 <button className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm transition-colors">
                   View Members
                 </button>

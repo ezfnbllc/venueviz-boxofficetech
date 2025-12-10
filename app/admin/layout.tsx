@@ -51,6 +51,7 @@ interface NavItem {
   label: string
   icon: string
   badge?: string
+  adminOnly?: boolean  // Only visible to master admins
 }
 
 interface NavGroup {
@@ -58,6 +59,7 @@ interface NavGroup {
   label: string
   icon: string
   items: NavItem[]
+  adminOnly?: boolean  // Entire group only visible to master admins
 }
 
 export default function AdminLayout({
@@ -75,6 +77,7 @@ export default function AdminLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [expandedGroups, setExpandedGroups] = useState<string[]>(['core'])
 
+  // Build navigation groups - some items/groups are admin-only
   const navGroups: NavGroup[] = [
     {
       id: 'core',
@@ -83,10 +86,10 @@ export default function AdminLayout({
       items: [
         { href: '/admin', label: 'Dashboard', icon: '📊' },
         { href: '/admin/events', label: 'Events', icon: '🎭' },
-        { href: '/admin/venues', label: 'Venues', icon: '🏛️' },
+        { href: '/admin/venues', label: 'Venues', icon: '🏛️', adminOnly: true },
         { href: '/admin/orders', label: 'Orders', icon: '🎫' },
         { href: '/admin/customers', label: 'Customers', icon: '👥' },
-        { href: '/admin/promoters', label: 'Promoters', icon: '🤝' },
+        { href: '/admin/promoters', label: 'Promoters', icon: '🤝', adminOnly: true },
       ]
     },
     {
@@ -119,7 +122,7 @@ export default function AdminLayout({
         { href: '/admin/operations/check-in', label: 'Check-In', icon: '✅' },
         { href: '/admin/operations/queue', label: 'Queue Management', icon: '🚶' },
         { href: '/admin/operations/transfers', label: 'Ticket Transfers', icon: '🔀' },
-        { href: '/admin/operations/automation', label: 'Automation', icon: '🤖' },
+        { href: '/admin/operations/automation', label: 'Automation', icon: '🤖', adminOnly: true },
       ]
     },
     {
@@ -140,13 +143,14 @@ export default function AdminLayout({
         { href: '/admin/analytics', label: 'Analytics', icon: '📊' },
         { href: '/admin/bi', label: 'BI Dashboard', icon: '📉' },
         { href: '/admin/reports', label: 'Reports', icon: '📋' },
-        { href: '/admin/fraud', label: 'Fraud Detection', icon: '🛡️' },
+        { href: '/admin/fraud', label: 'Fraud Detection', icon: '🛡️', adminOnly: true },
       ]
     },
     {
       id: 'settings',
       label: 'Settings',
       icon: '⚙️',
+      adminOnly: true,  // Entire settings group is admin-only
       items: [
         { href: '/admin/integrations', label: 'Integrations', icon: '🔗' },
         { href: '/admin/webhooks', label: 'Webhooks', icon: '🪝' },
@@ -156,6 +160,15 @@ export default function AdminLayout({
       ]
     },
   ]
+
+  // Filter navigation based on user role
+  const filteredNavGroups = navGroups
+    .filter(group => !group.adminOnly || isAdmin)
+    .map(group => ({
+      ...group,
+      items: group.items.filter(item => !item.adminOnly || isAdmin)
+    }))
+    .filter(group => group.items.length > 0)
 
   // Auto-expand group containing current route
   useEffect(() => {
@@ -248,7 +261,7 @@ export default function AdminLayout({
 
         {/* Navigation */}
         <nav className="p-3 overflow-y-auto h-[calc(100vh-80px)]">
-          {navGroups.map(group => {
+          {filteredNavGroups.map(group => {
             const isExpanded = expandedGroups.includes(group.id)
             const hasActiveItem = group.items.some(item => isItemActive(item.href))
 
@@ -367,11 +380,15 @@ export default function AdminLayout({
                     <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-800 rounded-xl overflow-hidden shadow-lg border border-slate-200 dark:border-slate-700">
                       <div className="p-4 border-b border-slate-200 dark:border-slate-700">
                         <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{user.email}</p>
-                        {isAdmin && (
+                        {isAdmin ? (
                           <span className="inline-block mt-1 px-2.5 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-xs font-medium rounded-lg">
                             Master Admin
                           </span>
-                        )}
+                        ) : userData?.role === 'promoter' ? (
+                          <span className="inline-block mt-1 px-2.5 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-xs font-medium rounded-lg">
+                            Promoter
+                          </span>
+                        ) : null}
                       </div>
                       <button
                         onClick={() => signOut()}
