@@ -1,56 +1,71 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-
-interface Ticket {
-  id: string
-  subject: string
-  customer: { name: string; email: string }
-  status: 'open' | 'pending' | 'resolved' | 'closed'
-  priority: 'low' | 'medium' | 'high' | 'urgent'
-  category: string
-  assignee?: { name: string }
-  createdAt: string
-  lastUpdated: string
-  slaStatus: 'on_track' | 'at_risk' | 'breached'
-}
+import { usePromoterAccess } from '@/lib/hooks/usePromoterAccess'
+import { HelpDeskService, Ticket, SLAPolicy, CannedResponse } from '@/lib/services/helpDeskService'
 
 export default function SupportPage() {
   const [activeTab, setActiveTab] = useState<'tickets' | 'queue' | 'metrics' | 'settings'>('tickets')
   const [loading, setLoading] = useState(true)
   const [tickets, setTickets] = useState<Ticket[]>([])
+  const [slaPolicies, setSlaPolicies] = useState<SLAPolicy[]>([])
+  const [cannedResponses, setCannedResponses] = useState<CannedResponse[]>([])
   const [selectedStatus, setSelectedStatus] = useState<string>('all')
   const [selectedPriority, setSelectedPriority] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
 
-  const stats = {
-    openTickets: 24,
-    pendingTickets: 18,
-    avgResponseTime: '2.5 hrs',
-    avgResolutionTime: '18 hrs',
-    customerSatisfaction: 94,
-    slaCompliance: 96,
-    ticketsToday: 12,
-    resolvedToday: 8,
-  }
+  const { isAdmin, effectivePromoterId, showAll } = usePromoterAccess()
 
   useEffect(() => {
-    setTimeout(() => {
-      setTickets([
-        { id: 'TKT-1001', subject: 'Unable to download tickets', customer: { name: 'John Smith', email: 'john@example.com' }, status: 'open', priority: 'high', category: 'Technical', assignee: { name: 'Support Agent 1' }, createdAt: '2024-01-08T10:30:00', lastUpdated: '2024-01-08T11:45:00', slaStatus: 'on_track' },
-        { id: 'TKT-1002', subject: 'Refund request for cancelled event', customer: { name: 'Sarah Johnson', email: 'sarah@example.com' }, status: 'pending', priority: 'medium', category: 'Billing', assignee: { name: 'Support Agent 2' }, createdAt: '2024-01-08T09:15:00', lastUpdated: '2024-01-08T10:30:00', slaStatus: 'at_risk' },
-        { id: 'TKT-1003', subject: 'VIP upgrade inquiry', customer: { name: 'Mike Davis', email: 'mike@example.com' }, status: 'open', priority: 'low', category: 'Sales', createdAt: '2024-01-08T08:00:00', lastUpdated: '2024-01-08T08:00:00', slaStatus: 'on_track' },
-        { id: 'TKT-1004', subject: 'Group booking assistance needed', customer: { name: 'Emily Brown', email: 'emily@example.com' }, status: 'resolved', priority: 'medium', category: 'Booking', assignee: { name: 'Support Agent 1' }, createdAt: '2024-01-07T14:20:00', lastUpdated: '2024-01-08T09:00:00', slaStatus: 'on_track' },
-        { id: 'TKT-1005', subject: 'Accessibility requirements', customer: { name: 'Chris Wilson', email: 'chris@example.com' }, status: 'open', priority: 'urgent', category: 'Accessibility', createdAt: '2024-01-08T11:00:00', lastUpdated: '2024-01-08T11:00:00', slaStatus: 'breached' },
-      ])
+    loadData()
+  }, [effectivePromoterId, showAll])
+
+  const loadData = async () => {
+    setLoading(true)
+    try {
+      // Load tickets - filter by promoter if not admin with 'all' selected
+      const ticketFilters = showAll ? {} : { promoterId: effectivePromoterId }
+      const loadedTickets = await HelpDeskService.getTickets(
+        showAll ? undefined : effectivePromoterId,
+        {}
+      )
+      setTickets(loadedTickets)
+
+      // Load SLA policies
+      if (effectivePromoterId && effectivePromoterId !== 'all') {
+        const policies = await HelpDeskService.getSLAPolicies(effectivePromoterId)
+        setSlaPolicies(policies)
+
+        const responses = await HelpDeskService.getCannedResponses({
+          promoterId: effectivePromoterId,
+        })
+        setCannedResponses(responses)
+      }
+    } catch (error) {
+      console.error('Error loading support data:', error)
+    } finally {
       setLoading(false)
-    }, 500)
-  }, [])
+    }
+  }
+
+  // Calculate stats from real data
+  const stats = {
+    openTickets: tickets.filter(t => t.status === 'open' || t.status === 'new').length,
+    pendingTickets: tickets.filter(t => t.status === 'pending' || t.status === 'on_hold').length,
+    resolvedTickets: tickets.filter(t => t.status === 'resolved').length,
+    closedTickets: tickets.filter(t => t.status === 'closed').length,
+    urgentTickets: tickets.filter(t => t.priority === 'urgent').length,
+    highPriorityTickets: tickets.filter(t => t.priority === 'high').length,
+    totalTickets: tickets.length,
+    slaBreached: tickets.filter(t => t.sla?.firstResponseBreached || t.sla?.resolutionBreached).length,
+  }
 
   const getStatusColor = (status: string) => {
     switch (status) {
+      case 'new': return 'bg-purple-500/20 text-purple-400 border-purple-500/30'
       case 'open': return 'bg-blue-500/20 text-blue-400 border-blue-500/30'
       case 'pending': return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+      case 'on_hold': return 'bg-orange-500/20 text-orange-400 border-orange-500/30'
       case 'resolved': return 'bg-green-500/20 text-green-400 border-green-500/30'
       case 'closed': return 'bg-gray-500/20 text-gray-400 border-gray-500/30'
       default: return 'bg-gray-500/20 text-gray-400 border-gray-500/30'
@@ -61,29 +76,68 @@ export default function SupportPage() {
     switch (priority) {
       case 'urgent': return 'bg-red-500/20 text-red-400'
       case 'high': return 'bg-orange-500/20 text-orange-400'
-      case 'medium': return 'bg-yellow-500/20 text-yellow-400'
+      case 'normal': return 'bg-yellow-500/20 text-yellow-400'
       case 'low': return 'bg-gray-500/20 text-gray-400'
       default: return 'bg-gray-500/20 text-gray-400'
     }
   }
 
-  const getSlaColor = (slaStatus: string) => {
-    switch (slaStatus) {
-      case 'on_track': return 'text-green-400'
-      case 'at_risk': return 'text-yellow-400'
-      case 'breached': return 'text-red-400'
-      default: return 'text-gray-400'
+  const getSlaColor = (ticket: Ticket) => {
+    if (ticket.sla?.firstResponseBreached || ticket.sla?.resolutionBreached) {
+      return 'text-red-400'
     }
+    if (ticket.sla?.nextBreachAt && new Date(ticket.sla.nextBreachAt) < new Date(Date.now() + 60 * 60 * 1000)) {
+      return 'text-yellow-400'
+    }
+    return 'text-green-400'
+  }
+
+  const getSlaStatus = (ticket: Ticket) => {
+    if (ticket.sla?.firstResponseBreached || ticket.sla?.resolutionBreached) {
+      return '✕ Breached'
+    }
+    if (ticket.sla?.nextBreachAt && new Date(ticket.sla.nextBreachAt) < new Date(Date.now() + 60 * 60 * 1000)) {
+      return '⚠ At Risk'
+    }
+    return '✓ On Track'
   }
 
   const filteredTickets = tickets.filter(ticket => {
     const matchesSearch = ticket.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          ticket.customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         ticket.id.toLowerCase().includes(searchQuery.toLowerCase())
+                         ticket.number.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesStatus = selectedStatus === 'all' || ticket.status === selectedStatus
     const matchesPriority = selectedPriority === 'all' || ticket.priority === selectedPriority
     return matchesSearch && matchesStatus && matchesPriority
   })
+
+  // Group tickets by assignee for queue view
+  const unassignedTickets = tickets.filter(t => !t.assignee && t.status !== 'closed' && t.status !== 'resolved')
+  const assigneeGroups = tickets.reduce((acc, ticket) => {
+    if (ticket.assignee && ticket.status !== 'closed' && ticket.status !== 'resolved') {
+      const key = ticket.assignee.id
+      if (!acc[key]) {
+        acc[key] = { assignee: ticket.assignee, tickets: [] }
+      }
+      acc[key].tickets.push(ticket)
+    }
+    return acc
+  }, {} as Record<string, { assignee: NonNullable<Ticket['assignee']>; tickets: Ticket[] }>)
+
+  // Category distribution for metrics
+  const categoryDistribution = tickets.reduce((acc, ticket) => {
+    acc[ticket.category] = (acc[ticket.category] || 0) + 1
+    return acc
+  }, {} as Record<string, number>)
+
+  const categoryStats = Object.entries(categoryDistribution)
+    .map(([category, count]) => ({
+      category,
+      count,
+      percentage: Math.round((count / tickets.length) * 100) || 0
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5)
 
   if (loading) {
     return (
@@ -98,14 +152,16 @@ export default function SupportPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Help Desk</h1>
-          <p className="text-gray-400 mt-1">Manage support tickets and customer inquiries</p>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Help Desk</h1>
+          <p className="text-slate-600 dark:text-gray-400 mt-1">
+            {showAll ? 'Manage all support tickets' : 'Manage your support tickets and customer inquiries'}
+          </p>
         </div>
         <div className="flex gap-2">
           <button className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors">
             + New Ticket
           </button>
-          <button className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors">
+          <button className="px-4 py-2 bg-slate-200 dark:bg-white/10 hover:bg-slate-300 dark:hover:bg-white/20 text-slate-700 dark:text-white rounded-lg transition-colors">
             Export
           </button>
         </div>
@@ -113,42 +169,42 @@ export default function SupportPage() {
 
       {/* Quick Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
-        <div className="bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-white/10">
-          <p className="text-gray-400 text-xs">Open</p>
-          <p className="text-2xl font-bold text-white">{stats.openTickets}</p>
+        <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-slate-200 dark:border-white/10">
+          <p className="text-slate-500 dark:text-gray-400 text-xs">Total</p>
+          <p className="text-2xl font-bold text-slate-900 dark:text-white">{stats.totalTickets}</p>
         </div>
-        <div className="bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-white/10">
-          <p className="text-gray-400 text-xs">Pending</p>
-          <p className="text-2xl font-bold text-yellow-400">{stats.pendingTickets}</p>
+        <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-slate-200 dark:border-white/10">
+          <p className="text-slate-500 dark:text-gray-400 text-xs">Open</p>
+          <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.openTickets}</p>
         </div>
-        <div className="bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-white/10">
-          <p className="text-gray-400 text-xs">Avg Response</p>
-          <p className="text-2xl font-bold text-white">{stats.avgResponseTime}</p>
+        <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-slate-200 dark:border-white/10">
+          <p className="text-slate-500 dark:text-gray-400 text-xs">Pending</p>
+          <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.pendingTickets}</p>
         </div>
-        <div className="bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-white/10">
-          <p className="text-gray-400 text-xs">Avg Resolution</p>
-          <p className="text-2xl font-bold text-white">{stats.avgResolutionTime}</p>
+        <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-slate-200 dark:border-white/10">
+          <p className="text-slate-500 dark:text-gray-400 text-xs">Resolved</p>
+          <p className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.resolvedTickets}</p>
         </div>
-        <div className="bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-white/10">
-          <p className="text-gray-400 text-xs">CSAT</p>
-          <p className="text-2xl font-bold text-green-400">{stats.customerSatisfaction}%</p>
+        <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-slate-200 dark:border-white/10">
+          <p className="text-slate-500 dark:text-gray-400 text-xs">Urgent</p>
+          <p className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.urgentTickets}</p>
         </div>
-        <div className="bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-white/10">
-          <p className="text-gray-400 text-xs">SLA</p>
-          <p className="text-2xl font-bold text-green-400">{stats.slaCompliance}%</p>
+        <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-slate-200 dark:border-white/10">
+          <p className="text-slate-500 dark:text-gray-400 text-xs">High Priority</p>
+          <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{stats.highPriorityTickets}</p>
         </div>
-        <div className="bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-white/10">
-          <p className="text-gray-400 text-xs">Today</p>
-          <p className="text-2xl font-bold text-white">{stats.ticketsToday}</p>
+        <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-slate-200 dark:border-white/10">
+          <p className="text-slate-500 dark:text-gray-400 text-xs">SLA Breached</p>
+          <p className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.slaBreached}</p>
         </div>
-        <div className="bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-white/10">
-          <p className="text-gray-400 text-xs">Resolved Today</p>
-          <p className="text-2xl font-bold text-green-400">{stats.resolvedToday}</p>
+        <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-slate-200 dark:border-white/10">
+          <p className="text-slate-500 dark:text-gray-400 text-xs">Closed</p>
+          <p className="text-2xl font-bold text-slate-600 dark:text-gray-400">{stats.closedTickets}</p>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-white/5 p-1 rounded-lg w-fit">
+      <div className="flex gap-1 bg-slate-100 dark:bg-white/5 p-1 rounded-lg w-fit">
         {(['tickets', 'queue', 'metrics', 'settings'] as const).map((tab) => (
           <button
             key={tab}
@@ -156,7 +212,7 @@ export default function SupportPage() {
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors capitalize ${
               activeTab === tab
                 ? 'bg-purple-600 text-white'
-                : 'text-gray-400 hover:text-white hover:bg-white/10'
+                : 'text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/10'
             }`}
           >
             {tab}
@@ -175,87 +231,97 @@ export default function SupportPage() {
                 placeholder="Search tickets..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                className="w-full px-4 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
             </div>
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
-              className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="px-4 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
             >
               <option value="all">All Status</option>
+              <option value="new">New</option>
               <option value="open">Open</option>
               <option value="pending">Pending</option>
+              <option value="on_hold">On Hold</option>
               <option value="resolved">Resolved</option>
               <option value="closed">Closed</option>
             </select>
             <select
               value={selectedPriority}
               onChange={(e) => setSelectedPriority(e.target.value)}
-              className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="px-4 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
             >
               <option value="all">All Priorities</option>
               <option value="urgent">Urgent</option>
               <option value="high">High</option>
-              <option value="medium">Medium</option>
+              <option value="normal">Normal</option>
               <option value="low">Low</option>
             </select>
           </div>
 
           {/* Tickets List */}
-          <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden">
+          <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl border border-slate-200 dark:border-white/10 overflow-hidden">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-white/10">
-                  <th className="text-left p-4 text-gray-400 font-medium">Ticket</th>
-                  <th className="text-left p-4 text-gray-400 font-medium">Customer</th>
-                  <th className="text-left p-4 text-gray-400 font-medium">Status</th>
-                  <th className="text-left p-4 text-gray-400 font-medium">Priority</th>
-                  <th className="text-left p-4 text-gray-400 font-medium">Category</th>
-                  <th className="text-left p-4 text-gray-400 font-medium">Assignee</th>
-                  <th className="text-left p-4 text-gray-400 font-medium">SLA</th>
-                  <th className="text-right p-4 text-gray-400 font-medium">Actions</th>
+                <tr className="border-b border-slate-200 dark:border-white/10">
+                  <th className="text-left p-4 text-slate-500 dark:text-gray-400 font-medium">Ticket</th>
+                  <th className="text-left p-4 text-slate-500 dark:text-gray-400 font-medium">Customer</th>
+                  <th className="text-left p-4 text-slate-500 dark:text-gray-400 font-medium">Status</th>
+                  <th className="text-left p-4 text-slate-500 dark:text-gray-400 font-medium">Priority</th>
+                  <th className="text-left p-4 text-slate-500 dark:text-gray-400 font-medium">Category</th>
+                  <th className="text-left p-4 text-slate-500 dark:text-gray-400 font-medium">Assignee</th>
+                  <th className="text-left p-4 text-slate-500 dark:text-gray-400 font-medium">SLA</th>
+                  <th className="text-right p-4 text-slate-500 dark:text-gray-400 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredTickets.map((ticket) => (
-                  <tr key={ticket.id} className="border-b border-white/5 hover:bg-white/5">
-                    <td className="p-4">
-                      <div>
-                        <p className="text-white font-medium">{ticket.id}</p>
-                        <p className="text-gray-400 text-sm truncate max-w-[200px]">{ticket.subject}</p>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <div>
-                        <p className="text-white">{ticket.customer.name}</p>
-                        <p className="text-gray-400 text-sm">{ticket.customer.email}</p>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium border capitalize ${getStatusColor(ticket.status)}`}>
-                        {ticket.status}
-                      </span>
-                    </td>
-                    <td className="p-4">
-                      <span className={`px-2 py-1 rounded text-xs font-medium capitalize ${getPriorityColor(ticket.priority)}`}>
-                        {ticket.priority}
-                      </span>
-                    </td>
-                    <td className="p-4 text-gray-400">{ticket.category}</td>
-                    <td className="p-4 text-gray-400">{ticket.assignee?.name || 'Unassigned'}</td>
-                    <td className="p-4">
-                      <span className={`text-sm ${getSlaColor(ticket.slaStatus)}`}>
-                        {ticket.slaStatus === 'on_track' ? '✓ On Track' : ticket.slaStatus === 'at_risk' ? '⚠ At Risk' : '✕ Breached'}
-                      </span>
-                    </td>
-                    <td className="p-4 text-right">
-                      <button className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm transition-colors">
-                        View
-                      </button>
+                {filteredTickets.length > 0 ? (
+                  filteredTickets.map((ticket) => (
+                    <tr key={ticket.id} className="border-b border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5">
+                      <td className="p-4">
+                        <div>
+                          <p className="text-slate-900 dark:text-white font-medium">{ticket.number}</p>
+                          <p className="text-slate-500 dark:text-gray-400 text-sm truncate max-w-[200px]">{ticket.subject}</p>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <div>
+                          <p className="text-slate-900 dark:text-white">{ticket.customer.name}</p>
+                          <p className="text-slate-500 dark:text-gray-400 text-sm">{ticket.customer.email}</p>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium border capitalize ${getStatusColor(ticket.status)}`}>
+                          {ticket.status.replace('_', ' ')}
+                        </span>
+                      </td>
+                      <td className="p-4">
+                        <span className={`px-2 py-1 rounded text-xs font-medium capitalize ${getPriorityColor(ticket.priority)}`}>
+                          {ticket.priority}
+                        </span>
+                      </td>
+                      <td className="p-4 text-slate-600 dark:text-gray-400">{ticket.category}</td>
+                      <td className="p-4 text-slate-600 dark:text-gray-400">{ticket.assignee?.name || 'Unassigned'}</td>
+                      <td className="p-4">
+                        <span className={`text-sm ${getSlaColor(ticket)}`}>
+                          {getSlaStatus(ticket)}
+                        </span>
+                      </td>
+                      <td className="p-4 text-right">
+                        <button className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm transition-colors">
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={8} className="p-8 text-center text-slate-500 dark:text-gray-400">
+                      {tickets.length === 0 ? 'No tickets found' : 'No tickets match your filters'}
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
@@ -266,151 +332,137 @@ export default function SupportPage() {
       {activeTab === 'queue' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Unassigned Queue */}
-          <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10">
-            <div className="p-4 border-b border-white/10">
-              <h3 className="text-white font-semibold">Unassigned</h3>
-              <p className="text-gray-400 text-sm">3 tickets waiting</p>
+          <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl border border-slate-200 dark:border-white/10">
+            <div className="p-4 border-b border-slate-200 dark:border-white/10">
+              <h3 className="text-slate-900 dark:text-white font-semibold">Unassigned</h3>
+              <p className="text-slate-500 dark:text-gray-400 text-sm">{unassignedTickets.length} tickets waiting</p>
             </div>
-            <div className="p-4 space-y-3">
-              {tickets.filter(t => !t.assignee).map(ticket => (
-                <div key={ticket.id} className="p-3 bg-white/5 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-white font-medium text-sm">{ticket.id}</span>
-                    <span className={`px-2 py-0.5 rounded text-xs ${getPriorityColor(ticket.priority)}`}>{ticket.priority}</span>
+            <div className="p-4 space-y-3 max-h-[400px] overflow-y-auto">
+              {unassignedTickets.length > 0 ? (
+                unassignedTickets.map(ticket => (
+                  <div key={ticket.id} className="p-3 bg-slate-50 dark:bg-white/5 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-slate-900 dark:text-white font-medium text-sm">{ticket.number}</span>
+                      <span className={`px-2 py-0.5 rounded text-xs ${getPriorityColor(ticket.priority)}`}>{ticket.priority}</span>
+                    </div>
+                    <p className="text-slate-500 dark:text-gray-400 text-sm truncate">{ticket.subject}</p>
+                    <div className="flex justify-between mt-2">
+                      <span className="text-slate-400 dark:text-gray-500 text-xs">{ticket.customer.name}</span>
+                      <button className="text-purple-600 dark:text-purple-400 text-xs hover:text-purple-500">Assign</button>
+                    </div>
                   </div>
-                  <p className="text-gray-400 text-sm truncate">{ticket.subject}</p>
-                  <div className="flex justify-between mt-2">
-                    <span className="text-gray-500 text-xs">{ticket.customer.name}</span>
-                    <button className="text-purple-400 text-xs hover:text-purple-300">Assign</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Agent 1 Queue */}
-          <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10">
-            <div className="p-4 border-b border-white/10">
-              <h3 className="text-white font-semibold">Support Agent 1</h3>
-              <p className="text-gray-400 text-sm">2 active tickets</p>
-            </div>
-            <div className="p-4 space-y-3">
-              {tickets.filter(t => t.assignee?.name === 'Support Agent 1').map(ticket => (
-                <div key={ticket.id} className="p-3 bg-white/5 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-white font-medium text-sm">{ticket.id}</span>
-                    <span className={`px-2 py-0.5 rounded text-xs ${getPriorityColor(ticket.priority)}`}>{ticket.priority}</span>
-                  </div>
-                  <p className="text-gray-400 text-sm truncate">{ticket.subject}</p>
-                  <div className="flex justify-between mt-2">
-                    <span className={`text-xs ${getSlaColor(ticket.slaStatus)}`}>{ticket.slaStatus.replace('_', ' ')}</span>
-                    <span className={`text-xs ${getStatusColor(ticket.status)} px-1 rounded`}>{ticket.status}</span>
-                  </div>
-                </div>
-              ))}
+                ))
+              ) : (
+                <p className="text-slate-400 dark:text-gray-500 text-sm text-center py-4">No unassigned tickets</p>
+              )}
             </div>
           </div>
 
-          {/* Agent 2 Queue */}
-          <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10">
-            <div className="p-4 border-b border-white/10">
-              <h3 className="text-white font-semibold">Support Agent 2</h3>
-              <p className="text-gray-400 text-sm">1 active ticket</p>
-            </div>
-            <div className="p-4 space-y-3">
-              {tickets.filter(t => t.assignee?.name === 'Support Agent 2').map(ticket => (
-                <div key={ticket.id} className="p-3 bg-white/5 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-white font-medium text-sm">{ticket.id}</span>
-                    <span className={`px-2 py-0.5 rounded text-xs ${getPriorityColor(ticket.priority)}`}>{ticket.priority}</span>
+          {/* Agent Queues */}
+          {Object.values(assigneeGroups).slice(0, 2).map(({ assignee, tickets: agentTickets }) => (
+            <div key={assignee.id} className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl border border-slate-200 dark:border-white/10">
+              <div className="p-4 border-b border-slate-200 dark:border-white/10">
+                <h3 className="text-slate-900 dark:text-white font-semibold">{assignee.name}</h3>
+                <p className="text-slate-500 dark:text-gray-400 text-sm">{agentTickets.length} active tickets</p>
+              </div>
+              <div className="p-4 space-y-3 max-h-[400px] overflow-y-auto">
+                {agentTickets.map(ticket => (
+                  <div key={ticket.id} className="p-3 bg-slate-50 dark:bg-white/5 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-slate-900 dark:text-white font-medium text-sm">{ticket.number}</span>
+                      <span className={`px-2 py-0.5 rounded text-xs ${getPriorityColor(ticket.priority)}`}>{ticket.priority}</span>
+                    </div>
+                    <p className="text-slate-500 dark:text-gray-400 text-sm truncate">{ticket.subject}</p>
+                    <div className="flex justify-between mt-2">
+                      <span className={`text-xs ${getSlaColor(ticket)}`}>{getSlaStatus(ticket)}</span>
+                      <span className={`text-xs ${getStatusColor(ticket.status)} px-1 rounded`}>{ticket.status}</span>
+                    </div>
                   </div>
-                  <p className="text-gray-400 text-sm truncate">{ticket.subject}</p>
-                  <div className="flex justify-between mt-2">
-                    <span className={`text-xs ${getSlaColor(ticket.slaStatus)}`}>{ticket.slaStatus.replace('_', ' ')}</span>
-                    <span className={`text-xs ${getStatusColor(ticket.status)} px-1 rounded`}>{ticket.status}</span>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          ))}
         </div>
       )}
 
       {/* Metrics Tab */}
       {activeTab === 'metrics' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-white/10">
-            <h3 className="text-lg font-semibold text-white mb-4">Response Time Trends</h3>
-            <div className="h-48 flex items-end gap-2">
-              {[2.1, 2.8, 2.4, 3.2, 2.5, 2.0, 2.3].map((hours, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center">
-                  <div
-                    className="w-full bg-purple-500 rounded-t"
-                    style={{ height: `${(hours / 4) * 100}%` }}
-                  />
-                  <span className="text-gray-500 text-xs mt-2">Day {i + 1}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-white/10">
-            <h3 className="text-lg font-semibold text-white mb-4">Ticket Volume</h3>
-            <div className="h-48 flex items-end gap-2">
-              {[15, 22, 18, 25, 20, 12, 16].map((count, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center">
-                  <div
-                    className="w-full bg-blue-500 rounded-t"
-                    style={{ height: `${(count / 30) * 100}%` }}
-                  />
-                  <span className="text-gray-500 text-xs mt-2">Day {i + 1}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-white/10">
-            <h3 className="text-lg font-semibold text-white mb-4">Category Distribution</h3>
+          <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-slate-200 dark:border-white/10">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Ticket Status Distribution</h3>
             <div className="space-y-3">
               {[
-                { category: 'Technical', count: 35, percentage: 28 },
-                { category: 'Billing', count: 28, percentage: 22 },
-                { category: 'Booking', count: 25, percentage: 20 },
-                { category: 'Sales', count: 20, percentage: 16 },
-                { category: 'Other', count: 17, percentage: 14 },
+                { status: 'Open', count: stats.openTickets, color: 'bg-blue-500' },
+                { status: 'Pending', count: stats.pendingTickets, color: 'bg-yellow-500' },
+                { status: 'Resolved', count: stats.resolvedTickets, color: 'bg-green-500' },
+                { status: 'Closed', count: stats.closedTickets, color: 'bg-gray-500' },
               ].map(item => (
-                <div key={item.category}>
+                <div key={item.status}>
                   <div className="flex justify-between text-sm mb-1">
-                    <span className="text-gray-400">{item.category}</span>
-                    <span className="text-white">{item.count} ({item.percentage}%)</span>
+                    <span className="text-slate-600 dark:text-gray-400">{item.status}</span>
+                    <span className="text-slate-900 dark:text-white">{item.count} ({stats.totalTickets > 0 ? Math.round((item.count / stats.totalTickets) * 100) : 0}%)</span>
                   </div>
-                  <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                    <div className="h-full bg-purple-500 rounded-full" style={{ width: `${item.percentage}%` }} />
+                  <div className="h-2 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
+                    <div className={`h-full ${item.color} rounded-full`} style={{ width: `${stats.totalTickets > 0 ? (item.count / stats.totalTickets) * 100 : 0}%` }} />
                   </div>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-white/10">
-            <h3 className="text-lg font-semibold text-white mb-4">Agent Performance</h3>
-            <div className="space-y-4">
-              {[
-                { name: 'Support Agent 1', resolved: 45, satisfaction: 96, avgTime: '1.8 hrs' },
-                { name: 'Support Agent 2', resolved: 38, satisfaction: 94, avgTime: '2.2 hrs' },
-                { name: 'Support Agent 3', resolved: 42, satisfaction: 92, avgTime: '2.0 hrs' },
-              ].map(agent => (
-                <div key={agent.name} className="p-3 bg-white/5 rounded-lg">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-white font-medium">{agent.name}</span>
-                    <span className="text-green-400 text-sm">{agent.satisfaction}% CSAT</span>
+          <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-slate-200 dark:border-white/10">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Category Distribution</h3>
+            <div className="space-y-3">
+              {categoryStats.length > 0 ? (
+                categoryStats.map(item => (
+                  <div key={item.category}>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-slate-600 dark:text-gray-400">{item.category}</span>
+                      <span className="text-slate-900 dark:text-white">{item.count} ({item.percentage}%)</span>
+                    </div>
+                    <div className="h-2 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
+                      <div className="h-full bg-purple-500 rounded-full" style={{ width: `${item.percentage}%` }} />
+                    </div>
                   </div>
-                  <div className="flex gap-4 text-sm">
-                    <span className="text-gray-400">{agent.resolved} resolved</span>
-                    <span className="text-gray-400">{agent.avgTime} avg</span>
+                ))
+              ) : (
+                <p className="text-slate-500 dark:text-gray-400 text-center py-4">No ticket data available</p>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-slate-200 dark:border-white/10">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Priority Breakdown</h3>
+            <div className="space-y-3">
+              {[
+                { priority: 'Urgent', count: stats.urgentTickets, color: 'bg-red-500' },
+                { priority: 'High', count: stats.highPriorityTickets, color: 'bg-orange-500' },
+                { priority: 'Normal', count: tickets.filter(t => t.priority === 'normal').length, color: 'bg-yellow-500' },
+                { priority: 'Low', count: tickets.filter(t => t.priority === 'low').length, color: 'bg-gray-500' },
+              ].map(item => (
+                <div key={item.priority}>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-slate-600 dark:text-gray-400">{item.priority}</span>
+                    <span className="text-slate-900 dark:text-white">{item.count}</span>
+                  </div>
+                  <div className="h-2 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
+                    <div className={`h-full ${item.color} rounded-full`} style={{ width: `${stats.totalTickets > 0 ? (item.count / stats.totalTickets) * 100 : 0}%` }} />
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-slate-200 dark:border-white/10">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">SLA Compliance</h3>
+            <div className="flex items-center justify-center h-32">
+              <div className="text-center">
+                <p className="text-4xl font-bold text-green-600 dark:text-green-400">
+                  {stats.totalTickets > 0 ? Math.round(((stats.totalTickets - stats.slaBreached) / stats.totalTickets) * 100) : 100}%
+                </p>
+                <p className="text-slate-500 dark:text-gray-400 text-sm mt-1">Compliance Rate</p>
+                <p className="text-red-500 text-sm mt-2">{stats.slaBreached} tickets breached SLA</p>
+              </div>
             </div>
           </div>
         </div>
@@ -419,52 +471,64 @@ export default function SupportPage() {
       {/* Settings Tab */}
       {activeTab === 'settings' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-white/10">
-            <h3 className="text-lg font-semibold text-white mb-4">SLA Policies</h3>
+          <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-slate-200 dark:border-white/10">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">SLA Policies</h3>
             <div className="space-y-3">
-              {[
-                { priority: 'Urgent', firstResponse: '15 min', resolution: '4 hrs' },
-                { priority: 'High', firstResponse: '1 hr', resolution: '8 hrs' },
-                { priority: 'Medium', firstResponse: '4 hrs', resolution: '24 hrs' },
-                { priority: 'Low', firstResponse: '8 hrs', resolution: '48 hrs' },
-              ].map(sla => (
-                <div key={sla.priority} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
-                  <span className={`font-medium ${getPriorityColor(sla.priority.toLowerCase())} px-2 py-0.5 rounded`}>{sla.priority}</span>
-                  <div className="flex gap-6 text-sm">
+              {slaPolicies.length > 0 ? (
+                slaPolicies.map(policy => (
+                  <div key={policy.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-white/5 rounded-lg">
                     <div>
-                      <span className="text-gray-400">First Response:</span>
-                      <span className="text-white ml-2">{sla.firstResponse}</span>
+                      <span className="text-slate-900 dark:text-white font-medium">{policy.name}</span>
+                      {policy.isDefault && (
+                        <span className="ml-2 px-2 py-0.5 bg-blue-500/20 text-blue-400 text-xs rounded">Default</span>
+                      )}
                     </div>
-                    <div>
-                      <span className="text-gray-400">Resolution:</span>
-                      <span className="text-white ml-2">{sla.resolution}</span>
+                    <div className="flex gap-4 text-sm">
+                      <span className="text-slate-500 dark:text-gray-400">
+                        Status: {policy.status}
+                      </span>
+                      {isAdmin && (
+                        <button className="text-purple-600 dark:text-purple-400 text-sm hover:text-purple-500">Edit</button>
+                      )}
                     </div>
                   </div>
-                  <button className="text-purple-400 text-sm hover:text-purple-300">Edit</button>
+                ))
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-slate-500 dark:text-gray-400 mb-4">No SLA policies configured</p>
+                  {isAdmin && (
+                    <button className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors">
+                      Create SLA Policy
+                    </button>
+                  )}
                 </div>
-              ))}
+              )}
             </div>
           </div>
 
-          <div className="bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-white/10">
-            <h3 className="text-lg font-semibold text-white mb-4">Canned Responses</h3>
+          <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-slate-200 dark:border-white/10">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Canned Responses</h3>
             <div className="space-y-3">
-              {[
-                { name: 'Ticket Received', usage: 245 },
-                { name: 'Refund Processing', usage: 128 },
-                { name: 'Event Cancelled', usage: 89 },
-                { name: 'Technical Support', usage: 156 },
-              ].map(response => (
-                <div key={response.name} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
-                  <span className="text-white">{response.name}</span>
-                  <div className="flex items-center gap-4">
-                    <span className="text-gray-400 text-sm">{response.usage} uses</span>
-                    <button className="text-purple-400 text-sm hover:text-purple-300">Edit</button>
+              {cannedResponses.length > 0 ? (
+                cannedResponses.map(response => (
+                  <div key={response.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-white/5 rounded-lg">
+                    <div>
+                      <span className="text-slate-900 dark:text-white">{response.name}</span>
+                      <p className="text-slate-500 dark:text-gray-400 text-sm truncate max-w-xs">{response.category}</p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span className="text-slate-400 dark:text-gray-500 text-sm">{response.usageCount || 0} uses</span>
+                      <button className="text-purple-600 dark:text-purple-400 text-sm hover:text-purple-500">Edit</button>
+                    </div>
                   </div>
+                ))
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-slate-500 dark:text-gray-400 mb-4">No canned responses yet</p>
                 </div>
-              ))}
+              )}
             </div>
-            <button className="w-full mt-4 py-2 border border-dashed border-white/20 rounded-lg text-gray-400 hover:text-white hover:border-purple-500 transition-colors">
+            <button className="w-full mt-4 py-2 border border-dashed border-slate-300 dark:border-white/20 rounded-lg text-slate-500 dark:text-gray-400 hover:text-purple-600 dark:hover:text-white hover:border-purple-500 transition-colors">
               + Add Response
             </button>
           </div>

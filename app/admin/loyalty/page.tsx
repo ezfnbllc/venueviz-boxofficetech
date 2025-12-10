@@ -2,107 +2,88 @@
 
 import { useState, useEffect } from 'react'
 import { usePromoterAccess } from '@/lib/hooks/usePromoterAccess'
-
-interface LoyaltyMember {
-  id: string
-  name: string
-  email: string
-  tier: 'bronze' | 'silver' | 'gold' | 'platinum'
-  points: number
-  lifetimePoints: number
-  joinedAt: string
-  lastActivity: string
-  promoterId?: string  // Added for promoter filtering
-}
-
-interface LoyaltyTier {
-  name: string
-  minPoints: number
-  benefits: string[]
-  memberCount: number
-  color: string
-}
-
-interface Reward {
-  id: string
-  name: string
-  description: string
-  pointsCost: number
-  category: string
-  redemptions: number
-  available: boolean
-  promoterId?: string  // Added for promoter filtering
-}
+import { LoyaltyService, LoyaltyProgram, LoyaltyMember, Reward } from '@/lib/services/loyaltyService'
 
 export default function LoyaltyPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'members' | 'rewards' | 'tiers' | 'campaigns'>('overview')
   const [loading, setLoading] = useState(true)
+  const [program, setProgram] = useState<LoyaltyProgram | null>(null)
   const [members, setMembers] = useState<LoyaltyMember[]>([])
   const [rewards, setRewards] = useState<Reward[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTier, setSelectedTier] = useState<string>('all')
 
-  // Promoter access control
-  const { isAdmin, showAll, filterByPromoter, effectivePromoterId } = usePromoterAccess()
-
-  const tiers: LoyaltyTier[] = [
-    { name: 'Bronze', minPoints: 0, benefits: ['5% discount on tickets', 'Early access notifications'], memberCount: 1250, color: 'amber' },
-    { name: 'Silver', minPoints: 1000, benefits: ['10% discount', 'Priority seating', 'Free drink voucher'], memberCount: 580, color: 'slate' },
-    { name: 'Gold', minPoints: 5000, benefits: ['15% discount', 'VIP lounge access', 'Free merchandise'], memberCount: 185, color: 'yellow' },
-    { name: 'Platinum', minPoints: 15000, benefits: ['20% discount', 'Backstage access', 'Personal concierge', 'Exclusive events'], memberCount: 42, color: 'purple' },
-  ]
-
-  const stats = {
-    totalMembers: 2057,
-    activeMembers: 1834,
-    totalPointsIssued: 4250000,
-    totalRedemptions: 12450,
-    avgPointsPerMember: 2067,
-    redemptionRate: 68,
-  }
+  const { isAdmin, showAll, effectivePromoterId } = usePromoterAccess()
+  const loyaltyService = new LoyaltyService()
 
   useEffect(() => {
-    // Simulate loading data
-    setTimeout(() => {
-      setMembers([
-        { id: '1', name: 'John Smith', email: 'john@example.com', tier: 'platinum', points: 18500, lifetimePoints: 45200, joinedAt: '2022-03-15', lastActivity: '2024-01-08' },
-        { id: '2', name: 'Sarah Johnson', email: 'sarah@example.com', tier: 'gold', points: 7800, lifetimePoints: 22100, joinedAt: '2022-06-20', lastActivity: '2024-01-07' },
-        { id: '3', name: 'Mike Davis', email: 'mike@example.com', tier: 'gold', points: 5200, lifetimePoints: 15800, joinedAt: '2023-01-10', lastActivity: '2024-01-05' },
-        { id: '4', name: 'Emily Brown', email: 'emily@example.com', tier: 'silver', points: 2100, lifetimePoints: 8900, joinedAt: '2023-04-22', lastActivity: '2024-01-06' },
-        { id: '5', name: 'Chris Wilson', email: 'chris@example.com', tier: 'bronze', points: 450, lifetimePoints: 1200, joinedAt: '2023-11-05', lastActivity: '2024-01-03' },
-      ])
-      setRewards([
-        { id: '1', name: 'Free Ticket Upgrade', description: 'Upgrade to VIP seating', pointsCost: 500, category: 'Tickets', redemptions: 1250, available: true },
-        { id: '2', name: 'Backstage Pass', description: 'Meet the artists', pointsCost: 2500, category: 'Experiences', redemptions: 85, available: true },
-        { id: '3', name: 'Merchandise Credit', description: '$25 merch credit', pointsCost: 1000, category: 'Merchandise', redemptions: 3200, available: true },
-        { id: '4', name: 'VIP Parking', description: 'Premium parking spot', pointsCost: 300, category: 'Services', redemptions: 890, available: true },
-        { id: '5', name: 'Exclusive Event Access', description: 'Members-only events', pointsCost: 5000, category: 'Experiences', redemptions: 42, available: false },
-      ])
-      setLoading(false)
-    }, 500)
-  }, [])
+    loadData()
+  }, [effectivePromoterId, showAll])
 
-  const getTierColor = (tier: string) => {
-    switch (tier) {
-      case 'bronze': return 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-      case 'silver': return 'bg-slate-400/20 text-slate-300 border-slate-400/30'
-      case 'gold': return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
-      case 'platinum': return 'bg-purple-500/20 text-purple-400 border-purple-500/30'
-      default: return 'bg-gray-500/20 text-gray-400 border-gray-500/30'
+  const loadData = async () => {
+    setLoading(true)
+    try {
+      if (effectivePromoterId && effectivePromoterId !== 'all') {
+        // Load program for specific promoter
+        const loadedProgram = await loyaltyService.getProgramByPromoter(effectivePromoterId)
+        setProgram(loadedProgram)
+
+        if (loadedProgram?.id) {
+          // Load members
+          const loadedMembers = await loyaltyService.getMembers(loadedProgram.id, {})
+          setMembers(loadedMembers)
+
+          // Load rewards
+          const loadedRewards = await loyaltyService.getRewards(loadedProgram.id)
+          setRewards(loadedRewards)
+        }
+      }
+    } catch (error) {
+      console.error('Error loading loyalty data:', error)
+    } finally {
+      setLoading(false)
     }
   }
 
-  // First filter by promoter access, then apply search/tier filters
-  const promoterFilteredMembers = filterByPromoter(members)
-  const filteredMembers = promoterFilteredMembers.filter(member => {
-    const matchesSearch = member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         member.email.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesTier = selectedTier === 'all' || member.tier === selectedTier
+  // Calculate stats from real data
+  const stats = {
+    totalMembers: members.length,
+    activeMembers: members.filter(m => {
+      const lastActivity = new Date(m.lastActivityAt)
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+      return lastActivity > thirtyDaysAgo
+    }).length,
+    totalPointsIssued: members.reduce((sum, m) => sum + m.totalPointsEarned, 0),
+    avgPointsPerMember: members.length > 0
+      ? Math.round(members.reduce((sum, m) => sum + m.currentPoints, 0) / members.length)
+      : 0,
+    totalReferrals: members.reduce((sum, m) => sum + m.referralCount, 0),
+  }
+
+  // Get tier distribution from program or use defaults
+  const tiers = program?.tiers || []
+
+  // Count members per tier
+  const tierCounts = members.reduce((acc, member) => {
+    acc[member.currentTier] = (acc[member.currentTier] || 0) + 1
+    return acc
+  }, {} as Record<string, number>)
+
+  const getTierColor = (tierName: string) => {
+    const name = tierName.toLowerCase()
+    if (name.includes('bronze') || name.includes('basic')) return 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+    if (name.includes('silver')) return 'bg-slate-400/20 text-slate-300 border-slate-400/30'
+    if (name.includes('gold')) return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+    if (name.includes('platinum') || name.includes('vip')) return 'bg-purple-500/20 text-purple-400 border-purple-500/30'
+    return 'bg-gray-500/20 text-gray-400 border-gray-500/30'
+  }
+
+  const filteredMembers = members.filter(member => {
+    const matchesSearch = searchQuery === '' ||
+      member.customerId.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesTier = selectedTier === 'all' || member.currentTier === selectedTier
     return matchesSearch && matchesTier
   })
-
-  // Also filter rewards by promoter
-  const filteredRewards = filterByPromoter(rewards)
 
   if (loading) {
     return (
@@ -119,11 +100,16 @@ export default function LoyaltyPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Loyalty & Rewards</h1>
           <p className="text-slate-600 dark:text-gray-400 mt-1">
-            {showAll ? 'Manage loyalty program across all promoters' : 'Manage your loyalty program and reward members'}
+            {program ? program.name : (showAll ? 'Manage loyalty programs across all promoters' : 'Manage your loyalty program and reward members')}
           </p>
         </div>
         <div className="flex gap-2">
-          {isAdmin && (
+          {isAdmin && !program && (
+            <button className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors">
+              + Create Program
+            </button>
+          )}
+          {program && (
             <button className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors">
               + Add Reward
             </button>
@@ -134,317 +120,311 @@ export default function LoyaltyPage() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 bg-white/5 p-1 rounded-lg w-fit">
-        {(['overview', 'members', 'rewards', 'tiers', 'campaigns'] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors capitalize ${
-              activeTab === tab
-                ? 'bg-purple-600 text-white'
-                : 'text-gray-400 hover:text-white hover:bg-white/10'
-            }`}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
-
-      {/* Overview Tab */}
-      {activeTab === 'overview' && (
-        <div className="space-y-6">
-          {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div className="bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-white/10">
-              <div className="flex items-center justify-between">
-                <p className="text-gray-400 text-sm">Total Members</p>
-                <span className="text-2xl">👥</span>
-              </div>
-              <p className="text-3xl font-bold text-white mt-2">{stats.totalMembers.toLocaleString()}</p>
-              <p className="text-sm text-green-400 mt-1">+12% this month</p>
-            </div>
-
-            <div className="bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-white/10">
-              <div className="flex items-center justify-between">
-                <p className="text-gray-400 text-sm">Active Members</p>
-                <span className="text-2xl">⚡</span>
-              </div>
-              <p className="text-3xl font-bold text-white mt-2">{stats.activeMembers.toLocaleString()}</p>
-              <p className="text-sm text-gray-400 mt-1">{((stats.activeMembers / stats.totalMembers) * 100).toFixed(1)}% engagement</p>
-            </div>
-
-            <div className="bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-white/10">
-              <div className="flex items-center justify-between">
-                <p className="text-gray-400 text-sm">Points Issued</p>
-                <span className="text-2xl">⭐</span>
-              </div>
-              <p className="text-3xl font-bold text-white mt-2">{(stats.totalPointsIssued / 1000000).toFixed(1)}M</p>
-              <p className="text-sm text-gray-400 mt-1">{stats.avgPointsPerMember.toLocaleString()} avg/member</p>
-            </div>
-
-            <div className="bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-white/10">
-              <div className="flex items-center justify-between">
-                <p className="text-gray-400 text-sm">Total Redemptions</p>
-                <span className="text-2xl">🎁</span>
-              </div>
-              <p className="text-3xl font-bold text-white mt-2">{stats.totalRedemptions.toLocaleString()}</p>
-              <p className="text-sm text-green-400 mt-1">{stats.redemptionRate}% redemption rate</p>
-            </div>
-
-            <div className="bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-white/10">
-              <div className="flex items-center justify-between">
-                <p className="text-gray-400 text-sm">Revenue Impact</p>
-                <span className="text-2xl">💰</span>
-              </div>
-              <p className="text-3xl font-bold text-white mt-2">$284K</p>
-              <p className="text-sm text-green-400 mt-1">+23% from loyalty members</p>
-            </div>
-
-            <div className="bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-white/10">
-              <div className="flex items-center justify-between">
-                <p className="text-gray-400 text-sm">Member LTV</p>
-                <span className="text-2xl">📈</span>
-              </div>
-              <p className="text-3xl font-bold text-white mt-2">$425</p>
-              <p className="text-sm text-green-400 mt-1">vs $180 non-members</p>
-            </div>
-          </div>
-
-          {/* Tier Distribution */}
-          <div className="bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-white/10">
-            <h3 className="text-lg font-semibold text-white mb-4">Tier Distribution</h3>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {tiers.map((tier) => (
-                <div key={tier.name} className={`p-4 rounded-lg border ${getTierColor(tier.name.toLowerCase())}`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-semibold">{tier.name}</span>
-                    <span className="text-2xl">{tier.name === 'Bronze' ? '🥉' : tier.name === 'Silver' ? '🥈' : tier.name === 'Gold' ? '🥇' : '💎'}</span>
-                  </div>
-                  <p className="text-2xl font-bold">{tier.memberCount.toLocaleString()}</p>
-                  <p className="text-sm opacity-70">members</p>
-                  <div className="mt-3 h-2 bg-black/30 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-current rounded-full"
-                      style={{ width: `${(tier.memberCount / stats.totalMembers) * 100}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Recent Activity */}
-          <div className="bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-white/10">
-            <h3 className="text-lg font-semibold text-white mb-4">Recent Activity</h3>
-            <div className="space-y-3">
-              {[
-                { action: 'Points earned', member: 'John Smith', details: '+500 points from ticket purchase', time: '2 minutes ago', icon: '⭐' },
-                { action: 'Reward redeemed', member: 'Sarah Johnson', details: 'Free Ticket Upgrade (500 pts)', time: '15 minutes ago', icon: '🎁' },
-                { action: 'Tier upgrade', member: 'Mike Davis', details: 'Silver → Gold', time: '1 hour ago', icon: '⬆️' },
-                { action: 'New member', member: 'Emily Brown', details: 'Joined loyalty program', time: '3 hours ago', icon: '👋' },
-                { action: 'Points earned', member: 'Chris Wilson', details: '+200 points from referral', time: '5 hours ago', icon: '⭐' },
-              ].map((activity, i) => (
-                <div key={i} className="flex items-center gap-4 p-3 bg-white/5 rounded-lg">
-                  <span className="text-2xl">{activity.icon}</span>
-                  <div className="flex-1">
-                    <p className="text-white font-medium">{activity.action}</p>
-                    <p className="text-gray-400 text-sm">{activity.member} - {activity.details}</p>
-                  </div>
-                  <span className="text-gray-500 text-sm">{activity.time}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+      {/* No Program State */}
+      {!program && (
+        <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-12 border border-slate-200 dark:border-white/10 text-center">
+          <div className="text-6xl mb-4">⭐</div>
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">No Loyalty Program</h2>
+          <p className="text-slate-600 dark:text-gray-400 mb-6 max-w-md mx-auto">
+            {isAdmin
+              ? 'Create a loyalty program to reward your customers and increase retention.'
+              : 'No loyalty program has been set up yet. Contact your administrator to create one.'}
+          </p>
+          {isAdmin && (
+            <button className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors">
+              Create Loyalty Program
+            </button>
+          )}
         </div>
       )}
 
-      {/* Members Tab */}
-      {activeTab === 'members' && (
-        <div className="space-y-4">
-          {/* Filters */}
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <input
-                type="text"
-                placeholder="Search members..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
-              />
+      {/* Stats */}
+      {program && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-slate-200 dark:border-white/10">
+              <p className="text-slate-500 dark:text-gray-400 text-xs">Total Members</p>
+              <p className="text-2xl font-bold text-slate-900 dark:text-white">{stats.totalMembers.toLocaleString()}</p>
             </div>
-            <select
-              value={selectedTier}
-              onChange={(e) => setSelectedTier(e.target.value)}
-              className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-            >
-              <option value="all">All Tiers</option>
-              <option value="bronze">Bronze</option>
-              <option value="silver">Silver</option>
-              <option value="gold">Gold</option>
-              <option value="platinum">Platinum</option>
-            </select>
+            <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-slate-200 dark:border-white/10">
+              <p className="text-slate-500 dark:text-gray-400 text-xs">Active (30d)</p>
+              <p className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.activeMembers.toLocaleString()}</p>
+            </div>
+            <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-slate-200 dark:border-white/10">
+              <p className="text-slate-500 dark:text-gray-400 text-xs">Points Issued</p>
+              <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{stats.totalPointsIssued.toLocaleString()}</p>
+            </div>
+            <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-slate-200 dark:border-white/10">
+              <p className="text-slate-500 dark:text-gray-400 text-xs">Avg Points/Member</p>
+              <p className="text-2xl font-bold text-slate-900 dark:text-white">{stats.avgPointsPerMember.toLocaleString()}</p>
+            </div>
+            <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-slate-200 dark:border-white/10">
+              <p className="text-slate-500 dark:text-gray-400 text-xs">Total Referrals</p>
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.totalReferrals.toLocaleString()}</p>
+            </div>
           </div>
 
-          {/* Members Table */}
-          <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-white/10">
-                  <th className="text-left p-4 text-gray-400 font-medium">Member</th>
-                  <th className="text-left p-4 text-gray-400 font-medium">Tier</th>
-                  <th className="text-left p-4 text-gray-400 font-medium">Points</th>
-                  <th className="text-left p-4 text-gray-400 font-medium">Lifetime Points</th>
-                  <th className="text-left p-4 text-gray-400 font-medium">Last Activity</th>
-                  <th className="text-right p-4 text-gray-400 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredMembers.map((member) => (
-                  <tr key={member.id} className="border-b border-white/5 hover:bg-white/5">
-                    <td className="p-4">
-                      <div>
-                        <p className="text-white font-medium">{member.name}</p>
-                        <p className="text-gray-400 text-sm">{member.email}</p>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium border capitalize ${getTierColor(member.tier)}`}>
-                        {member.tier}
-                      </span>
-                    </td>
-                    <td className="p-4 text-white">{member.points.toLocaleString()}</td>
-                    <td className="p-4 text-gray-400">{member.lifetimePoints.toLocaleString()}</td>
-                    <td className="p-4 text-gray-400">{new Date(member.lastActivity).toLocaleDateString()}</td>
-                    <td className="p-4 text-right">
-                      <button className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm transition-colors">
-                        View
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Rewards Tab */}
-      {activeTab === 'rewards' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredRewards.map((reward) => (
-              <div key={reward.id} className={`bg-white/5 backdrop-blur-xl rounded-xl p-6 border ${reward.available ? 'border-white/10' : 'border-red-500/30'}`}>
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h3 className="text-white font-semibold">{reward.name}</h3>
-                    <p className="text-gray-400 text-sm mt-1">{reward.description}</p>
-                  </div>
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${reward.available ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                    {reward.available ? 'Active' : 'Inactive'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between pt-4 border-t border-white/10">
-                  <div>
-                    <p className="text-purple-400 font-bold text-lg">{reward.pointsCost.toLocaleString()} pts</p>
-                    <p className="text-gray-500 text-sm">{reward.redemptions.toLocaleString()} redemptions</p>
-                  </div>
-                  <span className="px-2 py-1 bg-white/10 text-gray-400 rounded text-sm">{reward.category}</span>
-                </div>
-                <div className="flex gap-2 mt-4">
-                  <button className="flex-1 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm transition-colors">
-                    Edit
-                  </button>
-                  <button className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm transition-colors">
-                    {reward.available ? 'Disable' : 'Enable'}
-                  </button>
-                </div>
-              </div>
+          {/* Tabs */}
+          <div className="flex gap-1 bg-slate-100 dark:bg-white/5 p-1 rounded-lg w-fit">
+            {(['overview', 'members', 'rewards', 'tiers'] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors capitalize ${
+                  activeTab === tab
+                    ? 'bg-purple-600 text-white'
+                    : 'text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/10'
+                }`}
+              >
+                {tab}
+              </button>
             ))}
           </div>
-        </div>
-      )}
 
-      {/* Tiers Tab */}
-      {activeTab === 'tiers' && (
-        <div className="space-y-4">
-          {tiers.map((tier) => (
-            <div key={tier.name} className={`bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-white/10`}>
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <span className="text-4xl">{tier.name === 'Bronze' ? '🥉' : tier.name === 'Silver' ? '🥈' : tier.name === 'Gold' ? '🥇' : '💎'}</span>
-                  <div>
-                    <h3 className="text-xl font-bold text-white">{tier.name}</h3>
-                    <p className="text-gray-400">{tier.minPoints.toLocaleString()}+ points required</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-2xl font-bold text-white">{tier.memberCount.toLocaleString()}</p>
-                  <p className="text-gray-400">members</p>
+          {/* Overview Tab */}
+          {activeTab === 'overview' && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Tier Distribution */}
+              <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-slate-200 dark:border-white/10">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Tier Distribution</h3>
+                <div className="space-y-4">
+                  {tiers.map(tier => {
+                    const count = tierCounts[tier.id] || 0
+                    const percentage = stats.totalMembers > 0 ? Math.round((count / stats.totalMembers) * 100) : 0
+                    return (
+                      <div key={tier.id}>
+                        <div className="flex justify-between text-sm mb-1">
+                          <span className="text-slate-900 dark:text-white font-medium">{tier.name}</span>
+                          <span className="text-slate-600 dark:text-gray-400">{count} members ({percentage}%)</span>
+                        </div>
+                        <div className="h-3 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-purple-500 rounded-full"
+                            style={{ width: `${percentage}%` }}
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
+                  {tiers.length === 0 && (
+                    <p className="text-slate-500 dark:text-gray-400 text-center py-4">No tiers configured</p>
+                  )}
                 </div>
               </div>
-              <div className="mt-4 pt-4 border-t border-white/10">
-                <p className="text-gray-400 text-sm mb-2">Benefits:</p>
-                <div className="flex flex-wrap gap-2">
-                  {tier.benefits.map((benefit, i) => (
-                    <span key={i} className="px-3 py-1 bg-white/10 text-white rounded-full text-sm">
-                      {benefit}
+
+              {/* Program Configuration */}
+              <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-slate-200 dark:border-white/10">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Program Configuration</h3>
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center p-3 bg-slate-50 dark:bg-white/5 rounded-lg">
+                    <span className="text-slate-600 dark:text-gray-400">Points per Dollar</span>
+                    <span className="text-slate-900 dark:text-white font-medium">{program.pointsConfig.pointsPerDollar}</span>
+                  </div>
+                  <div className="flex justify-between items-center p-3 bg-slate-50 dark:bg-white/5 rounded-lg">
+                    <span className="text-slate-600 dark:text-gray-400">Min. Redemption</span>
+                    <span className="text-slate-900 dark:text-white font-medium">{program.pointsConfig.minimumRedemption} pts</span>
+                  </div>
+                  <div className="flex justify-between items-center p-3 bg-slate-50 dark:bg-white/5 rounded-lg">
+                    <span className="text-slate-600 dark:text-gray-400">Point Expiration</span>
+                    <span className="text-slate-900 dark:text-white font-medium">
+                      {program.pointsConfig.expirationMonths === 0 ? 'Never' : `${program.pointsConfig.expirationMonths} months`}
                     </span>
-                  ))}
+                  </div>
+                  <div className="flex justify-between items-center p-3 bg-slate-50 dark:bg-white/5 rounded-lg">
+                    <span className="text-slate-600 dark:text-gray-400">Referral Program</span>
+                    <span className={`px-2 py-1 rounded text-xs ${program.referralConfig.enabled ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                      {program.referralConfig.enabled ? 'Enabled' : 'Disabled'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center p-3 bg-slate-50 dark:bg-white/5 rounded-lg">
+                    <span className="text-slate-600 dark:text-gray-400">Status</span>
+                    <span className={`px-2 py-1 rounded text-xs capitalize ${
+                      program.status === 'active' ? 'bg-green-500/20 text-green-400' :
+                      program.status === 'paused' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'
+                    }`}>
+                      {program.status}
+                    </span>
+                  </div>
                 </div>
               </div>
-              <div className="flex gap-2 mt-4">
-                {isAdmin && (
-                  <button className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm transition-colors">
-                    Edit Tier
-                  </button>
-                )}
-                <button className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm transition-colors">
-                  View Members
-                </button>
-              </div>
             </div>
-          ))}
-        </div>
-      )}
+          )}
 
-      {/* Campaigns Tab */}
-      {activeTab === 'campaigns' && (
-        <div className="space-y-4">
-          <div className="bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-white/10">
-            <h3 className="text-lg font-semibold text-white mb-4">Active Campaigns</h3>
+          {/* Members Tab */}
+          {activeTab === 'members' && (
             <div className="space-y-4">
-              {[
-                { name: 'Double Points Weekend', status: 'active', startDate: '2024-01-12', endDate: '2024-01-14', participants: 450 },
-                { name: 'Referral Bonus', status: 'active', startDate: '2024-01-01', endDate: '2024-01-31', participants: 128 },
-                { name: 'New Member Welcome', status: 'active', startDate: '2023-12-01', endDate: null, participants: 892 },
-              ].map((campaign, i) => (
-                <div key={i} className="flex items-center justify-between p-4 bg-white/5 rounded-lg">
-                  <div>
-                    <p className="text-white font-medium">{campaign.name}</p>
-                    <p className="text-gray-400 text-sm">
-                      {campaign.startDate} - {campaign.endDate || 'Ongoing'}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <p className="text-white font-medium">{campaign.participants}</p>
-                      <p className="text-gray-400 text-sm">participants</p>
-                    </div>
-                    <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-sm">Active</span>
-                    <button className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm transition-colors">
-                      Edit
-                    </button>
-                  </div>
+              {/* Filters */}
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    placeholder="Search by customer ID..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full px-4 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
                 </div>
-              ))}
-            </div>
-          </div>
+                <select
+                  value={selectedTier}
+                  onChange={(e) => setSelectedTier(e.target.value)}
+                  className="px-4 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                >
+                  <option value="all">All Tiers</option>
+                  {tiers.map(tier => (
+                    <option key={tier.id} value={tier.id}>{tier.name}</option>
+                  ))}
+                </select>
+              </div>
 
-          <button className="w-full py-4 border-2 border-dashed border-white/20 rounded-xl text-gray-400 hover:text-white hover:border-purple-500 transition-colors">
-            + Create New Campaign
-          </button>
-        </div>
+              {/* Members Table */}
+              <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl border border-slate-200 dark:border-white/10 overflow-hidden">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-slate-200 dark:border-white/10">
+                      <th className="text-left p-4 text-slate-500 dark:text-gray-400 font-medium">Customer</th>
+                      <th className="text-left p-4 text-slate-500 dark:text-gray-400 font-medium">Tier</th>
+                      <th className="text-left p-4 text-slate-500 dark:text-gray-400 font-medium">Points</th>
+                      <th className="text-left p-4 text-slate-500 dark:text-gray-400 font-medium">Lifetime</th>
+                      <th className="text-left p-4 text-slate-500 dark:text-gray-400 font-medium">Referrals</th>
+                      <th className="text-left p-4 text-slate-500 dark:text-gray-400 font-medium">Joined</th>
+                      <th className="text-right p-4 text-slate-500 dark:text-gray-400 font-medium">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredMembers.length > 0 ? (
+                      filteredMembers.map((member) => (
+                        <tr key={member.id} className="border-b border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5">
+                          <td className="p-4">
+                            <p className="text-slate-900 dark:text-white font-medium">{member.customerId}</p>
+                          </td>
+                          <td className="p-4">
+                            <span className={`px-2 py-1 rounded text-xs font-medium border ${getTierColor(member.currentTier)}`}>
+                              {member.currentTier}
+                            </span>
+                          </td>
+                          <td className="p-4 text-purple-600 dark:text-purple-400 font-medium">
+                            {member.currentPoints.toLocaleString()}
+                          </td>
+                          <td className="p-4 text-slate-600 dark:text-gray-400">
+                            {member.totalPointsEarned.toLocaleString()}
+                          </td>
+                          <td className="p-4 text-slate-600 dark:text-gray-400">
+                            {member.referralCount}
+                          </td>
+                          <td className="p-4 text-slate-500 dark:text-gray-500 text-sm">
+                            {new Date(member.joinedAt).toLocaleDateString()}
+                          </td>
+                          <td className="p-4 text-right">
+                            <button className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm transition-colors">
+                              View
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={7} className="p-8 text-center text-slate-500 dark:text-gray-400">
+                          {members.length === 0 ? 'No members yet' : 'No members match your filters'}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Rewards Tab */}
+          {activeTab === 'rewards' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {rewards.length > 0 ? (
+                  rewards.map((reward) => (
+                    <div key={reward.id} className={`bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-6 border ${reward.isActive ? 'border-slate-200 dark:border-white/10' : 'border-red-500/30'}`}>
+                      <div className="flex items-start justify-between mb-4">
+                        <div>
+                          <h3 className="text-slate-900 dark:text-white font-semibold">{reward.name}</h3>
+                          <p className="text-slate-500 dark:text-gray-400 text-sm">{reward.description}</p>
+                        </div>
+                        <span className={`px-2 py-1 rounded text-xs ${reward.isActive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                          {reward.isActive ? 'Active' : 'Inactive'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-purple-600 dark:text-purple-400 font-bold">{reward.pointsCost.toLocaleString()} pts</span>
+                        <span className="text-slate-500 dark:text-gray-500 text-sm">{reward.category}</span>
+                      </div>
+                      {reward.maxRedemptions && (
+                        <div className="mt-2 text-sm text-slate-500 dark:text-gray-400">
+                          Limit: {reward.maxRedemptions} redemptions
+                        </div>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="col-span-full text-center py-12 text-slate-500 dark:text-gray-400">
+                    No rewards configured. Create your first reward to get started.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Tiers Tab */}
+          {activeTab === 'tiers' && (
+            <div className="space-y-4">
+              {tiers.length > 0 ? (
+                tiers.map((tier) => (
+                  <div key={tier.id} className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-slate-200 dark:border-white/10">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">{tier.icon || '⭐'}</span>
+                        <div>
+                          <h3 className="text-slate-900 dark:text-white font-semibold text-lg">{tier.name}</h3>
+                          <p className="text-slate-500 dark:text-gray-400 text-sm">
+                            {tier.minPoints.toLocaleString()} - {tier.maxPoints ? tier.maxPoints.toLocaleString() : '∞'} points
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-slate-600 dark:text-gray-400">
+                        {tierCounts[tier.id] || 0} members
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {tier.benefits.map((benefit, i) => (
+                        <span
+                          key={i}
+                          className="px-3 py-1 bg-purple-500/10 text-purple-400 rounded-full text-sm"
+                        >
+                          {benefit.description}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex gap-2 mt-4">
+                      {isAdmin && (
+                        <button className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm transition-colors">
+                          Edit Tier
+                        </button>
+                      )}
+                      <button className="px-4 py-2 bg-slate-200 dark:bg-white/10 hover:bg-slate-300 dark:hover:bg-white/20 text-slate-700 dark:text-white rounded-lg text-sm transition-colors">
+                        View Members
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-12 border border-slate-200 dark:border-white/10 text-center">
+                  <p className="text-slate-500 dark:text-gray-400 mb-4">No tiers configured yet</p>
+                  {isAdmin && (
+                    <button className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors">
+                      Add Tier
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   )

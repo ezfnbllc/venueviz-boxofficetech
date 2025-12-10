@@ -1,76 +1,115 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { usePromoterAccess } from '@/lib/hooks/usePromoterAccess'
+import {
+  SocialCommerceService,
+  SocialShare,
+  Review,
+} from '@/lib/services/socialCommerceService'
 
-interface SocialPost {
+interface UGCContent {
   id: string
-  platform: 'facebook' | 'instagram' | 'twitter' | 'tiktok'
+  promoterId: string
+  type: 'photo' | 'video' | 'story' | 'review'
   content: string
-  status: 'draft' | 'scheduled' | 'published'
-  scheduledFor?: string
-  publishedAt?: string
-  engagement: { likes: number; comments: number; shares: number; reach: number }
-}
-
-interface Influencer {
-  id: string
-  name: string
-  handle: string
+  mediaUrl?: string
+  customerId: string
+  customerName: string
+  eventId?: string
+  eventName?: string
   platform: string
-  followers: number
-  engagement: number
-  campaigns: number
-  revenue: number
-  status: 'active' | 'pending' | 'inactive'
+  status: 'pending' | 'approved' | 'rejected' | 'featured'
+  likes?: number
+  createdAt: Date
 }
 
 export default function SocialCommercePage() {
-  const [activeTab, setActiveTab] = useState<'posts' | 'analytics' | 'ugc' | 'reviews'>('posts')
-  const [loading, setLoading] = useState(true)
-  const [posts, setPosts] = useState<SocialPost[]>([])
+  const {
+    effectivePromoterId,
+    showAll,
+    loading: accessLoading,
+  } = usePromoterAccess()
 
+  const [activeTab, setActiveTab] = useState<'shares' | 'reviews' | 'ugc'>('shares')
+  const [loading, setLoading] = useState(true)
+  const [socialShares, setSocialShares] = useState<SocialShare[]>([])
+  const [reviews, setReviews] = useState<Review[]>([])
+  const [error, setError] = useState<string | null>(null)
+
+  // Calculate stats from real data
   const stats = {
-    totalFollowers: 125000,
-    totalEngagement: 4.2,
-    postsThisMonth: 45,
-    ugcSubmissions: 128,
-    avgReach: 15000,
-    socialRevenue: 28500,
+    totalShares: socialShares.length,
+    totalClicks: socialShares.reduce((sum, s) => sum + s.clicks, 0),
+    totalConversions: socialShares.reduce((sum, s) => sum + s.conversions, 0),
+    avgRating: reviews.length > 0
+      ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+      : 0,
+    totalReviews: reviews.length,
+    pendingReviews: reviews.filter(r => r.status === 'pending').length,
   }
 
   useEffect(() => {
-    setTimeout(() => {
-      setPosts([
-        { id: '1', platform: 'instagram', content: 'Get ready for the biggest summer festival! Early bird tickets available now 🎉', status: 'published', publishedAt: '2024-01-08T10:00:00', engagement: { likes: 2450, comments: 189, shares: 156, reach: 45000 } },
-        { id: '2', platform: 'facebook', content: 'Jazz Night is back! Join us for an unforgettable evening of live music.', status: 'published', publishedAt: '2024-01-07T15:30:00', engagement: { likes: 1820, comments: 95, shares: 234, reach: 32000 } },
-        { id: '3', platform: 'twitter', content: 'Flash sale! 24 hours only - 30% off all weekend events. Use code FLASH30', status: 'scheduled', scheduledFor: '2024-01-10T12:00:00', engagement: { likes: 0, comments: 0, shares: 0, reach: 0 } },
-        { id: '4', platform: 'tiktok', content: 'Behind the scenes at our latest concert setup! 🎸', status: 'published', publishedAt: '2024-01-06T18:00:00', engagement: { likes: 8500, comments: 423, shares: 1250, reach: 125000 } },
-        { id: '5', platform: 'instagram', content: 'New venue announcement coming soon! Stay tuned 👀', status: 'draft', engagement: { likes: 0, comments: 0, shares: 0, reach: 0 } },
-      ])
+    loadData()
+  }, [effectivePromoterId, showAll])
+
+  const loadData = async () => {
+    if (accessLoading || !effectivePromoterId) return
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      if (showAll) {
+        // Admin viewing all - show empty with message
+        setSocialShares([])
+        setReviews([])
+      } else {
+        const [loadedShares, loadedReviews] = await Promise.all([
+          SocialCommerceService.getSocialShares(effectivePromoterId),
+          SocialCommerceService.getReviews(effectivePromoterId),
+        ])
+        setSocialShares(loadedShares)
+        setReviews(loadedReviews)
+      }
+    } catch (err) {
+      console.error('Error loading social data:', err)
+      setError('Failed to load social commerce data')
+    } finally {
       setLoading(false)
-    }, 500)
-  }, [])
+    }
+  }
 
   const getPlatformIcon = (platform: string) => {
-    switch (platform) {
+    switch (platform.toLowerCase()) {
       case 'facebook': return '📘'
       case 'instagram': return '📷'
       case 'twitter': return '🐦'
       case 'tiktok': return '🎵'
+      case 'youtube': return '🎬'
       default: return '📱'
     }
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'published': return 'bg-green-500/20 text-green-400'
-      case 'scheduled': return 'bg-blue-500/20 text-blue-400'
-      case 'draft': return 'bg-gray-500/20 text-gray-400'
-      default: return 'bg-gray-500/20 text-gray-400'
+  const handleApproveReview = async (reviewId: string) => {
+    try {
+      await SocialCommerceService.approveReview(reviewId)
+      loadData()
+    } catch (err) {
+      console.error('Error approving review:', err)
     }
   }
 
-  if (loading) {
+  const handleRejectReview = async (reviewId: string) => {
+    try {
+      await SocialCommerceService.rejectReview(reviewId)
+      loadData()
+    } catch (err) {
+      console.error('Error rejecting review:', err)
+    }
+  }
+
+  if (loading || accessLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-purple-500"></div>
@@ -84,68 +123,67 @@ export default function SocialCommercePage() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white">Social Commerce</h1>
-          <p className="text-gray-400 mt-1">Manage social media presence and user-generated content</p>
+          <p className="text-gray-400 mt-1">Manage social shares, reviews, and user-generated content</p>
         </div>
         <div className="flex gap-2">
           <button className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors">
-            + Create Post
+            + Create Share Link
           </button>
           <button className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors">
-            Schedule
+            Request Reviews
           </button>
         </div>
       </div>
+
+      {/* Admin All-Promoters Notice */}
+      {showAll && (
+        <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+          <p className="text-blue-400">
+            Select a specific promoter from the dropdown to view their social commerce data.
+          </p>
+        </div>
+      )}
+
+      {/* Error State */}
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+          <p className="text-red-400">{error}</p>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <div className="bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-white/10">
-          <p className="text-gray-400 text-xs">Total Followers</p>
-          <p className="text-2xl font-bold text-white">{(stats.totalFollowers / 1000).toFixed(0)}K</p>
+          <p className="text-gray-400 text-xs">Total Shares</p>
+          <p className="text-2xl font-bold text-white">{stats.totalShares}</p>
         </div>
         <div className="bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-white/10">
-          <p className="text-gray-400 text-xs">Engagement Rate</p>
-          <p className="text-2xl font-bold text-green-400">{stats.totalEngagement}%</p>
+          <p className="text-gray-400 text-xs">Total Clicks</p>
+          <p className="text-2xl font-bold text-blue-400">{stats.totalClicks}</p>
         </div>
         <div className="bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-white/10">
-          <p className="text-gray-400 text-xs">Posts This Month</p>
-          <p className="text-2xl font-bold text-white">{stats.postsThisMonth}</p>
+          <p className="text-gray-400 text-xs">Conversions</p>
+          <p className="text-2xl font-bold text-green-400">{stats.totalConversions}</p>
         </div>
         <div className="bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-white/10">
-          <p className="text-gray-400 text-xs">UGC Submissions</p>
-          <p className="text-2xl font-bold text-blue-400">{stats.ugcSubmissions}</p>
+          <p className="text-gray-400 text-xs">Avg Rating</p>
+          <p className="text-2xl font-bold text-yellow-400">
+            {stats.avgRating > 0 ? stats.avgRating.toFixed(1) : '—'}
+          </p>
         </div>
         <div className="bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-white/10">
-          <p className="text-gray-400 text-xs">Avg Reach</p>
-          <p className="text-2xl font-bold text-white">{(stats.avgReach / 1000).toFixed(0)}K</p>
+          <p className="text-gray-400 text-xs">Total Reviews</p>
+          <p className="text-2xl font-bold text-white">{stats.totalReviews}</p>
         </div>
         <div className="bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-white/10">
-          <p className="text-gray-400 text-xs">Social Revenue</p>
-          <p className="text-2xl font-bold text-green-400">${(stats.socialRevenue / 1000).toFixed(1)}K</p>
+          <p className="text-gray-400 text-xs">Pending Reviews</p>
+          <p className="text-2xl font-bold text-yellow-400">{stats.pendingReviews}</p>
         </div>
-      </div>
-
-      {/* Platform Overview */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { platform: 'Instagram', icon: '📷', followers: 45000, growth: 12.5, color: 'pink' },
-          { platform: 'Facebook', icon: '📘', followers: 38000, growth: 5.2, color: 'blue' },
-          { platform: 'Twitter', icon: '🐦', followers: 22000, growth: 8.8, color: 'sky' },
-          { platform: 'TikTok', icon: '🎵', followers: 20000, growth: 25.3, color: 'purple' },
-        ].map((p, i) => (
-          <div key={i} className="bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-white/10">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-2xl">{p.icon}</span>
-              <span className="text-green-400 text-sm">+{p.growth}%</span>
-            </div>
-            <p className="text-white font-semibold">{p.platform}</p>
-            <p className="text-gray-400 text-sm">{(p.followers / 1000).toFixed(0)}K followers</p>
-          </div>
-        ))}
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 bg-white/5 p-1 rounded-lg w-fit">
-        {(['posts', 'analytics', 'ugc', 'reviews'] as const).map((tab) => (
+        {(['shares', 'reviews', 'ugc'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -160,224 +198,194 @@ export default function SocialCommercePage() {
         ))}
       </div>
 
-      {/* Posts Tab */}
-      {activeTab === 'posts' && (
+      {/* Shares Tab */}
+      {activeTab === 'shares' && (
         <div className="space-y-4">
-          {posts.map((post) => (
-            <div key={post.id} className="bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-white/10">
-              <div className="flex items-start justify-between gap-4 mb-4">
-                <div className="flex items-start gap-3">
-                  <span className="text-3xl">{getPlatformIcon(post.platform)}</span>
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-white font-medium capitalize">{post.platform}</span>
-                      <span className={`px-2 py-0.5 rounded text-xs ${getStatusColor(post.status)}`}>
-                        {post.status}
-                      </span>
-                    </div>
-                    <p className="text-gray-300">{post.content}</p>
-                    {post.scheduledFor && (
-                      <p className="text-gray-500 text-sm mt-2">Scheduled for: {new Date(post.scheduledFor).toLocaleString()}</p>
-                    )}
-                    {post.publishedAt && (
-                      <p className="text-gray-500 text-sm mt-2">Published: {new Date(post.publishedAt).toLocaleString()}</p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <button className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm transition-colors">
-                    Edit
-                  </button>
-                  {post.status === 'draft' && (
-                    <button className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm transition-colors">
-                      Publish
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {post.status === 'published' && (
-                <div className="grid grid-cols-4 gap-4 pt-4 border-t border-white/10">
-                  <div className="text-center">
-                    <p className="text-gray-400 text-xs">Likes</p>
-                    <p className="text-white font-semibold">{post.engagement.likes.toLocaleString()}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-gray-400 text-xs">Comments</p>
-                    <p className="text-white font-semibold">{post.engagement.comments.toLocaleString()}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-gray-400 text-xs">Shares</p>
-                    <p className="text-white font-semibold">{post.engagement.shares.toLocaleString()}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-gray-400 text-xs">Reach</p>
-                    <p className="text-white font-semibold">{(post.engagement.reach / 1000).toFixed(0)}K</p>
-                  </div>
-                </div>
-              )}
+          {/* Empty State */}
+          {socialShares.length === 0 && !showAll && (
+            <div className="bg-white/5 backdrop-blur-xl rounded-xl p-12 border border-white/10 text-center">
+              <div className="text-6xl mb-4">📱</div>
+              <h3 className="text-xl font-semibold text-white mb-2">No Social Shares Yet</h3>
+              <p className="text-gray-400 mb-6">
+                Social shares from customers will appear here when they share your events.
+              </p>
             </div>
-          ))}
-        </div>
-      )}
+          )}
 
-      {/* Analytics Tab */}
-      {activeTab === 'analytics' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-white/10">
-            <h3 className="text-lg font-semibold text-white mb-4">Engagement Over Time</h3>
-            <div className="h-48 flex items-end gap-2">
-              {[3.2, 3.8, 4.1, 3.9, 4.5, 4.2, 4.8].map((rate, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center">
-                  <div
-                    className="w-full bg-gradient-to-t from-purple-600 to-purple-400 rounded-t"
-                    style={{ height: `${(rate / 5) * 100}%` }}
-                  />
-                  <span className="text-gray-500 text-xs mt-2">Day {i + 1}</span>
-                </div>
-              ))}
+          {socialShares.length > 0 && (
+            <div className="bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="text-left p-4 text-gray-400 font-medium">Share</th>
+                    <th className="text-left p-4 text-gray-400 font-medium">Event</th>
+                    <th className="text-left p-4 text-gray-400 font-medium">Platform</th>
+                    <th className="text-left p-4 text-gray-400 font-medium">Clicks</th>
+                    <th className="text-left p-4 text-gray-400 font-medium">Conversions</th>
+                    <th className="text-left p-4 text-gray-400 font-medium">Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {socialShares.slice(0, 20).map((share) => (
+                    <tr key={share.id} className="border-b border-white/5 hover:bg-white/5">
+                      <td className="p-4">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl">{getPlatformIcon(share.platform)}</span>
+                          <div>
+                            <p className="text-white font-medium">{share.customerName || 'Unknown'}</p>
+                            <p className="text-gray-400 text-sm">{share.shareType.replace('_', ' ')}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-4 text-gray-400">{share.eventName}</td>
+                      <td className="p-4">
+                        <span className="px-2 py-1 bg-white/10 text-gray-400 rounded text-sm capitalize">
+                          {share.platform}
+                        </span>
+                      </td>
+                      <td className="p-4 text-white font-medium">{share.clicks}</td>
+                      <td className="p-4 text-green-400 font-medium">{share.conversions}</td>
+                      <td className="p-4 text-gray-400 text-sm">
+                        {share.createdAt ? new Date(share.createdAt).toLocaleDateString() : 'N/A'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </div>
-
-          <div className="bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-white/10">
-            <h3 className="text-lg font-semibold text-white mb-4">Top Performing Content</h3>
-            <div className="space-y-3">
-              {[
-                { type: 'Video', engagement: 8.5, posts: 12 },
-                { type: 'Carousel', engagement: 5.2, posts: 18 },
-                { type: 'Stories', engagement: 4.8, posts: 45 },
-                { type: 'Single Image', engagement: 3.1, posts: 28 },
-              ].map((content, i) => (
-                <div key={i} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
-                  <span className="text-white">{content.type}</span>
-                  <div className="flex items-center gap-4">
-                    <span className="text-gray-400 text-sm">{content.posts} posts</span>
-                    <span className="text-green-400 font-medium">{content.engagement}% eng</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* UGC Tab */}
-      {activeTab === 'ugc' && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold text-white">User-Generated Content</h3>
-            <div className="flex gap-2">
-              <button className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm transition-colors">
-                Approve Selected
-              </button>
-              <button className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm transition-colors">
-                Filters
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[
-              { user: '@eventfan123', content: 'Amazing concert last night!', platform: 'instagram', status: 'pending', likes: 245 },
-              { user: '@musiclover', content: 'Best festival experience ever', platform: 'twitter', status: 'approved', likes: 189 },
-              { user: '@partygoer', content: 'VIP treatment was incredible', platform: 'facebook', status: 'approved', likes: 156 },
-              { user: '@concertjunkie', content: 'Can\'t wait for the next one!', platform: 'tiktok', status: 'pending', likes: 892 },
-              { user: '@nightowl', content: 'The venue was perfect', platform: 'instagram', status: 'rejected', likes: 78 },
-              { user: '@festivalfan', content: 'Making memories!', platform: 'instagram', status: 'approved', likes: 423 },
-            ].map((ugc, i) => (
-              <div key={i} className={`bg-white/5 backdrop-blur-xl rounded-xl p-4 border ${
-                ugc.status === 'pending' ? 'border-yellow-500/30' : 'border-white/10'
-              }`}>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">{getPlatformIcon(ugc.platform)}</span>
-                    <span className="text-white font-medium">{ugc.user}</span>
-                  </div>
-                  <span className={`px-2 py-0.5 rounded text-xs ${
-                    ugc.status === 'approved' ? 'bg-green-500/20 text-green-400' :
-                    ugc.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
-                    'bg-red-500/20 text-red-400'
-                  }`}>
-                    {ugc.status}
-                  </span>
-                </div>
-                <p className="text-gray-300 mb-3">{ugc.content}</p>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-400 text-sm">{ugc.likes} likes</span>
-                  {ugc.status === 'pending' && (
-                    <div className="flex gap-2">
-                      <button className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs transition-colors">
-                        Approve
-                      </button>
-                      <button className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs transition-colors">
-                        Reject
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+          )}
         </div>
       )}
 
       {/* Reviews Tab */}
       {activeTab === 'reviews' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-white/10 text-center">
-              <p className="text-4xl font-bold text-white">4.7</p>
-              <p className="text-yellow-400">★★★★★</p>
-              <p className="text-gray-400 text-sm">1,245 reviews</p>
-            </div>
-            <div className="bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-white/10">
-              <div className="space-y-2">
-                {[5, 4, 3, 2, 1].map(stars => (
-                  <div key={stars} className="flex items-center gap-2">
-                    <span className="text-gray-400 text-sm w-4">{stars}</span>
-                    <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
-                      <div className="h-full bg-yellow-500 rounded-full" style={{ width: `${stars === 5 ? 65 : stars === 4 ? 22 : stars === 3 ? 8 : stars === 2 ? 3 : 2}%` }} />
-                    </div>
-                  </div>
-                ))}
+          {/* Rating Summary */}
+          {reviews.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              <div className="bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-white/10 text-center">
+                <p className="text-4xl font-bold text-white">{stats.avgRating.toFixed(1)}</p>
+                <p className="text-yellow-400">{'★'.repeat(Math.round(stats.avgRating))}{'☆'.repeat(5 - Math.round(stats.avgRating))}</p>
+                <p className="text-gray-400 text-sm">{reviews.length} reviews</p>
+              </div>
+              <div className="bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-white/10">
+                <div className="space-y-2">
+                  {[5, 4, 3, 2, 1].map(stars => {
+                    const count = reviews.filter(r => r.rating === stars).length
+                    const percentage = reviews.length > 0 ? (count / reviews.length) * 100 : 0
+                    return (
+                      <div key={stars} className="flex items-center gap-2">
+                        <span className="text-gray-400 text-sm w-4">{stars}</span>
+                        <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
+                          <div className="h-full bg-yellow-500 rounded-full" style={{ width: `${percentage}%` }} />
+                        </div>
+                        <span className="text-gray-400 text-sm w-8">{count}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+              <div className="bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-white/10 text-center">
+                <p className="text-2xl font-bold text-green-400">
+                  {reviews.length > 0
+                    ? Math.round((reviews.filter(r => r.rating >= 4).length / reviews.length) * 100)
+                    : 0}%
+                </p>
+                <p className="text-gray-400 text-sm">Would recommend</p>
+              </div>
+              <div className="bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-white/10 text-center">
+                <p className="text-2xl font-bold text-white">{stats.pendingReviews}</p>
+                <p className="text-gray-400 text-sm">Pending responses</p>
               </div>
             </div>
-            <div className="bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-white/10 text-center">
-              <p className="text-2xl font-bold text-green-400">92%</p>
-              <p className="text-gray-400 text-sm">Would recommend</p>
-            </div>
-            <div className="bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-white/10 text-center">
-              <p className="text-2xl font-bold text-white">24</p>
-              <p className="text-gray-400 text-sm">Pending responses</p>
-            </div>
-          </div>
+          )}
 
-          {[
-            { author: 'John D.', rating: 5, content: 'Absolutely fantastic experience! The venue was incredible and the staff were so helpful.', date: '2024-01-07', replied: true },
-            { author: 'Sarah M.', rating: 4, content: 'Great event overall, though the queue for drinks was a bit long.', date: '2024-01-06', replied: false },
-            { author: 'Mike T.', rating: 5, content: 'Best concert I\'ve been to in years. Will definitely be back!', date: '2024-01-05', replied: true },
-            { author: 'Emily R.', rating: 3, content: 'Good show but parking was difficult to find.', date: '2024-01-04', replied: false },
-          ].map((review, i) => (
-            <div key={i} className="bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-white/10">
+          {/* Empty State */}
+          {reviews.length === 0 && !showAll && (
+            <div className="bg-white/5 backdrop-blur-xl rounded-xl p-12 border border-white/10 text-center">
+              <div className="text-6xl mb-4">⭐</div>
+              <h3 className="text-xl font-semibold text-white mb-2">No Reviews Yet</h3>
+              <p className="text-gray-400 mb-6">
+                Customer reviews will appear here. Consider sending review requests after events.
+              </p>
+              <button className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors">
+                Request Reviews
+              </button>
+            </div>
+          )}
+
+          {/* Reviews List */}
+          {reviews.map((review) => (
+            <div key={review.id} className="bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-white/10">
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-white font-medium">{review.author}</span>
+                    <span className="text-white font-medium">{review.customerName}</span>
                     <span className="text-yellow-400">{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</span>
                   </div>
-                  <span className="text-gray-500 text-sm">{review.date}</span>
+                  <span className="text-gray-500 text-sm">
+                    {review.eventName} - {review.createdAt ? new Date(review.createdAt).toLocaleDateString() : 'N/A'}
+                  </span>
                 </div>
-                {review.replied ? (
-                  <span className="px-2 py-0.5 bg-green-500/20 text-green-400 rounded text-xs">Replied</span>
+                {review.status === 'pending' ? (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleApproveReview(review.id)}
+                      className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm transition-colors"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => handleRejectReview(review.id)}
+                      className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm transition-colors"
+                    >
+                      Reject
+                    </button>
+                  </div>
                 ) : (
-                  <button className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm transition-colors">
-                    Reply
-                  </button>
+                  <span className={`px-2 py-0.5 rounded text-xs ${
+                    review.status === 'approved' ? 'bg-green-500/20 text-green-400' :
+                    review.status === 'rejected' ? 'bg-red-500/20 text-red-400' :
+                    review.status === 'featured' ? 'bg-purple-500/20 text-purple-400' :
+                    'bg-gray-500/20 text-gray-400'
+                  }`}>
+                    {review.status}
+                  </span>
                 )}
               </div>
+              {review.title && <h4 className="text-white font-medium mb-2">{review.title}</h4>}
               <p className="text-gray-300">{review.content}</p>
+              {review.response && (
+                <div className="mt-4 p-3 bg-white/5 rounded-lg border-l-2 border-purple-500">
+                  <p className="text-sm text-gray-400 mb-1">Your response:</p>
+                  <p className="text-gray-300">{review.response}</p>
+                </div>
+              )}
+              {!review.response && review.status === 'approved' && (
+                <button className="mt-4 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm transition-colors">
+                  Reply
+                </button>
+              )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* UGC Tab */}
+      {activeTab === 'ugc' && (
+        <div className="space-y-4">
+          {/* Empty State */}
+          <div className="bg-white/5 backdrop-blur-xl rounded-xl p-12 border border-white/10 text-center">
+            <div className="text-6xl mb-4">🎨</div>
+            <h3 className="text-xl font-semibold text-white mb-2">User-Generated Content</h3>
+            <p className="text-gray-400 mb-6">
+              Photos, videos, and content shared by customers will appear here.
+              Enable UGC collection in campaign settings to start gathering content.
+            </p>
+            <button className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors">
+              Create UGC Campaign
+            </button>
+          </div>
         </div>
       )}
     </div>
