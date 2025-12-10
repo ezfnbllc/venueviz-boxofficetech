@@ -1,2 +1,0 @@
-# We need to remove the Group Discount section from Step4Pricing
-# It starts with {/* Group Discount */} and ends at the next major section

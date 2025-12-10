@@ -59,12 +59,121 @@ export default function OrdersPage() {
     }
   }
 
-  const printTicket = (ticket: any) => {
-    window.print()
+  const printTicket = (ticket: any, order: any) => {
+    const customerInfo = getCustomerInfo(order)
+    const printContent = `
+      <html>
+        <head>
+          <title>Ticket - ${order.eventName}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 40px; }
+            .ticket { border: 2px solid #9333EA; border-radius: 16px; padding: 24px; max-width: 400px; margin: 0 auto; }
+            .header { text-align: center; border-bottom: 1px solid #ddd; padding-bottom: 16px; margin-bottom: 16px; }
+            .event-name { font-size: 24px; font-weight: bold; color: #9333EA; }
+            .detail-row { display: flex; justify-content: space-between; margin: 8px 0; }
+            .label { color: #666; }
+            .value { font-weight: 600; }
+            .qr-section { text-align: center; margin-top: 20px; padding-top: 16px; border-top: 1px dashed #ddd; }
+            .qr-code { width: 150px; height: 150px; }
+            .ticket-number { font-family: monospace; font-size: 12px; color: #666; margin-top: 8px; }
+          </style>
+        </head>
+        <body>
+          <div class="ticket">
+            <div class="header">
+              <div class="event-name">${order.eventName || 'Event'}</div>
+              <div style="color: #666; margin-top: 4px;">${order.event?.venueName || ''}</div>
+            </div>
+            <div class="detail-row">
+              <span class="label">Customer:</span>
+              <span class="value">${customerInfo.name}</span>
+            </div>
+            <div class="detail-row">
+              <span class="label">Section:</span>
+              <span class="value">${ticket.sectionName || ticket.section || 'General'}</span>
+            </div>
+            ${ticket.row ? `<div class="detail-row"><span class="label">Row:</span><span class="value">${ticket.row}</span></div>` : ''}
+            ${ticket.seat ? `<div class="detail-row"><span class="label">Seat:</span><span class="value">${ticket.seat}</span></div>` : ''}
+            <div class="detail-row">
+              <span class="label">Tier:</span>
+              <span class="value">${ticket.tierName || 'General Admission'}</span>
+            </div>
+            ${ticket.qrCode ? `
+              <div class="qr-section">
+                <img src="${ticket.qrCode}" class="qr-code" alt="QR Code"/>
+                <div class="ticket-number">Ticket #${ticket.ticketNumber || ticket.id?.slice(0, 8) || ''}</div>
+              </div>
+            ` : ''}
+          </div>
+        </body>
+      </html>
+    `
+    const printWindow = window.open('', '_blank')
+    if (printWindow) {
+      printWindow.document.write(printContent)
+      printWindow.document.close()
+      printWindow.print()
+    }
   }
 
-  const emailTicket = (ticket: any) => {
-    alert('Email functionality coming soon!')
+  const emailTicket = (ticket: any, order: any) => {
+    const customerInfo = getCustomerInfo(order)
+    const subject = encodeURIComponent(`Your Ticket for ${order.eventName || 'Event'}`)
+    const body = encodeURIComponent(`
+Hello ${customerInfo.name},
+
+Here are your ticket details for ${order.eventName}:
+
+Event: ${order.eventName}
+Venue: ${order.event?.venueName || 'N/A'}
+Section: ${ticket.sectionName || ticket.section || 'General Admission'}
+${ticket.row ? `Row: ${ticket.row}` : ''}
+${ticket.seat ? `Seat: ${ticket.seat}` : ''}
+Tier: ${ticket.tierName || 'General Admission'}
+Ticket #: ${ticket.ticketNumber || ticket.id?.slice(0, 8) || 'N/A'}
+
+Order #: ${order.orderId || order.id?.slice(0, 8)}
+
+Please present this ticket or the QR code at the venue entrance.
+
+Thank you for your purchase!
+
+---
+VenueViz Box Office
+    `.trim())
+
+    window.location.href = `mailto:${customerInfo.email}?subject=${subject}&body=${body}`
+  }
+
+  const emailAllTickets = (order: any) => {
+    const customerInfo = getCustomerInfo(order)
+    const ticketsList = (order.tickets || []).map((t: any, i: number) =>
+      `Ticket ${i + 1}: ${t.sectionName || t.section || 'General'} ${t.row ? `Row ${t.row}` : ''} ${t.seat ? `Seat ${t.seat}` : ''}`
+    ).join('\n')
+
+    const subject = encodeURIComponent(`Your Tickets for ${order.eventName || 'Event'} - Order #${order.orderId || order.id?.slice(0, 8)}`)
+    const body = encodeURIComponent(`
+Hello ${customerInfo.name},
+
+Thank you for your order! Here are your ticket details:
+
+Event: ${order.eventName}
+Venue: ${order.event?.venueName || 'N/A'}
+Order #: ${order.orderId || order.id?.slice(0, 8)}
+Total: $${(order.pricing?.total || order.total || 0).toFixed(2)}
+
+Your Tickets:
+${ticketsList || 'General Admission'}
+
+Please present your tickets or order confirmation at the venue entrance.
+
+Thank you for your purchase!
+
+---
+VenueViz Box Office
+    `.trim())
+
+    window.location.href = `mailto:${customerInfo.email}?subject=${subject}&body=${body}`
   }
 
   if (loading) {
@@ -324,13 +433,13 @@ export default function OrdersPage() {
                           
                           <div className="mt-3 flex gap-2">
                             <button
-                              onClick={() => printTicket(ticket)}
+                              onClick={() => printTicket(ticket, selectedOrder)}
                               className="flex-1 px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded text-sm"
                             >
-                              🖨️ Print
+                              Print
                             </button>
                             <button
-                              onClick={() => emailTicket(ticket)}
+                              onClick={() => emailTicket(ticket, selectedOrder)}
                               className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm"
                             >
                               📧 Email
