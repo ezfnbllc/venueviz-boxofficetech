@@ -102,4 +102,40 @@ export class StorageService {
 
     return uploadedUrls
   }
+
+  /**
+   * Upload promoter/tenant logo
+   */
+  static async uploadPromoterLogo(file: File): Promise<string> {
+    try {
+      const timestamp = Date.now()
+      const fileName = `promoters/logo_${timestamp}_${file.name}`
+
+      const storageRef = ref(storage, fileName)
+      const snapshot = await uploadBytes(storageRef, file)
+      const url = await getDownloadURL(snapshot.ref)
+      return url
+    } catch (error) {
+      console.error('Error uploading promoter logo:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Upload document for tenant
+   */
+  static async uploadDocument(file: File, tenantId: string): Promise<string> {
+    try {
+      const timestamp = Date.now()
+      const fileName = `documents/${tenantId}/${timestamp}_${file.name}`
+
+      const storageRef = ref(storage, fileName)
+      const snapshot = await uploadBytes(storageRef, file)
+      const url = await getDownloadURL(snapshot.ref)
+      return url
+    } catch (error) {
+      console.error('Error uploading document:', error)
+      throw error
+    }
+  }
 }

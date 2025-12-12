@@ -61,7 +61,7 @@ export default function AdminLayout({
     { href: '/admin/orders', label: 'Orders', icon: '🛒' },
     { href: '/admin/customers', label: 'Customers', icon: '👥' },
     { href: '/admin/promotions', label: 'Promotions', icon: '🎁' },
-    { href: '/admin/promoters', label: 'Promoters', icon: '🤝' },
+    { href: '/admin/white-label', label: 'White-Label', icon: '🏢' },
     { href: '/analytics', label: 'Analytics', icon: '📈' },
   ]
 
