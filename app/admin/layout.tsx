@@ -16,6 +16,7 @@ export default function AdminLayout({
   const pathname = usePathname()
   const [currentPromoterId, setCurrentPromoterId] = useState<string>()
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -108,11 +109,11 @@ export default function AdminLayout({
             {/* Right - Filter & User */}
             <div className="flex items-center gap-3">
               {/* Promoter Filter */}
-              <PromoterFilterDropdown 
+              <PromoterFilterDropdown
                 isMasterAdmin={isAdmin}
                 currentPromoterId={currentPromoterId}
               />
-              
+
               {/* User Menu */}
               <div className="relative" ref={userMenuRef}>
                 <button
@@ -126,7 +127,7 @@ export default function AdminLayout({
 
                 {/* User Dropdown */}
                 {userMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-64 bg-gray-900 border border-gray-700 rounded-lg shadow-xl overflow-hidden">
+                  <div className="absolute right-0 mt-2 w-64 bg-gray-900 border border-gray-700 rounded-lg shadow-xl overflow-hidden z-50">
                     <div className="p-4 border-b border-gray-800">
                       <p className="text-sm font-medium text-white truncate">{user.email}</p>
                       {isAdmin && (
@@ -144,9 +145,51 @@ export default function AdminLayout({
                   </div>
                 )}
               </div>
+
+              {/* Mobile Menu Button */}
+              <button
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="lg:hidden p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                {mobileMenuOpen ? (
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                ) : (
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                )}
+              </button>
             </div>
           </div>
         </div>
+
+        {/* Mobile Navigation */}
+        {mobileMenuOpen && (
+          <div className="lg:hidden border-t border-purple-500/30 bg-black/60 backdrop-blur-sm">
+            <div className="px-4 py-3 space-y-1">
+              {navItems.map(item => {
+                const isActive = pathname === item.href
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                      isActive
+                        ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/50'
+                        : 'text-gray-400 hover:text-white hover:bg-white/10'
+                    }`}
+                  >
+                    <span className="text-lg">{item.icon}</span>
+                    {item.label}
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Main Content */}
