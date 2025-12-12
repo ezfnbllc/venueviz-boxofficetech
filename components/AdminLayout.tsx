@@ -17,7 +17,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { label: 'Orders', href: '/admin/orders', icon: '🎫' },
     { label: 'Customers', href: '/admin/customers', icon: '👥' },
     { label: 'Promotions', href: '/admin/promotions', icon: '🎟️' },
-    { label: 'Promoters', href: '/admin/promoters', icon: '🤝' }
+    { label: 'Promoters', href: '/admin/promoters', icon: '🤝' },
+    { label: 'White-Label', href: '/admin/white-label', icon: '🏢' }
   ]
   
   useEffect(() => {
