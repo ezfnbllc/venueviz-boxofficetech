@@ -44,6 +44,22 @@ export class StorageService {
     }
   }
 
+  static async uploadPromoterLogo(file: File, promoterName?: string): Promise<string> {
+    try {
+      const timestamp = Date.now()
+      const safeName = (promoterName || 'promoter').replace(/[^a-z0-9]/gi, '_').toLowerCase()
+      const fileName = `promoters/${safeName}_${timestamp}_${file.name}`
+
+      const storageRef = ref(storage, fileName)
+      const snapshot = await uploadBytes(storageRef, file)
+      const url = await getDownloadURL(snapshot.ref)
+      return url
+    } catch (error) {
+      console.error('Error uploading promoter logo:', error)
+      throw error
+    }
+  }
+
   /**
    * Upload image from URL - fetches via proxy API and uploads to Firebase
    */
