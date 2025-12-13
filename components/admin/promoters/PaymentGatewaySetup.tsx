@@ -218,20 +218,20 @@ export default function PaymentGatewaySetup({
     <div className="space-y-6">
       {/* Current Gateway Display */}
       {currentGateway && !isEditing && (
-        <div className="bg-black/40 rounded-xl p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold">Current Payment Gateway</h2>
+        <div className="stat-card rounded-xl p-6">
+          <div className="flex justify-between items-center mb-4 flex-wrap gap-4">
+            <h2 className="text-xl font-bold text-primary-contrast">Current Payment Gateway</h2>
             <div className="flex gap-2">
               <button
                 onClick={testExistingGateway}
                 disabled={testing}
-                className="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed"
+                className="btn-accent px-4 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {testing ? 'Testing...' : '🧪 Test Connection'}
               </button>
               <button
                 onClick={() => setIsEditing(true)}
-                className="px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700"
+                className="btn-secondary px-4 py-2 rounded-lg"
               >
                 Change Gateway
               </button>
@@ -240,13 +240,13 @@ export default function PaymentGatewaySetup({
 
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
-              <span className="text-sm text-gray-400">Provider</span>
-              <p className="font-medium capitalize">{currentGateway.provider}</p>
+              <span className="text-sm text-secondary-contrast">Provider</span>
+              <p className="font-medium capitalize text-primary-contrast">{currentGateway.provider}</p>
             </div>
             <div>
-              <span className="text-sm text-gray-400">Environment</span>
+              <span className="text-sm text-secondary-contrast">Environment</span>
               <p className={`font-medium ${
-                currentGateway.environment === 'live' ? 'text-green-400' : 'text-yellow-400'
+                currentGateway.environment === 'live' ? 'text-money' : 'text-amber-600 dark:text-yellow-400'
               }`}>
                 {currentGateway.environment === 'live' ? '✅ Live' : '🧪 Sandbox'}
               </p>
@@ -255,9 +255,9 @@ export default function PaymentGatewaySetup({
 
           {testResult && (
             <div className={`p-4 rounded-lg border ${
-              testResult.success 
-                ? 'bg-green-600/10 border-green-600/50'
-                : 'bg-red-600/10 border-red-600/50'
+              testResult.success
+                ? 'bg-green-50 dark:bg-green-600/10 border-green-300 dark:border-green-600/50'
+                : 'bg-red-50 dark:bg-red-600/10 border-red-300 dark:border-red-600/50'
             }`}>
               <div className="flex items-start gap-3">
                 <span className="text-2xl">
@@ -265,24 +265,24 @@ export default function PaymentGatewaySetup({
                 </span>
                 <div className="flex-1">
                   <p className={`font-medium ${
-                    testResult.success ? 'text-green-400' : 'text-red-400'
+                    testResult.success ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'
                   }`}>
                     {testResult.message}
                   </p>
-                  
+
                   {testResult.success && testResult.details && (
                     <div className="mt-3 space-y-2 text-sm">
                       {Object.entries(testResult.details).map(([key, value]: [string, any]) => (
                         <div key={key} className="flex justify-between">
-                          <span className="text-gray-400 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}:</span>
-                          <span className="text-white">{String(value)}</span>
+                          <span className="text-secondary-contrast capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}:</span>
+                          <span className="text-primary-contrast">{String(value)}</span>
                         </div>
                       ))}
                     </div>
                   )}
 
                   {!testResult.success && testResult.error && (
-                    <p className="text-sm text-gray-400 mt-2">{testResult.error}</p>
+                    <p className="text-sm text-secondary-contrast mt-2">{testResult.error}</p>
                   )}
                 </div>
               </div>
@@ -293,14 +293,14 @@ export default function PaymentGatewaySetup({
 
       {/* Gateway Setup Form */}
       {isEditing && (
-        <div className="bg-black/40 rounded-xl p-6">
-          <h2 className="text-xl font-bold mb-6">
+        <div className="stat-card rounded-xl p-6">
+          <h2 className="text-xl font-bold mb-6 text-primary-contrast">
             {currentGateway ? 'Change Payment Gateway' : 'Setup Payment Gateway'}
           </h2>
 
           {!isMaster && (
-            <div className="mb-6 p-4 bg-purple-600/10 border border-purple-600/50 rounded-lg">
-              <label className="flex items-center gap-3">
+            <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-600/10 border border-blue-300 dark:border-blue-600/50 rounded-lg">
+              <label className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={useBoxOfficeTech}
@@ -308,8 +308,8 @@ export default function PaymentGatewaySetup({
                   className="w-5 h-5"
                 />
                 <div>
-                  <p className="font-medium">Use BoxOfficeTech Payment Gateway</p>
-                  <p className="text-sm text-gray-400">
+                  <p className="font-medium text-primary-contrast">Use BoxOfficeTech Payment Gateway</p>
+                  <p className="text-sm text-secondary-contrast">
                     Process payments through BoxOfficeTech's gateway
                   </p>
                 </div>
@@ -321,7 +321,7 @@ export default function PaymentGatewaySetup({
             <>
               {/* Provider Selection */}
               <div className="mb-4">
-                <label className="block text-sm font-medium mb-2">Payment Provider</label>
+                <label className="block text-sm font-medium mb-2 text-primary-contrast">Payment Provider</label>
                 <div className="grid grid-cols-3 gap-4">
                   {['stripe', 'square', 'paypal'].map(provider => (
                     <button
@@ -332,11 +332,11 @@ export default function PaymentGatewaySetup({
                       }}
                       className={`p-4 rounded-lg border-2 transition-all ${
                         formData.provider === provider
-                          ? 'border-purple-600 bg-purple-600/20'
-                          : 'border-gray-600 hover:border-gray-500'
+                          ? 'border-blue-600 bg-blue-50 dark:bg-blue-600/20'
+                          : 'border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500'
                       }`}
                     >
-                      <p className="font-medium capitalize">{provider}</p>
+                      <p className="font-medium capitalize text-primary-contrast">{provider}</p>
                     </button>
                   ))}
                 </div>
@@ -344,7 +344,7 @@ export default function PaymentGatewaySetup({
 
               {/* Environment Selection */}
               <div className="mb-4">
-                <label className="block text-sm font-medium mb-2">Environment</label>
+                <label className="block text-sm font-medium mb-2 text-primary-contrast">Environment</label>
                 <div className="grid grid-cols-2 gap-4">
                   <button
                     onClick={() => {
@@ -353,12 +353,12 @@ export default function PaymentGatewaySetup({
                     }}
                     className={`p-4 rounded-lg border-2 transition-all ${
                       formData.environment === 'sandbox'
-                        ? 'border-yellow-600 bg-yellow-600/20'
-                        : 'border-gray-600 hover:border-gray-500'
+                        ? 'border-amber-500 bg-amber-50 dark:bg-yellow-600/20'
+                        : 'border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500'
                     }`}
                   >
-                    <p className="font-medium">🧪 Sandbox</p>
-                    <p className="text-sm text-gray-400">For testing</p>
+                    <p className="font-medium text-primary-contrast">🧪 Sandbox</p>
+                    <p className="text-sm text-secondary-contrast">For testing</p>
                   </button>
                   <button
                     onClick={() => {
@@ -367,12 +367,12 @@ export default function PaymentGatewaySetup({
                     }}
                     className={`p-4 rounded-lg border-2 transition-all ${
                       formData.environment === 'live'
-                        ? 'border-green-600 bg-green-600/20'
-                        : 'border-gray-600 hover:border-gray-500'
+                        ? 'border-green-500 bg-green-50 dark:bg-green-600/20'
+                        : 'border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500'
                     }`}
                   >
-                    <p className="font-medium">✅ Live</p>
-                    <p className="text-sm text-gray-400">For real transactions</p>
+                    <p className="font-medium text-primary-contrast">✅ Live</p>
+                    <p className="text-sm text-secondary-contrast">For real transactions</p>
                   </button>
                 </div>
               </div>
@@ -382,8 +382,8 @@ export default function PaymentGatewaySetup({
                 {formData.provider === 'stripe' && (
                   <>
                     <div>
-                      <label className="block text-sm font-medium mb-2">
-                        Secret Key {formData.environment === 'live' && <span className="text-red-400">*</span>}
+                      <label className="block text-sm font-medium mb-2 text-primary-contrast">
+                        Secret Key {formData.environment === 'live' && <span className="text-red-600 dark:text-red-400">*</span>}
                       </label>
                       <input
                         type="password"
@@ -392,17 +392,17 @@ export default function PaymentGatewaySetup({
                           setCredentials({...credentials, secretKey: e.target.value})
                           setTestResult(null)
                         }}
-                        className="w-full px-4 py-2 bg-white/10 rounded-lg text-white"
+                        className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 focus:border-blue-500 dark:focus:border-accent-500 focus:outline-none"
                         placeholder={formData.environment === 'live' ? 'sk_live_...' : 'sk_test_...'}
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-2">Webhook Secret (Optional)</label>
+                      <label className="block text-sm font-medium mb-2 text-primary-contrast">Webhook Secret (Optional)</label>
                       <input
                         type="password"
                         value={credentials.webhookSecret}
                         onChange={(e) => setCredentials({...credentials, webhookSecret: e.target.value})}
-                        className="w-full px-4 py-2 bg-white/10 rounded-lg text-white"
+                        className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 focus:border-blue-500 dark:focus:border-accent-500 focus:outline-none"
                         placeholder="whsec_..."
                       />
                     </div>
@@ -412,8 +412,8 @@ export default function PaymentGatewaySetup({
                 {formData.provider === 'square' && (
                   <>
                     <div>
-                      <label className="block text-sm font-medium mb-2">
-                        Access Token {formData.environment === 'live' && <span className="text-red-400">*</span>}
+                      <label className="block text-sm font-medium mb-2 text-primary-contrast">
+                        Access Token {formData.environment === 'live' && <span className="text-red-600 dark:text-red-400">*</span>}
                       </label>
                       <input
                         type="password"
@@ -422,17 +422,17 @@ export default function PaymentGatewaySetup({
                           setCredentials({...credentials, apiKey: e.target.value})
                           setTestResult(null)
                         }}
-                        className="w-full px-4 py-2 bg-white/10 rounded-lg text-white"
+                        className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 focus:border-blue-500 dark:focus:border-accent-500 focus:outline-none"
                         placeholder="EAAA..."
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-2">Merchant ID (Optional)</label>
+                      <label className="block text-sm font-medium mb-2 text-primary-contrast">Merchant ID (Optional)</label>
                       <input
                         type="text"
                         value={credentials.merchantId}
                         onChange={(e) => setCredentials({...credentials, merchantId: e.target.value})}
-                        className="w-full px-4 py-2 bg-white/10 rounded-lg text-white"
+                        className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 focus:border-blue-500 dark:focus:border-accent-500 focus:outline-none"
                         placeholder="Leave empty to auto-detect"
                       />
                     </div>
@@ -442,8 +442,8 @@ export default function PaymentGatewaySetup({
                 {formData.provider === 'paypal' && (
                   <>
                     <div>
-                      <label className="block text-sm font-medium mb-2">
-                        Client ID {formData.environment === 'live' && <span className="text-red-400">*</span>}
+                      <label className="block text-sm font-medium mb-2 text-primary-contrast">
+                        Client ID {formData.environment === 'live' && <span className="text-red-600 dark:text-red-400">*</span>}
                       </label>
                       <input
                         type="text"
@@ -452,13 +452,13 @@ export default function PaymentGatewaySetup({
                           setCredentials({...credentials, clientId: e.target.value})
                           setTestResult(null)
                         }}
-                        className="w-full px-4 py-2 bg-white/10 rounded-lg text-white"
+                        className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 focus:border-blue-500 dark:focus:border-accent-500 focus:outline-none"
                         placeholder="AV..."
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-2">
-                        Client Secret {formData.environment === 'live' && <span className="text-red-400">*</span>}
+                      <label className="block text-sm font-medium mb-2 text-primary-contrast">
+                        Client Secret {formData.environment === 'live' && <span className="text-red-600 dark:text-red-400">*</span>}
                       </label>
                       <input
                         type="password"
@@ -467,7 +467,7 @@ export default function PaymentGatewaySetup({
                           setCredentials({...credentials, secretKey: e.target.value})
                           setTestResult(null)
                         }}
-                        className="w-full px-4 py-2 bg-white/10 rounded-lg text-white"
+                        className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 focus:border-blue-500 dark:focus:border-accent-500 focus:outline-none"
                         placeholder="EK..."
                       />
                     </div>
@@ -479,21 +479,21 @@ export default function PaymentGatewaySetup({
               <div className="mb-6">
                 <button
                   onClick={testConnection}
-                  disabled={testing || 
+                  disabled={testing ||
                     (formData.provider === 'stripe' && !credentials.secretKey) ||
                     (formData.provider === 'square' && !credentials.apiKey) ||
                     (formData.provider === 'paypal' && (!credentials.clientId || !credentials.secretKey))
                   }
-                  className="px-6 py-2 bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed"
+                  className="btn-accent px-6 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {testing ? 'Testing...' : 'Test Connection'}
                 </button>
-                
+
                 {testResult && (
                   <div className={`mt-4 p-4 rounded-lg border ${
-                    testResult.success 
-                      ? 'bg-green-600/10 border-green-600/50'
-                      : 'bg-red-600/10 border-red-600/50'
+                    testResult.success
+                      ? 'bg-green-50 dark:bg-green-600/10 border-green-300 dark:border-green-600/50'
+                      : 'bg-red-50 dark:bg-red-600/10 border-red-300 dark:border-red-600/50'
                   }`}>
                     <div className="flex items-start gap-3">
                       <span className="text-2xl">
@@ -501,24 +501,24 @@ export default function PaymentGatewaySetup({
                       </span>
                       <div className="flex-1">
                         <p className={`font-medium ${
-                          testResult.success ? 'text-green-400' : 'text-red-400'
+                          testResult.success ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'
                         }`}>
                           {testResult.message}
                         </p>
-                        
+
                         {testResult.success && testResult.details && (
                           <div className="mt-3 space-y-2 text-sm">
                             {Object.entries(testResult.details).map(([key, value]: [string, any]) => (
                               <div key={key} className="flex justify-between">
-                                <span className="text-gray-400 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}:</span>
-                                <span className="text-white">{String(value)}</span>
+                                <span className="text-secondary-contrast capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}:</span>
+                                <span className="text-primary-contrast">{String(value)}</span>
                               </div>
                             ))}
                           </div>
                         )}
 
                         {!testResult.success && testResult.error && (
-                          <p className="text-sm text-gray-400 mt-2">{testResult.error}</p>
+                          <p className="text-sm text-secondary-contrast mt-2">{testResult.error}</p>
                         )}
                       </div>
                     </div>
@@ -527,20 +527,20 @@ export default function PaymentGatewaySetup({
               </div>
 
               {/* Save/Cancel Buttons */}
-              <div className="flex gap-3">
+              <div className="flex gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
                 <button
                   onClick={() => {
                     setIsEditing(false)
                     setTestResult(null)
                   }}
-                  className="px-6 py-2 bg-gray-600 rounded-lg hover:bg-gray-700"
+                  className="btn-secondary px-6 py-2 rounded-lg"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSave}
                   disabled={!testResult?.success}
-                  className="flex-1 px-6 py-2 bg-green-600 rounded-lg hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed"
+                  className="flex-1 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Save Gateway
                 </button>
@@ -549,16 +549,16 @@ export default function PaymentGatewaySetup({
           )}
 
           {useBoxOfficeTech && (
-            <div className="flex gap-3">
+            <div className="flex gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
               <button
                 onClick={() => setIsEditing(false)}
-                className="px-6 py-2 bg-gray-600 rounded-lg hover:bg-gray-700"
+                className="btn-secondary px-6 py-2 rounded-lg"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
-                className="flex-1 px-6 py-2 bg-green-600 rounded-lg hover:bg-green-700"
+                className="flex-1 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
               >
                 Use BoxOfficeTech Gateway
               </button>

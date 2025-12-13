@@ -45,7 +45,7 @@ export default function EventsPage() {
 
     // Apply search filter
     if (searchTerm) {
-      events = events.filter(event => 
+      events = events.filter(event =>
         event.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         event.venueName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         event.description?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -53,7 +53,7 @@ export default function EventsPage() {
     }
 
     // Apply status filter
-    events = events.filter(event => 
+    events = events.filter(event =>
       statusFilter.includes(event.status)
     )
 
@@ -95,7 +95,7 @@ export default function EventsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-purple-500"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-accent-500"></div>
       </div>
     )
   }
@@ -104,14 +104,14 @@ export default function EventsPage() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold">Events</h1>
-          <p className="text-gray-400 mt-1">
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Events</h1>
+          <p className="text-slate-500 dark:text-slate-400 mt-1">
             Showing {filteredEvents.length} of {allEvents.length} events
           </p>
         </div>
         <button
           onClick={handleCreateEvent}
-          className="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg font-medium"
+          className="px-6 py-3 bg-accent-600 hover:bg-accent-700 text-white rounded-lg font-medium transition-colors"
         >
           + Create Event
         </button>
@@ -124,7 +124,7 @@ export default function EventsPage() {
           placeholder="Search events..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="flex-1 px-4 py-2 bg-white/10 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+          className="flex-1 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 text-slate-900 dark:text-white placeholder-slate-400"
         />
         <StatusMultiSelect
           selectedStatuses={statusFilter}
@@ -133,9 +133,9 @@ export default function EventsPage() {
       </div>
 
       {filteredEvents.length === 0 ? (
-        <div className="bg-white/5 rounded-xl p-12 text-center">
-          <p className="text-gray-400 text-lg">
-            {shouldFilter && activePromoterIds?.length === 0 
+        <div className="bg-white dark:bg-slate-800 rounded-xl p-12 text-center border border-slate-200 dark:border-slate-700">
+          <p className="text-slate-500 dark:text-slate-400 text-lg">
+            {shouldFilter && activePromoterIds?.length === 0
               ? 'No promoters selected. Please select promoters from the filter above.'
               : searchTerm
               ? 'No events match your search.'
@@ -147,10 +147,10 @@ export default function EventsPage() {
           {filteredEvents.map(event => (
             <div
               key={event.id}
-              className="bg-white/5 rounded-xl overflow-hidden border border-gray-800 hover:border-purple-500 transition-all"
+              className="bg-white dark:bg-slate-800 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 hover:border-accent-500 dark:hover:border-accent-500 transition-all shadow-sm"
             >
               {event.images?.cover && (
-                <div className="h-48 bg-gray-800">
+                <div className="h-48 bg-slate-100 dark:bg-slate-700">
                   <img
                     src={event.images.cover}
                     alt={event.name}
@@ -161,42 +161,42 @@ export default function EventsPage() {
 
               <div className="p-6">
                 <div className="flex items-start justify-between mb-3">
-                  <h3 className="text-xl font-bold">{event.name}</h3>
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">{event.name}</h3>
                   <span className={`px-2 py-1 rounded text-xs ${
                     event.status === 'published' || event.status === 'active'
-                      ? 'bg-green-500/20 text-green-400'
+                      ? 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400'
                       : event.status === 'draft'
-                      ? 'bg-yellow-500/20 text-yellow-400'
-                      : 'bg-gray-500/20 text-gray-400'
+                      ? 'bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400'
+                      : 'bg-slate-100 dark:bg-slate-500/20 text-slate-600 dark:text-slate-400'
                   }`}>
                     {event.status}
                   </span>
                 </div>
 
-                <div className="space-y-2 text-sm text-gray-400 mb-4">
+                <div className="space-y-2 text-sm text-slate-500 dark:text-slate-400 mb-4">
                   {event.venueName && (
                     <p>📍 {event.venueName}</p>
                   )}
                   {event.schedule?.performances?.[0]?.date && (
-                    <p>�� {new Date(event.schedule.performances[0].date).toLocaleDateString()}</p>
+                    <p>📅 {new Date(event.schedule.performances[0].date).toLocaleDateString()}</p>
                   )}
                   {event.promoter?.promoterName ? (
                     <p>🤝 {event.promoter.promoterName}</p>
                   ) : isAdmin && (
-                    <p className="text-yellow-400">🤝 Unassigned</p>
+                    <p className="text-yellow-600 dark:text-yellow-400">🤝 Unassigned</p>
                   )}
                 </div>
 
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleEditEvent(event.id)}
-                    className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm"
+                    className="flex-1 px-4 py-2 bg-accent-600 hover:bg-accent-700 text-white rounded-lg text-sm transition-colors"
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => handleDeleteEvent(event.id)}
-                    className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-sm"
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm transition-colors"
                   >
                     Delete
                   </button>

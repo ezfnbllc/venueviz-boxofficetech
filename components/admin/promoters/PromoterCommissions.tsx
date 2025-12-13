@@ -32,37 +32,37 @@ export default function PromoterCommissions({ promoterId }: PromoterCommissionsP
     .reduce((sum, c) => sum + c.amountOwed, 0)
 
   if (loading) {
-    return <div className="animate-pulse">Loading commissions...</div>
+    return <div className="animate-pulse text-secondary-contrast">Loading commissions...</div>
   }
 
   return (
     <div className="space-y-6">
-      <div className="bg-yellow-600/10 border border-yellow-600/50 rounded-xl p-4">
-        <div className="text-yellow-400 text-sm mb-2">Total Commission Owed</div>
-        <div className="text-3xl font-bold text-yellow-400">${totalOwed.toLocaleString()}</div>
+      <div className="bg-amber-50 dark:bg-yellow-600/10 border border-amber-300 dark:border-yellow-600/50 rounded-xl p-4">
+        <div className="text-amber-700 dark:text-yellow-400 text-sm mb-2">Total Commission Owed</div>
+        <div className="text-3xl font-bold text-amber-700 dark:text-yellow-400">${totalOwed.toLocaleString()}</div>
       </div>
 
-      <div className="bg-black/40 rounded-xl overflow-hidden">
+      <div className="table-container rounded-xl overflow-hidden">
         <table className="w-full">
-          <thead className="bg-white/5">
+          <thead className="bg-slate-100 dark:bg-slate-700/50">
             <tr>
-              <th className="px-6 py-3 text-left text-sm">Event</th>
-              <th className="px-6 py-3 text-left text-sm">Sales</th>
-              <th className="px-6 py-3 text-left text-sm">Commission</th>
-              <th className="px-6 py-3 text-left text-sm">Status</th>
+              <th className="px-6 py-3 text-left text-sm text-primary-contrast font-semibold">Event</th>
+              <th className="px-6 py-3 text-left text-sm text-primary-contrast font-semibold">Sales</th>
+              <th className="px-6 py-3 text-left text-sm text-primary-contrast font-semibold">Commission</th>
+              <th className="px-6 py-3 text-left text-sm text-primary-contrast font-semibold">Status</th>
             </tr>
           </thead>
           <tbody>
             {commissions.map(c => (
-              <tr key={c.id} className="border-t border-gray-800">
-                <td className="px-6 py-4 text-sm">{c.eventName}</td>
-                <td className="px-6 py-4 text-sm">${c.totalSales.toLocaleString()}</td>
-                <td className="px-6 py-4 text-sm">${c.amountOwed.toLocaleString()}</td>
+              <tr key={c.id} className="border-t border-slate-200 dark:border-slate-700">
+                <td className="px-6 py-4 text-sm text-primary-contrast">{c.eventName}</td>
+                <td className="px-6 py-4 text-sm text-primary-contrast">${c.totalSales.toLocaleString()}</td>
+                <td className="px-6 py-4 text-sm text-primary-contrast font-medium">${c.amountOwed.toLocaleString()}</td>
                 <td className="px-6 py-4">
                   <span className={`px-2 py-1 rounded-full text-xs ${
-                    c.paymentStatus === 'paid' 
-                      ? 'bg-green-600/20 text-green-400'
-                      : 'bg-yellow-600/20 text-yellow-400'
+                    c.paymentStatus === 'paid'
+                      ? 'badge-success'
+                      : 'badge-warning'
                   }`}>
                     {c.paymentStatus}
                   </span>

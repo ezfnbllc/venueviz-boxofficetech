@@ -15,13 +15,13 @@ interface PosterScanModalProps {
 function formatAddress(address: any): string {
   if (typeof address === 'string') return address
   if (!address) return ''
-  
+
   const parts = []
   if (address.street) parts.push(address.street)
   if (address.city) parts.push(address.city)
   if (address.state) parts.push(address.state)
   if (address.zip) parts.push(address.zip)
-  
+
   return parts.join(', ')
 }
 
@@ -43,10 +43,10 @@ export default function PosterScanModal({ onClose, onImport }: PosterScanModalPr
         setError('Please upload an image file')
         return
       }
-      
+
       setImageFile(file)
       setError('')
-      
+
       const reader = new FileReader()
       reader.onload = (e) => {
         setImagePreview(e.target?.result as string)
@@ -63,11 +63,11 @@ export default function PosterScanModal({ onClose, onImport }: PosterScanModalPr
       for (const [key, img] of Object.entries<any>(imageData)) {
         const base64Data = img.data
         const blob = await fetch(`data:${img.type};base64,${base64Data}`).then(r => r.blob())
-        
+
         const storageRef = ref(storage, `events/${img.name}`)
         await uploadBytes(storageRef, blob, { contentType: img.type })
         const url = await getDownloadURL(storageRef)
-        
+
         urls[key] = url
       }
 
@@ -93,7 +93,7 @@ export default function PosterScanModal({ onClose, onImport }: PosterScanModalPr
 
     try {
       const data = await EventAI.extractFromPoster(imageFile)
-      
+
       // Upload images client-side if we got base64 data
       if (data.imageData) {
         setUploadingImages(true)
@@ -102,9 +102,9 @@ export default function PosterScanModal({ onClose, onImport }: PosterScanModalPr
         delete data.imageData
         setUploadingImages(false)
       }
-      
+
       setExtractedData(data)
-      
+
       // Auto-match venue
       if (data.venue?.name || data.venue?.address) {
         await matchVenue(data.venue.name, data.venue.address)
@@ -124,7 +124,7 @@ export default function PosterScanModal({ onClose, onImport }: PosterScanModalPr
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ venueName, venueAddress })
       })
-      
+
       if (response.ok) {
         const data = await response.json()
         setVenueMatches(data.matches || [])
@@ -139,7 +139,7 @@ export default function PosterScanModal({ onClose, onImport }: PosterScanModalPr
 
   const adjustDescription = async (action: 'lengthen' | 'shorten' | 'professional') => {
     if (!extractedData?.description) return
-    
+
     setAdjustingDescription(true)
     try {
       const response = await fetch('/api/ai/adjust-description', {
@@ -150,7 +150,7 @@ export default function PosterScanModal({ onClose, onImport }: PosterScanModalPr
           action
         })
       })
-      
+
       if (response.ok) {
         const data = await response.json()
         setExtractedData({
@@ -167,7 +167,7 @@ export default function PosterScanModal({ onClose, onImport }: PosterScanModalPr
 
   const handleAddNewVenue = async () => {
     if (!extractedData?.venue) return
-    
+
     try {
       const newVenueId = await AdminService.createVenue({
         name: extractedData.venue.name,
@@ -175,7 +175,7 @@ export default function PosterScanModal({ onClose, onImport }: PosterScanModalPr
         capacity: 500,
         type: 'other'
       })
-      
+
       setSelectedVenueId(newVenueId)
       alert('✅ New venue added!')
     } catch (error) {
@@ -192,15 +192,15 @@ export default function PosterScanModal({ onClose, onImport }: PosterScanModalPr
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-gray-900 rounded-xl border border-gray-800 max-w-6xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center p-6 border-b border-gray-800 sticky top-0 bg-gray-900 z-10">
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center p-6 border-b border-slate-200 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-800 z-10">
           <div>
-            <h3 className="text-xl font-bold text-white">🖼️ Scan Event Poster</h3>
-            <p className="text-sm text-gray-400 mt-1">
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white">🖼️ Scan Event Poster</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
               AI extracts info + auto-uploads images
             </p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-white text-2xl">✕</button>
+          <button onClick={onClose} className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white text-2xl">✕</button>
         </div>
 
         <div className="p-6">
@@ -208,7 +208,7 @@ export default function PosterScanModal({ onClose, onImport }: PosterScanModalPr
             <div className="space-y-4">
               {imagePreview ? (
                 <div className="relative">
-                  <img src={imagePreview} alt="Preview" className="w-full max-h-[500px] object-contain rounded-lg border border-gray-800" />
+                  <img src={imagePreview} alt="Preview" className="w-full max-h-[500px] object-contain rounded-lg border border-slate-200 dark:border-slate-700" />
                   <button
                     onClick={() => { setImageFile(null); setImagePreview('') }}
                     className="absolute top-2 right-2 px-3 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white"
@@ -217,9 +217,9 @@ export default function PosterScanModal({ onClose, onImport }: PosterScanModalPr
                   </button>
                 </div>
               ) : (
-                <label className="block w-full p-16 border-2 border-dashed border-gray-700 rounded-lg cursor-pointer hover:border-purple-500 text-center">
+                <label className="block w-full p-16 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-lg cursor-pointer hover:border-accent-500 text-center">
                   <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" disabled={loading} />
-                  <div className="text-gray-400">
+                  <div className="text-slate-500 dark:text-slate-400">
                     <div className="text-6xl mb-4">📤</div>
                     <p className="text-lg mb-2">Click to upload</p>
                     <p className="text-sm opacity-75">All formats supported</p>
@@ -230,11 +230,11 @@ export default function PosterScanModal({ onClose, onImport }: PosterScanModalPr
               {(loading || uploadingImages) && (
                 <AILoadingState message={uploadingImages ? "Uploading images to Firebase..." : "Scanning poster..."} />
               )}
-              
+
               {error && <div className="p-4 bg-red-600/20 border border-red-500/30 rounded-lg text-red-400">{error}</div>}
 
               {imageFile && !loading && (
-                <button onClick={handleScan} className="w-full px-6 py-4 bg-purple-600 hover:bg-purple-700 rounded-lg font-medium text-white text-lg">
+                <button onClick={handleScan} className="w-full px-6 py-4 bg-accent-600 hover:bg-accent-700 rounded-lg font-medium text-white text-lg">
                   🚀 Scan Poster
                 </button>
               )}
@@ -242,7 +242,7 @@ export default function PosterScanModal({ onClose, onImport }: PosterScanModalPr
           ) : (
             <div className="space-y-6">
               <div className="flex gap-3 items-center">
-                <h4 className="text-xl font-bold text-white">{extractedData.name}</h4>
+                <h4 className="text-xl font-bold text-slate-900 dark:text-white">{extractedData.name}</h4>
                 <ConfidenceBadge confidence={extractedData.confidence} />
               </div>
 
@@ -251,35 +251,35 @@ export default function PosterScanModal({ onClose, onImport }: PosterScanModalPr
                   <h5 className="font-semibold text-blue-400 mb-3">📸 Images Uploaded</h5>
                   <div className="grid grid-cols-3 gap-3">
                     <div>
-                      <p className="text-xs text-gray-400 mb-2">Cover</p>
-                      <img src={extractedData.images.cover} alt="Cover" className="w-full h-32 object-cover rounded border border-gray-700" />
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Cover</p>
+                      <img src={extractedData.images.cover} alt="Cover" className="w-full h-32 object-cover rounded border border-slate-200 dark:border-slate-700" />
                     </div>
                     <div>
-                      <p className="text-xs text-gray-400 mb-2">Thumbnail</p>
-                      <img src={extractedData.images.thumbnail} alt="Thumb" className="w-full h-32 object-cover rounded border border-gray-700" />
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Thumbnail</p>
+                      <img src={extractedData.images.thumbnail} alt="Thumb" className="w-full h-32 object-cover rounded border border-slate-200 dark:border-slate-700" />
                     </div>
                     <div>
-                      <p className="text-xs text-gray-400 mb-2">Gallery</p>
-                      <img src={extractedData.images.gallery[0]} alt="Gallery" className="w-full h-32 object-cover rounded border border-gray-700" />
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Gallery</p>
+                      <img src={extractedData.images.gallery[0]} alt="Gallery" className="w-full h-32 object-cover rounded border border-slate-200 dark:border-slate-700" />
                     </div>
                   </div>
                 </div>
               )}
 
-              <div className="bg-gray-850 rounded-lg p-4 border border-gray-800">
+              <div className="bg-slate-100 dark:bg-slate-700 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
                 <div className="flex justify-between items-center mb-3">
-                  <label className="text-sm font-medium text-gray-300">Description</label>
+                  <label className="text-sm font-medium text-slate-600 dark:text-slate-300">Description</label>
                   <div className="flex gap-2">
-                    <button onClick={() => adjustDescription('shorten')} disabled={adjustingDescription} className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 rounded disabled:opacity-50">↓ Shorten</button>
-                    <button onClick={() => adjustDescription('lengthen')} disabled={adjustingDescription} className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 rounded disabled:opacity-50">↑ Lengthen</button>
-                    <button onClick={() => adjustDescription('professional')} disabled={adjustingDescription} className="px-3 py-1 text-xs bg-purple-600 hover:bg-purple-700 rounded disabled:opacity-50">✨ Polish</button>
+                    <button onClick={() => adjustDescription('shorten')} disabled={adjustingDescription} className="px-3 py-1 text-xs bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded disabled:opacity-50 text-slate-900 dark:text-white">↓ Shorten</button>
+                    <button onClick={() => adjustDescription('lengthen')} disabled={adjustingDescription} className="px-3 py-1 text-xs bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded disabled:opacity-50 text-slate-900 dark:text-white">↑ Lengthen</button>
+                    <button onClick={() => adjustDescription('professional')} disabled={adjustingDescription} className="px-3 py-1 text-xs bg-accent-600 hover:bg-accent-700 rounded disabled:opacity-50 text-white">✨ Polish</button>
                   </div>
                 </div>
                 <textarea
                   value={extractedData.description}
                   onChange={(e) => setExtractedData({ ...extractedData, description: e.target.value })}
                   rows={4}
-                  className="w-full px-3 py-2 bg-gray-900 border border-gray-800 rounded text-white text-sm"
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-900 dark:text-white text-sm"
                 />
               </div>
 
@@ -287,13 +287,13 @@ export default function PosterScanModal({ onClose, onImport }: PosterScanModalPr
                 <div className="bg-green-600/10 border border-green-500/30 rounded-lg p-4">
                   <h5 className="font-semibold text-green-400 mb-3">✅ Venue Matches</h5>
                   {venueMatches.map((match: any) => (
-                    <label key={match.venue.id} className="flex items-center gap-3 p-3 bg-gray-850 rounded mb-2 cursor-pointer hover:bg-gray-800">
+                    <label key={match.venue.id} className="flex items-center gap-3 p-3 bg-slate-100 dark:bg-slate-700 rounded mb-2 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600">
                       <input type="radio" name="venue" checked={selectedVenueId === match.venue.id} onChange={() => setSelectedVenueId(match.venue.id)} />
                       <div className="flex-1">
-                        <p className="font-medium text-white">{match.venue.name}</p>
-                        <p className="text-xs text-gray-400">{formatAddress(match.venue.address)}</p>
+                        <p className="font-medium text-slate-900 dark:text-white">{match.venue.name}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{formatAddress(match.venue.address)}</p>
                       </div>
-                      <span className="text-sm font-semibold text-purple-400">{Math.round(match.score)}%</span>
+                      <span className="text-sm font-semibold text-accent-500 dark:text-accent-400">{Math.round(match.score)}%</span>
                     </label>
                   ))}
                   <button onClick={handleAddNewVenue} className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white text-sm mt-2">
@@ -303,14 +303,14 @@ export default function PosterScanModal({ onClose, onImport }: PosterScanModalPr
               )}
 
               {extractedData.pricing && extractedData.pricing.length > 0 && (
-                <div className="bg-gray-850 rounded-lg p-4 border border-gray-800">
-                  <h5 className="font-semibold text-white mb-3">💰 Ticket Pricing</h5>
+                <div className="bg-slate-100 dark:bg-slate-700 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
+                  <h5 className="font-semibold text-slate-900 dark:text-white mb-3">💰 Ticket Pricing</h5>
                   <div className="grid grid-cols-2 gap-3">
                     {extractedData.pricing.map((tier: any, i: number) => (
-                      <div key={i} className="p-3 bg-gray-900 rounded border border-gray-700">
-                        <p className="font-medium text-white">{tier.name}</p>
-                        <p className="text-2xl font-bold text-purple-400">${tier.price}</p>
-                        {tier.description && <p className="text-xs text-gray-400 mt-1">{tier.description}</p>}
+                      <div key={i} className="p-3 bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700">
+                        <p className="font-medium text-slate-900 dark:text-white">{tier.name}</p>
+                        <p className="text-2xl font-bold text-accent-500 dark:text-accent-400">${tier.price}</p>
+                        {tier.description && <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{tier.description}</p>}
                       </div>
                     ))}
                   </div>
@@ -318,14 +318,14 @@ export default function PosterScanModal({ onClose, onImport }: PosterScanModalPr
               )}
 
               {extractedData.promotions && extractedData.promotions.length > 0 && (
-                <div className="bg-purple-600/10 border border-purple-500/30 rounded-lg p-4">
-                  <h5 className="font-semibold text-purple-400 mb-3">🎁 Promotions</h5>
+                <div className="bg-accent-600/20 border border-accent-500/30 rounded-lg p-4">
+                  <h5 className="font-semibold text-accent-500 dark:text-accent-400 mb-3">🎁 Promotions</h5>
                   <div className="space-y-2">
                     {extractedData.promotions.map((promo: any, i: number) => (
-                      <div key={i} className="p-3 bg-gray-850 rounded flex justify-between items-center">
+                      <div key={i} className="p-3 bg-slate-100 dark:bg-slate-700 rounded flex justify-between items-center">
                         <div>
                           <p className="font-mono text-yellow-400 font-bold">{promo.code || 'N/A'}</p>
-                          <p className="text-sm text-gray-400">{promo.description}</p>
+                          <p className="text-sm text-slate-500 dark:text-slate-400">{promo.description}</p>
                         </div>
                         <span className="text-lg font-bold text-green-400">
                           {promo.type === 'percentage' ? `${promo.discount}%` : `$${promo.discount}`} OFF
@@ -336,9 +336,9 @@ export default function PosterScanModal({ onClose, onImport }: PosterScanModalPr
                 </div>
               )}
 
-              <div className="flex gap-3 pt-4 border-t border-gray-800">
-                <button onClick={() => { setExtractedData(null); setImageFile(null); setImagePreview(''); setVenueMatches([]) }} className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg text-white">← Scan Another</button>
-                <button onClick={handleApply} disabled={venueMatches.length > 0 && !selectedVenueId} className="flex-1 px-6 py-3 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded-lg font-medium text-white">Apply →</button>
+              <div className="flex gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+                <button onClick={() => { setExtractedData(null); setImageFile(null); setImagePreview(''); setVenueMatches([]) }} className="px-6 py-3 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-lg text-slate-900 dark:text-white">← Scan Another</button>
+                <button onClick={handleApply} disabled={venueMatches.length > 0 && !selectedVenueId} className="flex-1 px-6 py-3 bg-accent-600 hover:bg-accent-700 disabled:opacity-50 rounded-lg font-medium text-white">Apply →</button>
               </div>
             </div>
           )}

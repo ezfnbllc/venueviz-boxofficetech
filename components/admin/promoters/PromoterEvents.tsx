@@ -38,28 +38,28 @@ export default function PromoterEvents({ promoterId }: PromoterEventsProps) {
   }
 
   if (loading) {
-    return <div className="animate-pulse">Loading events...</div>
+    return <div className="animate-pulse text-secondary-contrast">Loading events...</div>
   }
 
   return (
     <div className="space-y-6">
       {events.length === 0 ? (
-        <div className="text-center py-12 bg-black/40 rounded-xl">
-          <p className="text-gray-400">No events found</p>
+        <div className="text-center py-12 bg-slate-100 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+          <p className="text-secondary-contrast">No events found</p>
         </div>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {events.map(event => (
-            <div key={event.id} className="bg-black/40 rounded-xl p-6">
-              <h3 className="text-xl font-bold mb-2">{event.name}</h3>
-              <p className="text-sm text-gray-400 mb-4">
-                Status: <span className={event.status === 'active' ? 'text-green-400' : 'text-gray-400'}>
+            <div key={event.id} className="stat-card rounded-xl p-6">
+              <h3 className="text-xl font-bold mb-2 text-primary-contrast">{event.name}</h3>
+              <p className="text-sm text-secondary-contrast mb-4">
+                Status: <span className={event.status === 'active' ? 'text-money' : 'text-secondary-contrast'}>
                   {event.status}
                 </span>
               </p>
               <button
                 onClick={() => router.push(`/admin/events/edit/${event.id}`)}
-                className="w-full px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700"
+                className="w-full btn-accent px-4 py-2 rounded-lg"
               >
                 Edit Event
               </button>

@@ -35,42 +35,42 @@ export default function PromoterOverview({ promoterId, isMaster }: PromoterOverv
   }
 
   if (loading) {
-    return <div className="animate-pulse">Loading stats...</div>
+    return <div className="animate-pulse text-secondary-contrast">Loading stats...</div>
   }
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <div className="bg-black/40 rounded-xl p-4">
-          <div className="text-xs text-gray-400 mb-1">Total Events</div>
-          <div className="text-2xl font-bold">{stats.totalEvents}</div>
+        <div className="stat-card rounded-xl p-4">
+          <div className="text-xs text-secondary-contrast mb-1 font-medium">Total Events</div>
+          <div className="text-2xl font-bold text-primary-contrast">{stats.totalEvents}</div>
         </div>
-        
-        <div className="bg-black/40 rounded-xl p-4">
-          <div className="text-xs text-gray-400 mb-1">Active Events</div>
-          <div className="text-2xl font-bold text-green-400">{stats.activeEvents}</div>
+
+        <div className="stat-card rounded-xl p-4">
+          <div className="text-xs text-secondary-contrast mb-1 font-medium">Active Events</div>
+          <div className="text-2xl font-bold text-money">{stats.activeEvents}</div>
         </div>
-        
-        <div className="bg-black/40 rounded-xl p-4">
-          <div className="text-xs text-gray-400 mb-1">Tickets Sold</div>
-          <div className="text-2xl font-bold">{stats.totalTicketsSold.toLocaleString()}</div>
+
+        <div className="stat-card rounded-xl p-4">
+          <div className="text-xs text-secondary-contrast mb-1 font-medium">Tickets Sold</div>
+          <div className="text-2xl font-bold text-primary-contrast">{stats.totalTicketsSold.toLocaleString()}</div>
         </div>
-        
-        <div className="bg-black/40 rounded-xl p-4">
-          <div className="text-xs text-gray-400 mb-1">Total Revenue</div>
-          <div className="text-2xl font-bold">${stats.totalRevenue.toLocaleString()}</div>
+
+        <div className="stat-card rounded-xl p-4">
+          <div className="text-xs text-secondary-contrast mb-1 font-medium">Total Revenue</div>
+          <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">${stats.totalRevenue.toLocaleString()}</div>
         </div>
-        
-        <div className="bg-black/40 rounded-xl p-4">
-          <div className="text-xs text-gray-400 mb-1">Commission Owed</div>
-          <div className="text-2xl font-bold text-yellow-400">
+
+        <div className="stat-card rounded-xl p-4">
+          <div className="text-xs text-secondary-contrast mb-1 font-medium">Commission Owed</div>
+          <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">
             ${stats.pendingCommission.toLocaleString()}
           </div>
         </div>
-        
-        <div className="bg-black/40 rounded-xl p-4">
-          <div className="text-xs text-gray-400 mb-1">Total Commission</div>
-          <div className="text-2xl font-bold">${stats.totalCommission.toLocaleString()}</div>
+
+        <div className="stat-card rounded-xl p-4">
+          <div className="text-xs text-secondary-contrast mb-1 font-medium">Total Commission</div>
+          <div className="text-2xl font-bold text-primary-contrast">${stats.totalCommission.toLocaleString()}</div>
         </div>
       </div>
     </div>

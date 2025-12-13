@@ -88,11 +88,11 @@ export default function Step7Sales() {
       {/* Sales Period */}
       <div className="mb-6">
         <h4 className="font-semibold mb-4">Sales Period</h4>
-        <div className="grid grid-cols-2 gap-4 p-4 bg-black/20 rounded-lg">
+        <div className="grid grid-cols-2 gap-4 p-4 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
           <div>
             <label className="block text-sm font-medium mb-2">
               Sales Start Date
-              <span className="text-xs text-gray-400 ml-2">
+              <span className="text-xs text-slate-500 dark:text-slate-400 ml-2">
                 ({eventTimezone.split('/')[1]?.replace('_', ' ') || eventTimezone})
               </span>
             </label>
@@ -100,7 +100,7 @@ export default function Step7Sales() {
               type="datetime-local"
               value={formData.sales?.salesStartDate || ''}
               onChange={(e) => updateSalesField('salesStartDate', e.target.value)}
-              className="w-full px-4 py-2 bg-white/10 rounded-lg focus:bg-white/20 outline-none"
+              className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg focus:bg-white/20 outline-none"
             />
           </div>
           
@@ -112,7 +112,7 @@ export default function Step7Sales() {
               <button
                 type="button"
                 onClick={autoSetSalesEnd}
-                className="text-xs px-2 py-1 bg-purple-600/30 text-purple-300 rounded hover:bg-purple-600/50"
+                className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-600/30 text-blue-700 dark:text-blue-400 rounded hover:bg-blue-200 dark:hover:bg-blue-600/50"
               >
                 Use event start
               </button>
@@ -121,7 +121,7 @@ export default function Step7Sales() {
               type="datetime-local"
               value={formData.sales?.salesEndDate || ''}
               onChange={(e) => updateSalesField('salesEndDate', e.target.value)}
-              className="w-full px-4 py-2 bg-white/10 rounded-lg focus:bg-white/20 outline-none"
+              className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg focus:bg-white/20 outline-none"
             />
           </div>
         </div>
@@ -130,7 +130,7 @@ export default function Step7Sales() {
       {/* Purchase Limits */}
       <div className="mb-6">
         <h4 className="font-semibold mb-4">Purchase Limits</h4>
-        <div className="p-4 bg-black/20 rounded-lg">
+        <div className="p-4 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
           <div className="mb-4">
             <label className="block text-sm font-medium mb-2">
               Maximum Tickets Per Order
@@ -139,7 +139,7 @@ export default function Step7Sales() {
               type="number"
               value={formData.sales?.maxTicketsPerOrder || 10}
               onChange={(e) => updateSalesField('maxTicketsPerOrder', parseInt(e.target.value) || 10)}
-              className="w-full px-4 py-2 bg-white/10 rounded-lg focus:bg-white/20 outline-none"
+              className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg focus:bg-white/20 outline-none"
               min="1"
               max="50"
             />
@@ -150,7 +150,7 @@ export default function Step7Sales() {
       {/* Delivery Options */}
       <div className="mb-6">
         <h4 className="font-semibold mb-4">Ticket Delivery</h4>
-        <div className="space-y-3 p-4 bg-black/20 rounded-lg">
+        <div className="space-y-3 p-4 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
           <label className="flex items-center gap-3">
             <input
               type="checkbox"
@@ -186,11 +186,11 @@ export default function Step7Sales() {
       {/* Refund Policy */}
       <div className="mb-6">
         <h4 className="font-semibold mb-4">Refund Policy</h4>
-        <div className="p-4 bg-black/20 rounded-lg">
+        <div className="p-4 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
           <select
             value={formData.sales?.refundPolicy || 'no-refunds'}
             onChange={(e) => updateSalesField('refundPolicy', e.target.value)}
-            className="w-full px-4 py-2 bg-white/10 rounded-lg focus:bg-white/20 outline-none"
+            className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg focus:bg-white/20 outline-none"
           >
             <option value="no-refunds">No Refunds</option>
             <option value="24-hours">24 Hours Before Event</option>
@@ -208,7 +208,7 @@ export default function Step7Sales() {
               <textarea
                 value={formData.sales?.customRefundPolicy || ''}
                 onChange={(e) => updateSalesField('customRefundPolicy', e.target.value)}
-                className="w-full px-4 py-2 bg-white/10 rounded-lg focus:bg-white/20 outline-none"
+                className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg focus:bg-white/20 outline-none"
                 rows={3}
                 placeholder="Describe your custom refund policy..."
               />
@@ -220,7 +220,7 @@ export default function Step7Sales() {
       {/* Additional Settings */}
       <div className="mb-6">
         <h4 className="font-semibold mb-4">Additional Settings</h4>
-        <div className="space-y-3 p-4 bg-black/20 rounded-lg">
+        <div className="space-y-3 p-4 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
           <label className="flex items-center gap-3">
             <input
               type="checkbox"

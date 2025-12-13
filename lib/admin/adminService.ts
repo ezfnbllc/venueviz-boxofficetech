@@ -18,8 +18,24 @@ import { db } from '@/lib/firebase'
 // Helper to check if code is running in browser (prevents SSR/build-time Firebase calls)
 const isBrowser = typeof window !== 'undefined'
 
+// Deep clean undefined values from objects
+const deepCleanUndefined = (obj: any): any => {
+  if (obj === null || obj === undefined) return obj
+  if (typeof obj !== 'object') return obj
+
+  const cleaned = Array.isArray(obj) ? [...obj] : { ...obj }
+  Object.keys(cleaned).forEach(key => {
+    if (cleaned[key] === undefined) {
+      delete cleaned[key]
+    } else if (typeof cleaned[key] === 'object' && cleaned[key] !== null) {
+      cleaned[key] = deepCleanUndefined(cleaned[key])
+    }
+  })
+  return cleaned
+}
+
 export class AdminService {
-  
+
   // ============ VENUES ============
   static async getVenues() {
     try {
@@ -147,10 +163,8 @@ export class AdminService {
 
   static async updateLayout(layoutId: string, layoutData: any) {
     try {
-      // Remove undefined values that Firebase doesn't accept
-      const cleanData = JSON.parse(JSON.stringify(layoutData))
-      
-      // Ensure all required fields have values
+      const cleanData = deepCleanUndefined(layoutData)
+
       const updateData: any = {
         venueId: cleanData.venueId || '',
         name: cleanData.name || 'Unnamed Layout',
@@ -165,14 +179,7 @@ export class AdminService {
         priceCategories: cleanData.priceCategories || [],
         updatedAt: Timestamp.now()
       }
-      
-      // Remove null values if not needed
-      Object.keys(updateData).forEach(key => {
-        if (updateData[key] === undefined) {
-          delete updateData[key]
-        }
-      })
-      
+
       const layoutRef = doc(db, 'layouts', layoutId)
       await updateDoc(layoutRef, updateData)
       return true
@@ -228,20 +235,7 @@ export class AdminService {
 
   static async createEvent(eventData: any) {
     try {
-      // Remove undefined values that Firebase doesn't accept
-      const cleanData = JSON.parse(JSON.stringify(eventData))
-
-      // Deep clean undefined values
-      const deepClean = (obj: any) => {
-        Object.keys(obj).forEach(key => {
-          if (obj[key] === undefined) {
-            delete obj[key]
-          } else if (typeof obj[key] === 'object' && obj[key] !== null) {
-            deepClean(obj[key])
-          }
-        })
-      }
-      deepClean(cleanData)
+      const cleanData = deepCleanUndefined(eventData)
 
       const eventsRef = collection(db, 'events')
       const docRef = await addDoc(eventsRef, {
@@ -256,394 +250,18 @@ export class AdminService {
     }
   }
 
-  // Import sanitizeEventData at the top of the file if not already present
   static async updateEvent(eventId: string, eventData: any) {
     try {
-      // Remove undefined values that Firebase doesnt accept
-      const cleanData = JSON.parse(JSON.stringify(eventData))
-      
-      // Ensure no undefined values exist
-      Object.keys(cleanData).forEach(key => {
-        if (cleanData[key] === undefined) {
-          delete cleanData[key]
-        }
-        if (typeof cleanData[key] === "object" && cleanData[key] !== null) {
-          Object.keys(cleanData[key]).forEach(subKey => {
-            if (cleanData[key][subKey] === undefined) {
-              delete cleanData[key][subKey]
-            }
-          })
-        }
-      })
-      
-      const eventRef = doc(db, "events", eventId)
+      const cleanData = deepCleanUndefined(eventData)
+
+      const eventRef = doc(db, 'events', eventId)
       await updateDoc(eventRef, {
         ...cleanData,
         updatedAt: Timestamp.now()
       })
       return true
     } catch (error) {
-      console.error("Error updating event:", error)
-      throw error
-    }
-  }
-  static async updateEvent(eventId: string, eventData: any) {
-    try {
-      // Remove undefined values that Firebase doesnt accept
-      const cleanData = JSON.parse(JSON.stringify(eventData))
-      
-      // Ensure no undefined values exist
-      Object.keys(cleanData).forEach(key => {
-        if (cleanData[key] === undefined) {
-          delete cleanData[key]
-        }
-        if (typeof cleanData[key] === "object" && cleanData[key] !== null) {
-          Object.keys(cleanData[key]).forEach(subKey => {
-            if (cleanData[key][subKey] === undefined) {
-              delete cleanData[key][subKey]
-            }
-          })
-        }
-      })
-      
-      const eventRef = doc(db, "events", eventId)
-      await updateDoc(eventRef, {
-        ...cleanData,
-        updatedAt: Timestamp.now()
-      })
-      return true
-    } catch (error) {
-      console.error("Error updating event:", error)
-      throw error
-    }
-  }
-  static async updateEvent(eventId: string, eventData: any) {
-    try {
-      // Remove undefined values that Firebase doesnt accept
-      const cleanData = JSON.parse(JSON.stringify(eventData))
-      
-      // Ensure no undefined values exist
-      Object.keys(cleanData).forEach(key => {
-        if (cleanData[key] === undefined) {
-          delete cleanData[key]
-        }
-        if (typeof cleanData[key] === "object" && cleanData[key] !== null) {
-          Object.keys(cleanData[key]).forEach(subKey => {
-            if (cleanData[key][subKey] === undefined) {
-              delete cleanData[key][subKey]
-            }
-          })
-        }
-      })
-      
-      const eventRef = doc(db, "events", eventId)
-      await updateDoc(eventRef, {
-        ...cleanData,
-        updatedAt: Timestamp.now()
-      })
-      return true
-    } catch (error) {
-      console.error("Error updating event:", error)
-      throw error
-    }
-  }
-  static async updateEvent(eventId: string, eventData: any) {
-    try {
-      // Remove undefined values that Firebase doesnt accept
-      const cleanData = JSON.parse(JSON.stringify(eventData))
-      
-      // Ensure no undefined values exist
-      Object.keys(cleanData).forEach(key => {
-        if (cleanData[key] === undefined) {
-          delete cleanData[key]
-        }
-        if (typeof cleanData[key] === "object" && cleanData[key] !== null) {
-          Object.keys(cleanData[key]).forEach(subKey => {
-            if (cleanData[key][subKey] === undefined) {
-              delete cleanData[key][subKey]
-            }
-          })
-        }
-      })
-      
-      const eventRef = doc(db, "events", eventId)
-      await updateDoc(eventRef, {
-        ...cleanData,
-        updatedAt: Timestamp.now()
-      })
-      return true
-    } catch (error) {
-      console.error("Error updating event:", error)
-      throw error
-    }
-  }
-  static async updateEvent(eventId: string, eventData: any) {
-    try {
-      // Remove undefined values that Firebase doesnt accept
-      const cleanData = JSON.parse(JSON.stringify(eventData))
-      
-      // Ensure no undefined values exist
-      Object.keys(cleanData).forEach(key => {
-        if (cleanData[key] === undefined) {
-          delete cleanData[key]
-        }
-        if (typeof cleanData[key] === "object" && cleanData[key] !== null) {
-          Object.keys(cleanData[key]).forEach(subKey => {
-            if (cleanData[key][subKey] === undefined) {
-              delete cleanData[key][subKey]
-            }
-          })
-        }
-      })
-      
-      const eventRef = doc(db, "events", eventId)
-      await updateDoc(eventRef, {
-        ...cleanData,
-        updatedAt: Timestamp.now()
-      })
-      return true
-    } catch (error) {
-      console.error("Error updating event:", error)
-      throw error
-    }
-  }
-  static async updateEvent(eventId: string, eventData: any) {
-    try {
-      // Remove undefined values that Firebase doesnt accept
-      const cleanData = JSON.parse(JSON.stringify(eventData))
-      
-      // Ensure no undefined values exist
-      Object.keys(cleanData).forEach(key => {
-        if (cleanData[key] === undefined) {
-          delete cleanData[key]
-        }
-        if (typeof cleanData[key] === "object" && cleanData[key] !== null) {
-          Object.keys(cleanData[key]).forEach(subKey => {
-            if (cleanData[key][subKey] === undefined) {
-              delete cleanData[key][subKey]
-            }
-          })
-        }
-      })
-      
-      const eventRef = doc(db, "events", eventId)
-      await updateDoc(eventRef, {
-        ...cleanData,
-        updatedAt: Timestamp.now()
-      })
-      return true
-    } catch (error) {
-      console.error("Error updating event:", error)
-      throw error
-    }
-  }
-  static async updateEvent(eventId: string, eventData: any) {
-    try {
-      // Remove undefined values that Firebase doesnt accept
-      const cleanData = JSON.parse(JSON.stringify(eventData))
-      
-      // Ensure no undefined values exist
-      Object.keys(cleanData).forEach(key => {
-        if (cleanData[key] === undefined) {
-          delete cleanData[key]
-        }
-        if (typeof cleanData[key] === "object" && cleanData[key] !== null) {
-          Object.keys(cleanData[key]).forEach(subKey => {
-            if (cleanData[key][subKey] === undefined) {
-              delete cleanData[key][subKey]
-            }
-          })
-        }
-      })
-      
-      const eventRef = doc(db, "events", eventId)
-      await updateDoc(eventRef, {
-        ...cleanData,
-        updatedAt: Timestamp.now()
-      })
-      return true
-    } catch (error) {
-      console.error("Error updating event:", error)
-      throw error
-    }
-  }
-  static async updateEvent(eventId: string, eventData: any) {
-    try {
-      // Remove undefined values that Firebase doesnt accept
-      const cleanData = JSON.parse(JSON.stringify(eventData))
-      
-      // Ensure no undefined values exist
-      Object.keys(cleanData).forEach(key => {
-        if (cleanData[key] === undefined) {
-          delete cleanData[key]
-        }
-        if (typeof cleanData[key] === "object" && cleanData[key] !== null) {
-          Object.keys(cleanData[key]).forEach(subKey => {
-            if (cleanData[key][subKey] === undefined) {
-              delete cleanData[key][subKey]
-            }
-          })
-        }
-      })
-      
-      const eventRef = doc(db, "events", eventId)
-      await updateDoc(eventRef, {
-        ...cleanData,
-        updatedAt: Timestamp.now()
-      })
-      return true
-    } catch (error) {
-      console.error("Error updating event:", error)
-      throw error
-    }
-  }
-  static async updateEvent(eventId: string, eventData: any) {
-    try {
-      // Remove undefined values that Firebase doesnt accept
-      const cleanData = JSON.parse(JSON.stringify(eventData))
-      
-      // Ensure no undefined values exist
-      Object.keys(cleanData).forEach(key => {
-        if (cleanData[key] === undefined) {
-          delete cleanData[key]
-        }
-        if (typeof cleanData[key] === "object" && cleanData[key] !== null) {
-          Object.keys(cleanData[key]).forEach(subKey => {
-            if (cleanData[key][subKey] === undefined) {
-              delete cleanData[key][subKey]
-            }
-          })
-        }
-      })
-      
-      const eventRef = doc(db, "events", eventId)
-      await updateDoc(eventRef, {
-        ...cleanData,
-        updatedAt: Timestamp.now()
-      })
-      return true
-    } catch (error) {
-      console.error("Error updating event:", error)
-      throw error
-    }
-  }
-  static async updateEvent(eventId: string, eventData: any) {
-    try {
-      // Remove undefined values that Firebase doesnt accept
-      const cleanData = JSON.parse(JSON.stringify(eventData))
-      
-      // Ensure no undefined values exist
-      Object.keys(cleanData).forEach(key => {
-        if (cleanData[key] === undefined) {
-          delete cleanData[key]
-        }
-        if (typeof cleanData[key] === "object" && cleanData[key] !== null) {
-          Object.keys(cleanData[key]).forEach(subKey => {
-            if (cleanData[key][subKey] === undefined) {
-              delete cleanData[key][subKey]
-            }
-          })
-        }
-      })
-      
-      const eventRef = doc(db, "events", eventId)
-      await updateDoc(eventRef, {
-        ...cleanData,
-        updatedAt: Timestamp.now()
-      })
-      return true
-    } catch (error) {
-      console.error("Error updating event:", error)
-      throw error
-    }
-  }
-  static async updateEvent(eventId: string, eventData: any) {
-    try {
-      // Remove undefined values that Firebase doesnt accept
-      const cleanData = JSON.parse(JSON.stringify(eventData))
-      
-      // Ensure no undefined values exist
-      Object.keys(cleanData).forEach(key => {
-        if (cleanData[key] === undefined) {
-          delete cleanData[key]
-        }
-        if (typeof cleanData[key] === "object" && cleanData[key] !== null) {
-          Object.keys(cleanData[key]).forEach(subKey => {
-            if (cleanData[key][subKey] === undefined) {
-              delete cleanData[key][subKey]
-            }
-          })
-        }
-      })
-      
-      const eventRef = doc(db, "events", eventId)
-      await updateDoc(eventRef, {
-        ...cleanData,
-        updatedAt: Timestamp.now()
-      })
-      return true
-    } catch (error) {
-      console.error("Error updating event:", error)
-      throw error
-    }
-  }
-  static async updateEvent(eventId: string, eventData: any) {
-    try {
-      // Remove undefined values that Firebase doesnt accept
-      const cleanData = JSON.parse(JSON.stringify(eventData))
-      
-      // Ensure no undefined values exist
-      Object.keys(cleanData).forEach(key => {
-        if (cleanData[key] === undefined) {
-          delete cleanData[key]
-        }
-        if (typeof cleanData[key] === "object" && cleanData[key] !== null) {
-          Object.keys(cleanData[key]).forEach(subKey => {
-            if (cleanData[key][subKey] === undefined) {
-              delete cleanData[key][subKey]
-            }
-          })
-        }
-      })
-      
-      const eventRef = doc(db, "events", eventId)
-      await updateDoc(eventRef, {
-        ...cleanData,
-        updatedAt: Timestamp.now()
-      })
-      return true
-    } catch (error) {
-      console.error("Error updating event:", error)
-      throw error
-    }
-  }
-  static async updateEvent(eventId: string, eventData: any) {
-    try {
-      // Remove undefined values that Firebase doesnt accept
-      const cleanData = JSON.parse(JSON.stringify(eventData))
-      
-      // Ensure no undefined values exist
-      Object.keys(cleanData).forEach(key => {
-        if (cleanData[key] === undefined) {
-          delete cleanData[key]
-        }
-        if (typeof cleanData[key] === "object" && cleanData[key] !== null) {
-          Object.keys(cleanData[key]).forEach(subKey => {
-            if (cleanData[key][subKey] === undefined) {
-              delete cleanData[key][subKey]
-            }
-          })
-        }
-      })
-      
-      const eventRef = doc(db, "events", eventId)
-      await updateDoc(eventRef, {
-        ...cleanData,
-        updatedAt: Timestamp.now()
-      })
-      return true
-    } catch (error) {
-      console.error("Error updating event:", error)
+      console.error('Error updating event:', error)
       throw error
     }
   }
@@ -706,7 +324,6 @@ export class AdminService {
 
   // ============ PROMOTERS ============
   static async getPromoters() {
-    // Skip during SSR/build to avoid Firebase permission errors
     if (!isBrowser) return []
 
     try {
@@ -818,39 +435,39 @@ export class AdminService {
         this.getCustomers(),
         this.getPromoters()
       ])
-      
+
       const now = new Date()
       const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
       const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-      
+
       let monthlyRevenue = 0
       let lastMonthRevenue = 0
-      
+
       orders.forEach(order => {
         const orderDate = order.purchaseDate?.toDate?.() || order.createdAt?.toDate?.() || new Date(0)
         const amount = order.pricing?.total || order.totalAmount || order.total || 0
-        
+
         if (orderDate >= thisMonth) {
           monthlyRevenue += amount
         } else if (orderDate >= lastMonth && orderDate < thisMonth) {
           lastMonthRevenue += amount
         }
       })
-      
-      const revenueGrowth = lastMonthRevenue > 0 
+
+      const revenueGrowth = lastMonthRevenue > 0
         ? ((monthlyRevenue - lastMonthRevenue) / lastMonthRevenue * 100).toFixed(1)
         : '0'
-      
+
       const activeEvents = events.filter(event => {
         const eventDate = event.schedule?.date?.toDate?.() || event.date?.toDate?.() || new Date(0)
         return eventDate >= now
       })
-      
+
       const completedEvents = events.filter(event => {
         const eventDate = event.schedule?.date?.toDate?.() || event.date?.toDate?.() || new Date(0)
         return eventDate < now
       })
-      
+
       return {
         totalEvents: events.length,
         activeEvents: activeEvents.length,
@@ -880,8 +497,6 @@ export class AdminService {
 
   // ============ PROMOTIONS (Alias for dashboard compatibility) ============
   static async getPromotions() {
-    // The dashboard expects getPromotions but we have getPromoters
-    // Add this method as an alias for backward compatibility
     return this.getPromoters()
   }
 

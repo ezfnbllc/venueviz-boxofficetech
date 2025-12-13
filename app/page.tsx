@@ -6,13 +6,18 @@ export default function HomePage() {
       <header className="border-b bg-white">
         <nav className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <a href="/" className="text-2xl font-bold text-purple-600">
-              VenueViz
+            <a href="/" className="flex items-center gap-2 text-2xl font-bold text-blue-600">
+              <img
+                src="https://firebasestorage.googleapis.com/v0/b/venueviz.firebasestorage.app/o/BOLogo.png?alt=media"
+                alt="BoxOfficeTech"
+                className="w-8 h-8 rounded object-contain"
+              />
+              BoxOfficeTech
             </a>
             <div className="flex gap-6">
-              <a href="/events" className="hover:text-purple-600">Events</a>
-              <a href="/venues" className="hover:text-purple-600">Venues</a>
-              <a href="/admin" className="hover:text-purple-600">Admin</a>
+              <a href="/events" className="hover:text-blue-600">Events</a>
+              <a href="/venues" className="hover:text-blue-600">Venues</a>
+              <a href="/admin" className="hover:text-blue-600">Admin</a>
             </div>
           </div>
         </nav>
@@ -54,7 +59,7 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="border-t bg-gray-50 py-8 mt-16">
         <div className="container mx-auto px-4 text-center text-gray-600">
-          © 2025 VenueViz BoxOfficeTech. All rights reserved.
+          © 2025 BoxOfficeTech. All rights reserved.
         </div>
       </footer>
     </div>

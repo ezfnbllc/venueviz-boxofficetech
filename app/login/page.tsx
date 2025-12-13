@@ -37,9 +37,16 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
       <div className="w-full max-w-md p-8 bg-black/40 backdrop-blur rounded-2xl border border-white/10">
-        <h1 className="text-3xl font-bold text-center mb-8 bg-gradient-to-r from-purple-400 to-pink-600 bg-clip-text text-transparent">
-          VenueViz Admin
-        </h1>
+        <div className="flex flex-col items-center mb-8">
+          <img
+            src="https://firebasestorage.googleapis.com/v0/b/venueviz.firebasestorage.app/o/BOLogo.png?alt=media"
+            alt="BoxOfficeTech"
+            className="w-16 h-16 rounded-xl object-contain mb-4"
+          />
+          <h1 className="text-3xl font-bold text-center bg-gradient-to-r from-blue-400 to-blue-600 bg-clip-text text-transparent">
+            BoxOfficeTech Admin
+          </h1>
+        </div>
         
         <form onSubmit={handleSubmit} className="space-y-6">
           <input 

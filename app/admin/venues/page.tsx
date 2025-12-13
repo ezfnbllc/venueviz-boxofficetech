@@ -22,7 +22,7 @@ export default function VenuesManagement() {
   const [imageUrls, setImageUrls] = useState<string[]>([])
   const [lookingUpVenue, setLookingUpVenue] = useState(false)
   const [lookupMessage, setLookupMessage] = useState('')
-  
+
   const [formData, setFormData] = useState({
     name: '',
     streetAddress1: '',
@@ -119,7 +119,7 @@ export default function VenuesManagement() {
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     if (files.length === 0) return
-    
+
     setUploadingImages(true)
     try {
       const uploadPromises = files.map(file => StorageService.uploadVenueImage(file))
@@ -148,13 +148,13 @@ export default function VenuesManagement() {
           }
         }
       }
-      
+
       if (editingVenue) {
         await AdminService.updateVenue(editingVenue.id, venueData)
       } else {
         await AdminService.createVenue(venueData)
       }
-      
+
       setShowWizard(false)
       resetForm()
       await loadVenues()
@@ -268,15 +268,15 @@ export default function VenuesManagement() {
       <div className="max-w-7xl mx-auto p-6">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold">Venues Management</h1>
-            <p className="text-gray-400">Configure venues and seating layouts</p>
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Venues Management</h1>
+            <p className="text-slate-500 dark:text-slate-400">Configure venues and seating layouts</p>
           </div>
-          <button 
+          <button
             onClick={() => {
               resetForm()
               setShowWizard(true)
             }}
-            className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg hover:from-purple-700 hover:to-pink-700"
+            className="px-6 py-2 bg-accent-600 rounded-lg hover:bg-accent-700"
           >
             + Add Venue
           </button>
@@ -284,15 +284,15 @@ export default function VenuesManagement() {
 
         {loading ? (
           <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-purple-500"/>
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-accent-500"/>
           </div>
         ) : venues.length === 0 ? (
-          <div className="text-center py-12 bg-black/40 backdrop-blur-xl rounded-xl border border-white/10">
+          <div className="text-center py-12 bg-white dark:bg-slate-800 backdrop-blur-xl rounded-xl border border-slate-200 dark:border-slate-700">
             <div className="text-6xl mb-4">🏛️</div>
-            <p className="text-gray-400 mb-4">No venues yet. Add your first venue!</p>
-            <button 
+            <p className="text-slate-500 dark:text-slate-400 mb-4">No venues yet. Add your first venue!</p>
+            <button
               onClick={() => setShowWizard(true)}
-              className="px-6 py-2 bg-purple-600 rounded-lg hover:bg-purple-700"
+              className="px-6 py-2 bg-accent-600 rounded-lg hover:bg-accent-700"
             >
               Add First Venue
             </button>
@@ -300,71 +300,71 @@ export default function VenuesManagement() {
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {venues.map(venue => (
-              <div key={venue.id} className="bg-black/40 backdrop-blur-xl rounded-xl border border-white/10 overflow-hidden group hover:scale-105 transition-transform">
+              <div key={venue.id} className="bg-white dark:bg-slate-800 backdrop-blur-xl rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden group hover:scale-105 transition-transform">
                 {/* Venue Image */}
                 {venue.images && venue.images[0] && (
                   <div className="h-48 overflow-hidden">
-                    <img 
-                      src={venue.images[0]} 
+                    <img
+                      src={venue.images[0]}
                       alt={venue.name}
                       className="w-full h-full object-cover group-hover:scale-110 transition-transform"
                     />
                   </div>
                 )}
-                
+
                 <div className="p-6">
-                  <h3 className="text-xl font-bold mb-2">{venue.name}</h3>
-                  <p className="text-gray-400 text-sm mb-4">
+                  <h3 className="text-xl font-bold mb-2 text-slate-900 dark:text-white">{venue.name}</h3>
+                  <p className="text-slate-500 dark:text-slate-400 text-sm mb-4">
                     {venue.city || venue.address?.city}, {venue.state || venue.address?.state}
                   </p>
-                  
+
                   <div className="space-y-2 mb-4">
-                    <div className="flex items-center gap-2 text-sm text-gray-400">
+                    <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
                       <span>👥</span>
                       <span>Capacity: {venue.capacity || 'N/A'}</span>
                     </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-400">
+                    <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
                       <span>🎭</span>
                       <span>Type: {venue.type || 'Theater'}</span>
                     </div>
                     {venue.layouts && venue.layouts.length > 0 && (
-                      <div className="flex items-center gap-2 text-sm text-gray-400">
+                      <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
                         <span>📐</span>
                         <span>{venue.layouts.length} Layout{venue.layouts.length !== 1 ? 's' : ''}</span>
                       </div>
                     )}
                   </div>
-                  
+
                   {/* Amenities */}
                   {venue.amenities && venue.amenities.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-4">
                       {venue.amenities.slice(0, 3).map((amenity: string, idx: number) => (
-                        <span key={idx} className="px-2 py-1 bg-purple-600/20 text-purple-400 rounded text-xs">
+                        <span key={idx} className="px-2 py-1 bg-accent-600/20 text-accent-500 dark:text-accent-400 rounded text-xs">
                           {amenity}
                         </span>
                       ))}
                       {venue.amenities.length > 3 && (
-                        <span className="px-2 py-1 bg-gray-600/20 text-gray-400 rounded text-xs">
+                        <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded text-xs">
                           +{venue.amenities.length - 3} more
                         </span>
                       )}
                     </div>
                   )}
-                  
+
                   <div className="flex gap-2">
-                    <button 
+                    <button
                       onClick={() => handleEdit(venue)}
                       className="flex-1 px-3 py-2 bg-blue-600/20 text-blue-400 rounded-lg hover:bg-blue-600/30 text-sm"
                     >
                       Edit
                     </button>
-                    <button 
+                    <button
                       onClick={() => handleOpenLayoutBuilder(venue)}
-                      className="flex-1 px-3 py-2 bg-purple-600/20 text-purple-400 rounded-lg hover:bg-purple-600/30 text-sm"
+                      className="flex-1 px-3 py-2 bg-accent-600/20 text-accent-500 dark:text-accent-400 rounded-lg hover:bg-accent-600/30 text-sm"
                     >
                       Layouts
                     </button>
-                    <button 
+                    <button
                       onClick={() => handleDelete(venue.id)}
                       className="px-3 py-2 bg-red-600/20 text-red-400 rounded-lg hover:bg-red-600/30 text-sm"
                     >
@@ -380,18 +380,18 @@ export default function VenuesManagement() {
         {/* Venue Wizard Modal */}
         {showWizard && (
           <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
-            <div className="bg-gray-900 rounded-xl p-6 w-full max-w-4xl my-8">
+            <div className="bg-white dark:bg-slate-800 rounded-xl p-6 w-full max-w-4xl my-8">
               {/* Wizard Header */}
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold">
+                <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
                   {editingVenue ? 'Edit Venue' : 'Add New Venue'}
                 </h2>
-                <button 
+                <button
                   onClick={() => {
                     setShowWizard(false)
                     resetForm()
                   }}
-                  className="text-gray-400 hover:text-white"
+                  className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 >
                   ✕
                 </button>
@@ -400,12 +400,12 @@ export default function VenuesManagement() {
               {/* Progress Steps */}
               <div className="flex justify-between mb-8">
                 {['Basic Info', 'Location', 'Features', 'Images'].map((step, idx) => (
-                  <div 
+                  <div
                     key={idx}
-                    className={`flex-1 text-center ${idx + 1 <= wizardStep ? 'text-purple-400' : 'text-gray-600'}`}
+                    className={`flex-1 text-center ${idx + 1 <= wizardStep ? 'text-accent-500 dark:text-accent-400' : 'text-slate-500 dark:text-slate-400'}`}
                   >
                     <div className={`w-8 h-8 mx-auto mb-2 rounded-full flex items-center justify-center ${
-                      idx + 1 <= wizardStep ? 'bg-purple-600' : 'bg-gray-700'
+                      idx + 1 <= wizardStep ? 'bg-accent-600' : 'bg-slate-200 dark:bg-slate-700'
                     }`}>
                       {idx + 1}
                     </div>
@@ -418,20 +418,20 @@ export default function VenuesManagement() {
               {wizardStep === 1 && (
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm mb-2">Venue Name</label>
+                    <label className="block text-sm mb-2 text-slate-900 dark:text-white">Venue Name</label>
                     <div className="flex gap-2">
                       <input
                         type="text"
                         value={formData.name}
                         onChange={(e) => setFormData({...formData, name: e.target.value})}
-                        className="flex-1 px-4 py-2 bg-white/10 rounded-lg"
+                        className="flex-1 px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white"
                         placeholder="Enter venue name"
                       />
                       <button
                         type="button"
                         onClick={handleLookupVenue}
                         disabled={lookingUpVenue || !formData.name.trim()}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:opacity-50 rounded-lg text-sm whitespace-nowrap flex items-center gap-2"
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 dark:disabled:bg-slate-700 disabled:opacity-50 rounded-lg text-sm whitespace-nowrap flex items-center gap-2"
                       >
                         {lookingUpVenue ? (
                           <>
@@ -448,28 +448,28 @@ export default function VenuesManagement() {
                         {lookupMessage}
                       </p>
                     )}
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                       Enter the venue name and click "Lookup Details" to auto-fill address and other information
                     </p>
                   </div>
 
                   <div>
-                    <label className="block text-sm mb-2">Description</label>
+                    <label className="block text-sm mb-2 text-slate-900 dark:text-white">Description</label>
                     <textarea
                       value={formData.description}
                       onChange={(e) => setFormData({...formData, description: e.target.value})}
-                      className="w-full px-4 py-2 bg-white/10 rounded-lg h-32"
+                      className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg h-32 text-slate-900 dark:text-white"
                       placeholder="Enter venue description"
                     />
                   </div>
-                  
+
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm mb-2">Venue Type</label>
+                      <label className="block text-sm mb-2 text-slate-900 dark:text-white">Venue Type</label>
                       <select
                         value={formData.type}
                         onChange={(e) => setFormData({...formData, type: e.target.value})}
-                        className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                        className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white"
                       >
                         <option value="theater">Theater</option>
                         <option value="arena">Arena</option>
@@ -479,23 +479,23 @@ export default function VenuesManagement() {
                         <option value="outdoor">Outdoor</option>
                       </select>
                     </div>
-                    
+
                     <div>
-                      <label className="block text-sm mb-2">Capacity</label>
+                      <label className="block text-sm mb-2 text-slate-900 dark:text-white">Capacity</label>
                       <input
                         type="number"
                         value={formData.capacity}
                         onChange={(e) => setFormData({...formData, capacity: parseInt(e.target.value)})}
-                        className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                        className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white"
                         placeholder="1000"
                       />
                     </div>
                   </div>
-                  
+
                   <div className="flex justify-end gap-3">
-                    <button 
+                    <button
                       onClick={() => setWizardStep(2)}
-                      className="px-6 py-2 bg-purple-600 rounded-lg"
+                      className="px-6 py-2 bg-accent-600 rounded-lg hover:bg-accent-700"
                     >
                       Next
                     </button>
@@ -507,93 +507,93 @@ export default function VenuesManagement() {
               {wizardStep === 2 && (
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm mb-2">Street Address</label>
+                    <label className="block text-sm mb-2 text-slate-900 dark:text-white">Street Address</label>
                     <input
                       type="text"
                       value={formData.streetAddress1}
                       onChange={(e) => setFormData({...formData, streetAddress1: e.target.value})}
-                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                      className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white"
                       placeholder="123 Main Street"
                     />
                   </div>
-                  
+
                   <div>
-                    <label className="block text-sm mb-2">Address Line 2 (Optional)</label>
+                    <label className="block text-sm mb-2 text-slate-900 dark:text-white">Address Line 2 (Optional)</label>
                     <input
                       type="text"
                       value={formData.streetAddress2}
                       onChange={(e) => setFormData({...formData, streetAddress2: e.target.value})}
-                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                      className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white"
                       placeholder="Suite, Floor, etc."
                     />
                   </div>
-                  
+
                   <div className="grid grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-sm mb-2">City</label>
+                      <label className="block text-sm mb-2 text-slate-900 dark:text-white">City</label>
                       <input
                         type="text"
                         value={formData.city}
                         onChange={(e) => setFormData({...formData, city: e.target.value})}
-                        className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                        className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white"
                       />
                     </div>
-                    
+
                     <div>
-                      <label className="block text-sm mb-2">State</label>
+                      <label className="block text-sm mb-2 text-slate-900 dark:text-white">State</label>
                       <input
                         type="text"
                         value={formData.state}
                         onChange={(e) => setFormData({...formData, state: e.target.value})}
-                        className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                        className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white"
                       />
                     </div>
-                    
+
                     <div>
-                      <label className="block text-sm mb-2">ZIP Code</label>
+                      <label className="block text-sm mb-2 text-slate-900 dark:text-white">ZIP Code</label>
                       <input
                         type="text"
                         value={formData.zipCode}
                         onChange={(e) => setFormData({...formData, zipCode: e.target.value})}
-                        className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                        className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white"
                       />
                     </div>
                   </div>
-                  
+
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm mb-2">Contact Email</label>
+                      <label className="block text-sm mb-2 text-slate-900 dark:text-white">Contact Email</label>
                       <input
                         type="email"
                         value={formData.contactEmail}
                         onChange={(e) => setFormData({...formData, contactEmail: e.target.value})}
-                        className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                        className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white"
                         placeholder="venue@example.com"
                       />
                     </div>
-                    
+
                     <div>
-                      <label className="block text-sm mb-2">Contact Phone</label>
+                      <label className="block text-sm mb-2 text-slate-900 dark:text-white">Contact Phone</label>
                       <input
                         type="tel"
                         value={formData.contactPhone}
                         onChange={(e) => setFormData({...formData, contactPhone: e.target.value})}
-                        className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                        className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white"
                         placeholder="(555) 123-4567"
                       />
                     </div>
                   </div>
-                  
+
                   <div className="flex justify-between">
-                    <button 
+                    <button
                       onClick={() => setWizardStep(1)}
-                      className="px-6 py-2 bg-gray-700 rounded-lg"
+                      className="px-6 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white"
                     >
                       Back
                     </button>
-                    <button 
+                    <button
                       onClick={() => setWizardStep(3)}
-                      className="px-6 py-2 bg-purple-600 rounded-lg"
+                      className="px-6 py-2 bg-accent-600 rounded-lg hover:bg-accent-700"
                     >
                       Next
                     </button>
@@ -605,32 +605,32 @@ export default function VenuesManagement() {
               {wizardStep === 3 && (
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm mb-2">Parking Capacity</label>
+                    <label className="block text-sm mb-2 text-slate-900 dark:text-white">Parking Capacity</label>
                     <input
                       type="number"
                       value={formData.parkingCapacity}
                       onChange={(e) => setFormData({...formData, parkingCapacity: parseInt(e.target.value)})}
-                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                      className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white"
                       placeholder="500"
                     />
                   </div>
-                  
+
                   <div>
-                    <label className="block text-sm mb-2">Website</label>
+                    <label className="block text-sm mb-2 text-slate-900 dark:text-white">Website</label>
                     <input
                       type="url"
                       value={formData.website}
                       onChange={(e) => setFormData({...formData, website: e.target.value})}
-                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                      className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white"
                       placeholder="https://venue-website.com"
                     />
                   </div>
-                  
+
                   <div>
-                    <label className="block text-sm mb-4">Amenities</label>
+                    <label className="block text-sm mb-4 text-slate-900 dark:text-white">Amenities</label>
                     <div className="grid grid-cols-3 gap-3">
                       {[
-                        'Parking', 'WiFi', 'Wheelchair Accessible', 
+                        'Parking', 'WiFi', 'Wheelchair Accessible',
                         'Food Service', 'Bar', 'VIP Boxes',
                         'Coat Check', 'ATM', 'Merchandise Shop'
                       ].map(amenity => (
@@ -641,22 +641,22 @@ export default function VenuesManagement() {
                             onChange={() => toggleAmenity(amenity)}
                             className="rounded"
                           />
-                          <span className="text-sm">{amenity}</span>
+                          <span className="text-sm text-slate-900 dark:text-white">{amenity}</span>
                         </label>
                       ))}
                     </div>
                   </div>
-                  
+
                   <div className="flex justify-between">
-                    <button 
+                    <button
                       onClick={() => setWizardStep(2)}
-                      className="px-6 py-2 bg-gray-700 rounded-lg"
+                      className="px-6 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white"
                     >
                       Back
                     </button>
-                    <button 
+                    <button
                       onClick={() => setWizardStep(4)}
-                      className="px-6 py-2 bg-purple-600 rounded-lg"
+                      className="px-6 py-2 bg-accent-600 rounded-lg hover:bg-accent-700"
                     >
                       Next
                     </button>
@@ -668,26 +668,26 @@ export default function VenuesManagement() {
               {wizardStep === 4 && (
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm mb-2">Venue Images</label>
+                    <label className="block text-sm mb-2 text-slate-900 dark:text-white">Venue Images</label>
                     <input
                       type="file"
                       multiple
                       accept="image/*"
                       onChange={handleImageUpload}
-                      className="w-full px-4 py-2 bg-white/10 rounded-lg"
+                      className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white"
                       disabled={uploadingImages}
                     />
                     {uploadingImages && (
-                      <p className="text-xs text-purple-400 mt-2">Uploading images...</p>
+                      <p className="text-xs text-accent-500 dark:text-accent-400 mt-2">Uploading images...</p>
                     )}
                   </div>
-                  
+
                   {imageUrls.length > 0 && (
                     <div className="grid grid-cols-4 gap-4">
                       {imageUrls.map((url, index) => (
                         <div key={index} className="relative">
                           <img src={url} alt="" className="w-full h-24 object-cover rounded" />
-                          <button 
+                          <button
                             onClick={() => {
                               const newUrls = imageUrls.filter((_, i) => i !== index)
                               setImageUrls(newUrls)
@@ -701,15 +701,15 @@ export default function VenuesManagement() {
                       ))}
                     </div>
                   )}
-                  
+
                   <div className="flex justify-between">
-                    <button 
+                    <button
                       onClick={() => setWizardStep(3)}
-                      className="px-6 py-2 bg-gray-700 rounded-lg"
+                      className="px-6 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white"
                     >
                       Back
                     </button>
-                    <button 
+                    <button
                       onClick={handleSubmit}
                       className="px-6 py-2 bg-green-600 rounded-lg hover:bg-green-700"
                     >
