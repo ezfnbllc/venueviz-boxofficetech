@@ -6,7 +6,7 @@ import { ThemeProvider } from '@/lib/theme-context'
 export default function RootLayout({children}:{children:React.ReactNode}){
   return(
     <html lang="en" suppressHydrationWarning>
-      <body className="bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 text-white">
+      <body className="bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-50 transition-colors duration-200">
         <ThemeProvider>
           <FirebaseAuthProvider>
             {children}
