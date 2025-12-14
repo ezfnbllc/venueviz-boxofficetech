@@ -6,13 +6,26 @@ Build a WordPress-like content management system for tenants with `brandingType:
 
 ---
 
+## Confirmed Decisions
+
+| Decision | Choice | Notes |
+|----------|--------|-------|
+| **Theme Import** | ZIP upload first, Google Drive API later | Hybrid approach - ZIP is simpler and ThemeForest distributes as ZIP |
+| **Template Parser** | Yes | Auto-detect content slots from ThemeForest HTML files |
+| **Custom JavaScript** | Yes | Allow with security sandboxing (iframe isolation) |
+| **Multi-language** | Yes | Support multiple language versions per page |
+| **Version Control** | 3 versions | Keep last 3 theme versions for rollback |
+
+---
+
 ## System Architecture
 
 ### High-Level Flow
 
 ```
-ThemeForest Purchase → Google Drive Upload → Admin Theme Import →
-Tenant Asset Storage → CMS Configuration → Live White-Label Site
+ThemeForest Purchase → ZIP Download → Admin Theme Import →
+Template Parser (auto-detect slots) → Tenant Asset Storage →
+CMS Configuration → Multi-language Content → Live White-Label Site
 ```
 
 ---
@@ -152,7 +165,7 @@ interface ThemeTemplate {
   name: string                 // e.g., "Home", "Event List", "Event Detail"
   type: 'page' | 'section' | 'component'
   htmlFile: string            // Path to original HTML file
-  slots: TemplateSlot[]       // Customizable content areas
+  slots: TemplateSlot[]       // Customizable content areas (auto-detected)
   thumbnail?: string
 }
 
@@ -162,8 +175,114 @@ interface TemplateSlot {
   type: 'text' | 'html' | 'image' | 'gallery' | 'dynamic'
   selector: string           // CSS selector for replacement
   defaultContent?: string
+  detectedBy: 'auto' | 'manual'  // How slot was identified
+}
+
+// Theme version for rollback (keep last 3)
+interface ThemeVersion {
+  id: string
+  themeId: string
+  version: string            // e.g., "1.0.0", "1.0.1"
+  config: ThemeConfig
+  assets: ThemeAssets        // Snapshot of asset paths
+  createdAt: Timestamp
+  createdBy: string
+  changelog?: string
 }
 ```
+
+### 1.4 Template Parser System
+
+**Auto-detection of Content Slots from ThemeForest HTML**
+
+The template parser analyzes HTML files and identifies editable content areas using:
+
+1. **Data Attributes** (highest priority)
+   - `data-cms-slot="hero-title"` - Explicit slot marker
+   - `data-cms-type="text|html|image|gallery"` - Content type
+
+2. **Semantic HTML Elements**
+   - `<h1>`, `<h2>` → Text slots (headings)
+   - `<p>`, `<article>` → HTML slots (content blocks)
+   - `<img>` with specific classes → Image slots
+   - `<section>`, `<div>` with IDs → Section containers
+
+3. **Common CSS Class Patterns**
+   - `.hero-title`, `.hero-subtitle` → Hero text slots
+   - `.content-area`, `.main-content` → HTML content slots
+   - `.gallery`, `.image-grid` → Gallery slots
+   - `.cta-button`, `.btn-primary` → CTA slots
+
+4. **ThemeForest Conventions**
+   - Common patterns from popular themes (Flavor, Developer Pro, etc.)
+   - Bootstrap grid detection
+   - Swiper/Slick carousel detection
+
+```typescript
+interface TemplateParserResult {
+  templates: ParsedTemplate[]
+  assets: {
+    css: string[]
+    js: string[]
+    images: string[]
+    fonts: string[]
+  }
+  dependencies: {
+    jquery: boolean
+    bootstrap: boolean
+    swiper: boolean
+    [key: string]: boolean
+  }
+  warnings: string[]          // Parsing issues
+}
+
+interface ParsedTemplate {
+  filename: string
+  suggestedName: string       // e.g., "Home Page" from index.html
+  slots: DetectedSlot[]
+  structure: {
+    hasHeader: boolean
+    hasFooter: boolean
+    hasSidebar: boolean
+    sections: string[]        // Section IDs/classes found
+  }
+}
+
+interface DetectedSlot {
+  selector: string
+  suggestedName: string
+  suggestedType: 'text' | 'html' | 'image' | 'gallery' | 'dynamic'
+  confidence: 'high' | 'medium' | 'low'
+  defaultContent: string
+  attributes: Record<string, string>
+}
+
+class TemplateParserService {
+  // Parse ZIP and extract templates
+  async parseThemeZip(zipFile: File): Promise<TemplateParserResult>
+
+  // Parse single HTML file
+  async parseHTMLFile(html: string, filename: string): Promise<ParsedTemplate>
+
+  // User confirms/edits detected slots
+  async confirmSlots(
+    templateId: string,
+    confirmedSlots: TemplateSlot[]
+  ): Promise<void>
+
+  // Regenerate template with slot markers
+  async generateEditableTemplate(
+    template: ParsedTemplate
+  ): Promise<string>
+}
+```
+
+**Parser UI Flow:**
+1. Upload ZIP → Parse automatically
+2. Show detected templates with slot preview
+3. Admin reviews/edits detected slots
+4. Confirm and save template configuration
+5. Slots become editable in page builder
 
 ### 1.2 Asset Upload Service
 
@@ -272,7 +391,14 @@ interface TenantPage {
   slug: string              // URL path e.g., "about-us"
   description?: string
 
-  // SEO
+  // Multi-language Support
+  defaultLanguage: string   // e.g., "en"
+  availableLanguages: string[]  // e.g., ["en", "es", "fr"]
+  translations: {
+    [langCode: string]: PageTranslation
+  }
+
+  // SEO (per language in translations)
   seo: {
     title?: string
     description?: string
@@ -288,7 +414,7 @@ interface TenantPage {
   // Template
   templateId: string
 
-  // Content Blocks
+  // Content Blocks (default language)
   sections: PageSection[]
 
   // Status
@@ -306,6 +432,23 @@ interface TenantPage {
   updatedAt: Timestamp
   createdBy: string
   updatedBy: string
+}
+
+// Multi-language page content
+interface PageTranslation {
+  langCode: string          // e.g., "es"
+  langName: string          // e.g., "Español"
+  title: string
+  slug: string              // Localized slug e.g., "sobre-nosotros"
+  seo: {
+    title?: string
+    description?: string
+    keywords?: string[]
+  }
+  sections: PageSection[]   // Translated section content
+  status: 'draft' | 'published'
+  translatedBy?: string
+  translatedAt?: Timestamp
 }
 
 interface PageSection {
@@ -417,6 +560,30 @@ interface CustomHTMLContent {
   html: string
   css?: string
   js?: string
+  sandboxed: boolean        // Run JS in sandboxed iframe
+}
+
+// Custom JavaScript with security controls
+interface CustomCodeConfig {
+  enabled: boolean
+  html: string
+  css: string
+  js: string
+
+  // Security settings
+  sandbox: {
+    enabled: boolean                    // Iframe isolation
+    allowScripts: boolean               // allow-scripts
+    allowForms: boolean                 // allow-forms
+    allowPopups: boolean                // allow-popups
+    allowSameOrigin: boolean            // allow-same-origin (careful!)
+  }
+
+  // Allowed external resources
+  allowedDomains: string[]              // CDN domains allowed
+
+  // Execution context
+  executeOn: 'load' | 'domready' | 'manual'
 }
 ```
 
@@ -510,6 +677,112 @@ interface NavMenuItem {
   openInNewTab?: boolean
 }
 ```
+
+### 2.4 Multi-Language System
+
+**Tenant Language Configuration**
+
+```typescript
+interface TenantLanguageConfig {
+  tenantId: string
+  defaultLanguage: string           // e.g., "en"
+  enabledLanguages: LanguageConfig[]
+  autoDetect: boolean               // Detect from browser
+  urlStrategy: 'subdirectory' | 'query' | 'subdomain'
+  // subdirectory: /es/about-us
+  // query: /about-us?lang=es
+  // subdomain: es.tenant.com/about-us
+}
+
+interface LanguageConfig {
+  code: string              // ISO 639-1 code e.g., "es"
+  name: string              // Display name e.g., "Español"
+  nativeName: string        // Native name e.g., "Español"
+  direction: 'ltr' | 'rtl'  // Text direction
+  enabled: boolean
+  isDefault: boolean
+}
+
+// Supported languages (initial set)
+const SUPPORTED_LANGUAGES = [
+  { code: 'en', name: 'English', nativeName: 'English' },
+  { code: 'es', name: 'Spanish', nativeName: 'Español' },
+  { code: 'fr', name: 'French', nativeName: 'Français' },
+  { code: 'de', name: 'German', nativeName: 'Deutsch' },
+  { code: 'pt', name: 'Portuguese', nativeName: 'Português' },
+  { code: 'it', name: 'Italian', nativeName: 'Italiano' },
+  { code: 'zh', name: 'Chinese', nativeName: '中文' },
+  { code: 'ja', name: 'Japanese', nativeName: '日本語' },
+  { code: 'ko', name: 'Korean', nativeName: '한국어' },
+  { code: 'ar', name: 'Arabic', nativeName: 'العربية', direction: 'rtl' },
+]
+```
+
+**Translation Workflow UI:**
+1. Page builder shows language switcher tabs
+2. Edit content per language
+3. Copy from default language option
+4. Translation progress indicator (% complete)
+5. Publish per language independently
+
+**Portal Language Switching:**
+- Language selector in header/footer
+- Persist preference in localStorage
+- URL reflects current language
+- SEO: `hreflang` tags for all versions
+
+---
+
+### 2.5 Theme Version Control (3 Versions)
+
+**Version Management:**
+
+```typescript
+interface ThemeVersionManager {
+  // Create new version on publish
+  async createVersion(
+    themeId: string,
+    changelog?: string
+  ): Promise<ThemeVersion>
+
+  // List versions (max 3)
+  async getVersions(themeId: string): Promise<ThemeVersion[]>
+
+  // Rollback to previous version
+  async rollback(
+    themeId: string,
+    versionId: string
+  ): Promise<void>
+
+  // Compare versions
+  async compareVersions(
+    versionId1: string,
+    versionId2: string
+  ): Promise<VersionDiff>
+
+  // Auto-cleanup old versions (keep last 3)
+  async cleanupOldVersions(themeId: string): Promise<void>
+}
+
+interface VersionDiff {
+  configChanges: {
+    field: string
+    oldValue: any
+    newValue: any
+  }[]
+  assetChanges: {
+    added: string[]
+    removed: string[]
+    modified: string[]
+  }
+}
+```
+
+**Version UI:**
+- Version history sidebar in theme editor
+- Rollback button with confirmation
+- Diff viewer for comparing changes
+- Auto-version on publish
 
 ---
 
@@ -761,43 +1034,63 @@ export function PageRenderer({ page, theme }: PageRendererProps) {
 - CDN for static assets (Firebase Storage)
 - Cache theme config in browser
 - Incremental static regeneration for pages
+- Compress CSS/JS on upload
+- Image optimization (WebP conversion)
 
 ### Security
-- Validate file uploads (type, size)
-- Sanitize HTML content
-- CORS configuration for assets
-- Rate limiting on uploads
+
+**File Upload Security:**
+- Validate file types (whitelist: css, js, html, jpg, png, gif, webp, svg, woff2, woff, ttf, otf)
+- Max file size limits (CSS: 5MB, JS: 2MB, Images: 10MB, Fonts: 5MB)
+- Virus scanning on upload (optional: ClamAV integration)
+- Sanitize filenames (remove special characters)
+
+**Custom JavaScript Security:**
+- **Sandbox Isolation**: Execute custom JS in sandboxed iframe
+- **CSP Headers**: Strict Content Security Policy for portal pages
+- **Domain Whitelist**: Only allow scripts from approved CDNs
+- **Code Review Option**: Master admin approval for custom JS (optional)
+- **Monitoring**: Log JS errors and suspicious activity
+
+```typescript
+// Sandboxed iframe for custom JS execution
+const SANDBOX_PERMISSIONS = [
+  'allow-scripts',        // Required for JS execution
+  'allow-forms',          // If forms are needed
+  // 'allow-same-origin', // DANGEROUS - avoid if possible
+]
+
+// CSP for portal pages with custom JS
+const CSP_HEADER = `
+  default-src 'self';
+  script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com;
+  style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+  font-src 'self' https://fonts.gstatic.com;
+  img-src 'self' data: https: blob:;
+  frame-src 'self' https://www.youtube.com https://player.vimeo.com;
+`
+```
+
+**HTML Sanitization:**
+- Use DOMPurify for user-provided HTML
+- Strip `<script>` tags from rich text content
+- Whitelist allowed HTML tags and attributes
 
 ### Scalability
 - Asset versioning for cache busting
 - Separate storage buckets per tenant (optional)
-- Background jobs for theme imports
+- Background jobs for theme imports (Cloud Functions)
+- Database indexing for multi-tenant queries
+- Version cleanup cron job (keep last 3)
 
 ### Dependencies
 - Rich text: TipTap or Slate.js
 - Drag-and-drop: dnd-kit or react-beautiful-dnd
 - Image editing: react-image-crop
-- Code editor: Monaco Editor (for custom HTML/CSS)
-
----
-
-## Questions for Clarification
-
-1. **Google Drive Integration**: Should we build a direct Google Drive API integration for theme import, or manual ZIP download + upload?
-
-2. **Theme Marketplace**: Will there be a shared theme marketplace, or is each theme unique per tenant?
-
-3. **Template Parser**: Should we build HTML template parsing to auto-detect content slots from ThemeForest HTML files?
-
-4. **Multi-language**: Should pages support multiple language versions?
-
-5. **Version Control**: How many theme versions should we keep for rollback?
-
-6. **Custom Code**: Should tenant admins be able to add custom JavaScript? (Security implications)
-
-7. **Email Templates**: Should the CMS also handle email template customization?
-
-8. **Event Widget Integration**: How should event listings integrate with the page builder? (Embedded component vs separate page)
+- Code editor: Monaco Editor (for custom HTML/CSS/JS)
+- HTML parsing: cheerio (Node.js) or DOMParser (browser)
+- ZIP handling: JSZip
+- HTML sanitization: DOMPurify
 
 ---
 
@@ -806,38 +1099,99 @@ export function PageRenderer({ page, theme }: PageRendererProps) {
 ```
 lib/
   services/
-    themeAssetService.ts      # Theme upload/management
-    cmsPageService.ts         # Page CRUD
-    cmsNavigationService.ts   # Navigation management
+    themeAssetService.ts        # Theme upload/management
+    templateParserService.ts    # HTML template parsing & slot detection
+    cmsPageService.ts           # Page CRUD with translations
+    cmsNavigationService.ts     # Navigation management
+    themeVersionService.ts      # Version control (3 versions)
+    customCodeService.ts        # Custom JS/CSS with sandboxing
   types/
-    cms.ts                    # All CMS types
+    cms.ts                      # All CMS types
+    translations.ts             # Multi-language types
   context/
-    ThemeContext.tsx          # Theme provider
+    ThemeContext.tsx            # Theme provider
+    LanguageContext.tsx         # Language provider
+  utils/
+    htmlSanitizer.ts            # DOMPurify wrapper
+    zipHandler.ts               # JSZip utilities
 
 components/
   cms/
-    PageBuilder/              # Page builder components
-    SectionTypes/             # Section type editors
-    Editors/                  # Shared editor components
-    Preview/                  # Preview components
-    Navigation/               # Menu builder
+    PageBuilder/                # Page builder components
+      index.tsx
+      SectionList.tsx
+      SectionEditor.tsx
+      LanguageTabs.tsx          # Multi-language content editing
+    SectionTypes/               # Section type editors
+    Editors/
+      RichTextEditor.tsx
+      CodeEditor.tsx            # Monaco for custom HTML/CSS/JS
+      ImagePicker.tsx
+    Preview/
+      PagePreview.tsx
+      SandboxedPreview.tsx      # Isolated preview for custom JS
+    ThemeImport/
+      ZipUploader.tsx
+      SlotDetector.tsx          # Template parser UI
+      SlotEditor.tsx
+    VersionControl/
+      VersionHistory.tsx
+      VersionDiff.tsx
+      RollbackModal.tsx
+    Navigation/
+      NavigationEditor.tsx
 
 app/
   admin/white-label/
-    themes/                   # Theme management pages
-    pages/                    # Page builder pages
-    navigation/               # Navigation editor
-    assets/                   # Media library
+    themes/
+      page.tsx                  # Theme list & import
+      [themeId]/
+        page.tsx                # Theme configuration
+        versions/
+          page.tsx              # Version history
+    pages/
+      page.tsx                  # Page list
+      [pageId]/
+        page.tsx                # Page builder with language tabs
+    navigation/
+      page.tsx                  # Menu builder
+    assets/
+      page.tsx                  # Media library
+    languages/
+      page.tsx                  # Language configuration
   api/cms/
-    themes/                   # Theme API
-    pages/                    # Pages API
-    assets/                   # Assets API
-    navigation/               # Navigation API
+    themes/
+      route.ts                  # Theme CRUD
+      [themeId]/
+        publish/route.ts
+        rollback/route.ts
+        parse/route.ts          # Template parsing
+    pages/
+      route.ts                  # Page CRUD with translations
+    assets/
+      route.ts
+    navigation/
+      route.ts
   p/[slug]/
-    layout.tsx               # Theme-aware layout
-    [pageSlug]/              # Dynamic page routes
+    layout.tsx                  # Theme-aware layout with language
+    page.tsx                    # Home page
+    [lang]/                     # Language-specific routes
+      [pageSlug]/
+        page.tsx                # Translated page
 ```
 
 ---
 
-This plan provides a comprehensive, WordPress-like CMS system for advanced white-label tenants. The phased approach allows for iterative development and early feedback.
+## Summary
+
+This comprehensive plan provides a WordPress-like CMS system for advanced white-label tenants with:
+
+- **Theme Import**: ZIP upload with auto-parsing of ThemeForest templates
+- **Template Parser**: Auto-detect editable content slots from HTML
+- **Page Builder**: Drag-and-drop sections with live preview
+- **Multi-Language**: Full translation support for pages (10 languages)
+- **Custom Code**: Secure JavaScript/CSS with sandbox isolation
+- **Version Control**: Keep last 3 theme versions with rollback
+- **Security**: CSP headers, HTML sanitization, file validation
+
+Ready for implementation upon approval.
