@@ -127,6 +127,7 @@ export default function WhiteLabelPage() {
   // New user form state
   const [newUserData, setNewUserData] = useState({ email: '', password: '', name: '' })
   const [userFormErrors, setUserFormErrors] = useState<Record<string, string>>({})
+  const [editingUser, setEditingUser] = useState<any>(null)
 
   // Branding form state
   const [brandingForm, setBrandingForm] = useState({
@@ -574,6 +575,51 @@ export default function WhiteLabelPage() {
     } catch (error) {
       console.error('Error removing user:', error)
       showToast('Failed to remove user', 'error')
+    }
+  }
+
+  const handleStartEditUser = (userId: string, userData: any) => {
+    setEditingUser({
+      id: userId,
+      name: userData?.name || '',
+      email: userData?.email || '',
+      phone: userData?.phone || '',
+      title: userData?.title || '',
+    })
+    setUserFormErrors({})
+  }
+
+  const handleCancelEditUser = () => {
+    setEditingUser(null)
+    setUserFormErrors({})
+  }
+
+  const validateEditUser = (): boolean => {
+    const errors: Record<string, string> = {}
+    if (!editingUser?.name?.trim()) errors.name = 'Name is required'
+    if (!editingUser?.email?.trim()) errors.email = 'Email is required'
+    else if (!isValidEmail(editingUser.email)) errors.email = 'Invalid email format'
+    if (editingUser?.phone && !isValidPhone(editingUser.phone)) errors.phone = 'Invalid phone format'
+    setUserFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
+  const handleUpdateUser = async () => {
+    if (!editingUser || !validateEditUser()) return
+    try {
+      await AdminService.updateUser(editingUser.id, {
+        name: editingUser.name,
+        email: editingUser.email,
+        phone: editingUser.phone || null,
+        title: editingUser.title || null,
+      })
+      showToast(`User ${editingUser.name} updated successfully`)
+      setEditingUser(null)
+      setUserFormErrors({})
+      await loadData()
+    } catch (error: any) {
+      console.error('Error updating user:', error)
+      showToast(error.message || 'Failed to update user', 'error')
     }
   }
 
@@ -1174,18 +1220,35 @@ export default function WhiteLabelPage() {
                         const userData = typeof user === 'string' ? users[user] : user
                         const userName = userData?.name || 'Unknown User'
                         const userEmail = userData?.email || (typeof user === 'string' ? user : 'No email')
+                        const userPhone = userData?.phone || ''
+                        const userTitle = userData?.title || ''
                         return (
                           <div key={userId} className="bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg p-3 flex justify-between items-center">
                             <div>
                               <p className="font-medium text-slate-900 dark:text-white">{userName}</p>
                               <p className="text-sm text-slate-500 dark:text-gray-400">{userEmail}</p>
+                              {(userPhone || userTitle) && (
+                                <p className="text-xs text-slate-400 dark:text-gray-500">
+                                  {userTitle && <span>{userTitle}</span>}
+                                  {userTitle && userPhone && <span> • </span>}
+                                  {userPhone && <span>{userPhone}</span>}
+                                </p>
+                              )}
                             </div>
-                            <button
-                              onClick={() => handleRemoveUser(userId)}
-                              className="px-3 py-1 bg-red-100 dark:bg-red-600/20 text-red-600 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-600/30 text-sm"
-                            >
-                              Remove
-                            </button>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleStartEditUser(userId, userData)}
+                                className="px-3 py-1 bg-blue-100 dark:bg-blue-600/20 text-blue-600 dark:text-blue-400 rounded hover:bg-blue-200 dark:hover:bg-blue-600/30 text-sm"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleRemoveUser(userId)}
+                                className="px-3 py-1 bg-red-100 dark:bg-red-600/20 text-red-600 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-600/30 text-sm"
+                              >
+                                Remove
+                              </button>
+                            </div>
                           </div>
                         )
                       })}
@@ -1195,68 +1258,136 @@ export default function WhiteLabelPage() {
                   )}
                 </div>
 
-                {/* Add New User */}
-                <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-slate-200 dark:border-white/10">
-                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Add New User</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Name *</label>
-                      <input
-                        type="text"
-                        value={newUserData.name}
-                        onChange={(e) => setNewUserData({ ...newUserData, name: e.target.value })}
-                        className={`w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border ${userFormErrors.name ? 'border-red-500' : 'border-slate-200 dark:border-slate-600'} focus:border-purple-500 focus:outline-none`}
-                        placeholder="User Name"
-                      />
-                      {userFormErrors.name && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{userFormErrors.name}</p>}
+                {/* Edit User Form */}
+                {editingUser && (
+                  <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-purple-500/30">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Edit User</h3>
+                      <button
+                        onClick={handleCancelEditUser}
+                        className="text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-gray-200"
+                      >
+                        Cancel
+                      </button>
                     </div>
-                    <div>
-                      <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Email *</label>
-                      <input
-                        type="email"
-                        value={newUserData.email}
-                        onChange={(e) => setNewUserData({ ...newUserData, email: e.target.value })}
-                        className={`w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border ${userFormErrors.email ? 'border-red-500' : 'border-slate-200 dark:border-slate-600'} focus:border-purple-500 focus:outline-none`}
-                        placeholder="user@example.com"
-                      />
-                      {userFormErrors.email && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{userFormErrors.email}</p>}
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Name *</label>
+                        <input
+                          type="text"
+                          value={editingUser.name}
+                          onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
+                          className={`w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border ${userFormErrors.name ? 'border-red-500' : 'border-slate-200 dark:border-slate-600'} focus:border-purple-500 focus:outline-none`}
+                          placeholder="User Name"
+                        />
+                        {userFormErrors.name && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{userFormErrors.name}</p>}
+                      </div>
+                      <div>
+                        <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Email *</label>
+                        <input
+                          type="email"
+                          value={editingUser.email}
+                          onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
+                          className={`w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border ${userFormErrors.email ? 'border-red-500' : 'border-slate-200 dark:border-slate-600'} focus:border-purple-500 focus:outline-none`}
+                          placeholder="user@example.com"
+                        />
+                        {userFormErrors.email && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{userFormErrors.email}</p>}
+                      </div>
+                      <div>
+                        <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Title</label>
+                        <input
+                          type="text"
+                          value={editingUser.title}
+                          onChange={(e) => setEditingUser({ ...editingUser, title: e.target.value })}
+                          className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 focus:border-purple-500 focus:outline-none"
+                          placeholder="e.g. Manager, Staff"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Phone</label>
+                        <input
+                          type="tel"
+                          value={editingUser.phone}
+                          onChange={(e) => setEditingUser({ ...editingUser, phone: e.target.value })}
+                          className={`w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border ${userFormErrors.phone ? 'border-red-500' : 'border-slate-200 dark:border-slate-600'} focus:border-purple-500 focus:outline-none`}
+                          placeholder="(555) 123-4567"
+                        />
+                        {userFormErrors.phone && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{userFormErrors.phone}</p>}
+                      </div>
+                      <button
+                        onClick={handleUpdateUser}
+                        className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors font-medium"
+                      >
+                        Update User
+                      </button>
                     </div>
-                    <div>
-                      <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Password *</label>
-                      <input
-                        type="password"
-                        value={newUserData.password}
-                        onChange={(e) => setNewUserData({ ...newUserData, password: e.target.value })}
-                        className={`w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border ${userFormErrors.password ? 'border-red-500' : 'border-slate-200 dark:border-slate-600'} focus:border-purple-500 focus:outline-none`}
-                        placeholder="••••••••"
-                      />
-                      {userFormErrors.password && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{userFormErrors.password}</p>}
-                      {newUserData.password && (
-                        <div className="mt-2">
-                          <div className="flex gap-1">
-                            {[1,2,3,4,5].map(i => (
-                              <div
-                                key={i}
-                                className={`h-1 flex-1 rounded ${
-                                  i <= getPasswordStrength(newUserData.password).score ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'
-                                }`}
-                              />
-                            ))}
-                          </div>
-                          <p className="text-xs text-slate-500 dark:text-gray-400 mt-1">
-                            Strength: {getPasswordStrength(newUserData.password).message}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                    <button
-                      onClick={handleAddUser}
-                      className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors font-medium"
-                    >
-                      Create User
-                    </button>
                   </div>
-                </div>
+                )}
+
+                {/* Add New User */}
+                {!editingUser && (
+                  <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-slate-200 dark:border-white/10">
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Add New User</h3>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Name *</label>
+                        <input
+                          type="text"
+                          value={newUserData.name}
+                          onChange={(e) => setNewUserData({ ...newUserData, name: e.target.value })}
+                          className={`w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border ${userFormErrors.name ? 'border-red-500' : 'border-slate-200 dark:border-slate-600'} focus:border-purple-500 focus:outline-none`}
+                          placeholder="User Name"
+                        />
+                        {userFormErrors.name && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{userFormErrors.name}</p>}
+                      </div>
+                      <div>
+                        <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Email *</label>
+                        <input
+                          type="email"
+                          value={newUserData.email}
+                          onChange={(e) => setNewUserData({ ...newUserData, email: e.target.value })}
+                          className={`w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border ${userFormErrors.email ? 'border-red-500' : 'border-slate-200 dark:border-slate-600'} focus:border-purple-500 focus:outline-none`}
+                          placeholder="user@example.com"
+                        />
+                        {userFormErrors.email && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{userFormErrors.email}</p>}
+                      </div>
+                      <div>
+                        <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Password *</label>
+                        <input
+                          type="password"
+                          value={newUserData.password}
+                          onChange={(e) => setNewUserData({ ...newUserData, password: e.target.value })}
+                          className={`w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border ${userFormErrors.password ? 'border-red-500' : 'border-slate-200 dark:border-slate-600'} focus:border-purple-500 focus:outline-none`}
+                          placeholder="••••••••"
+                        />
+                        {userFormErrors.password && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{userFormErrors.password}</p>}
+                        {newUserData.password && (
+                          <div className="mt-2">
+                            <div className="flex gap-1">
+                              {[1,2,3,4,5].map(i => (
+                                <div
+                                  key={i}
+                                  className={`h-1 flex-1 rounded ${
+                                    i <= getPasswordStrength(newUserData.password).score ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                            <p className="text-xs text-slate-500 dark:text-gray-400 mt-1">
+                              Strength: {getPasswordStrength(newUserData.password).message}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={handleAddUser}
+                        className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors font-medium"
+                      >
+                        Create User
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-12 border border-slate-200 dark:border-white/10 text-center">
