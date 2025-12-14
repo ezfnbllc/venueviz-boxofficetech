@@ -152,9 +152,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Configure route to handle large files
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-}
+// Route segment config for large file uploads
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+export const maxDuration = 60 // 60 seconds for large file processing
