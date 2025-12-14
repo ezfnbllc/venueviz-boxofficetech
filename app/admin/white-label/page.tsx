@@ -562,7 +562,11 @@ export default function WhiteLabelPage() {
     if (!selectedPromoter) return
     if (!confirm('Remove this user from the tenant? The user account will still exist but will lose access.')) return
     try {
-      const updatedUsers = (selectedPromoter.users || []).filter(id => id !== userId)
+      // Handle both string IDs and user objects in the array
+      const updatedUsers = (selectedPromoter.users || []).filter((user: any) => {
+        const currentUserId = typeof user === 'string' ? user : (user?.id || user?.uid)
+        return currentUserId !== userId
+      })
       await AdminService.updatePromoter(selectedPromoter.id, { users: updatedUsers })
       await AdminService.updateUser(userId, { promoterId: null, role: 'user' })
       showToast('User removed from tenant')
@@ -1164,13 +1168,17 @@ export default function WhiteLabelPage() {
                   </h3>
                   {selectedPromoter.users?.length > 0 ? (
                     <div className="space-y-2">
-                      {selectedPromoter.users.map((userId: string) => {
-                        const userData = users[userId]
+                      {selectedPromoter.users.map((user: any, index: number) => {
+                        // Handle both string IDs and user objects
+                        const userId = typeof user === 'string' ? user : (user?.id || user?.uid || `user-${index}`)
+                        const userData = typeof user === 'string' ? users[user] : user
+                        const userName = userData?.name || 'Unknown User'
+                        const userEmail = userData?.email || (typeof user === 'string' ? user : 'No email')
                         return (
                           <div key={userId} className="bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg p-3 flex justify-between items-center">
                             <div>
-                              <p className="font-medium text-slate-900 dark:text-white">{userData?.name || 'Unknown User'}</p>
-                              <p className="text-sm text-slate-500 dark:text-gray-400">{userData?.email || userId}</p>
+                              <p className="font-medium text-slate-900 dark:text-white">{userName}</p>
+                              <p className="text-sm text-slate-500 dark:text-gray-400">{userEmail}</p>
                             </div>
                             <button
                               onClick={() => handleRemoveUser(userId)}
@@ -1298,6 +1306,7 @@ export default function WhiteLabelPage() {
           <div className={`${isAdmin && promoters.length > 1 ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
             {selectedPromoter ? (
               <PaymentGatewaySetup
+                key={`payment-${selectedPromoter.id}`}
                 promoterId={selectedPromoter.id}
                 currentGateway={paymentGateway}
                 isMaster={isAdmin || false}
@@ -1830,13 +1839,17 @@ export default function WhiteLabelPage() {
               <h3 className="text-lg font-semibold mb-3 text-slate-900 dark:text-white">Current Users</h3>
               {selectedPromoter.users?.length > 0 ? (
                 <div className="space-y-2">
-                  {selectedPromoter.users.map((userId: string) => {
-                    const userData = users[userId]
+                  {selectedPromoter.users.map((user: any, index: number) => {
+                    // Handle both string IDs and user objects
+                    const userId = typeof user === 'string' ? user : (user?.id || user?.uid || `user-${index}`)
+                    const userData = typeof user === 'string' ? users[user] : user
+                    const userName = userData?.name || 'Unknown User'
+                    const userEmail = userData?.email || (typeof user === 'string' ? user : 'No email')
                     return (
                       <div key={userId} className="bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg p-3 flex justify-between items-center">
                         <div>
-                          <p className="font-medium text-slate-900 dark:text-white">{userData?.name || 'Unknown User'}</p>
-                          <p className="text-sm text-slate-500 dark:text-gray-400">{userData?.email || userId}</p>
+                          <p className="font-medium text-slate-900 dark:text-white">{userName}</p>
+                          <p className="text-sm text-slate-500 dark:text-gray-400">{userEmail}</p>
                         </div>
                         <button
                           onClick={() => handleRemoveUser(userId)}
