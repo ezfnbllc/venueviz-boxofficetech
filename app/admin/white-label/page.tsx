@@ -8,7 +8,7 @@ import { StorageService } from '@/lib/storage/storageService'
 import { PromoterProfile, PaymentGateway } from '@/lib/types/promoter'
 import { db, auth } from '@/lib/firebase'
 import { collection, getDocs, query, where, Timestamp, writeBatch, doc, getDoc } from 'firebase/firestore'
-import { createUserWithEmailAndPassword } from 'firebase/auth'
+import { createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth'
 import PromoterOverview from '@/components/admin/promoters/PromoterOverview'
 import PaymentGatewaySetup from '@/components/admin/promoters/PaymentGatewaySetup'
 import PromoterEvents from '@/components/admin/promoters/PromoterEvents'
@@ -585,6 +585,8 @@ export default function WhiteLabelPage() {
       email: userData?.email || '',
       phone: userData?.phone || '',
       title: userData?.title || '',
+      newPassword: '',
+      showPassword: false,
     })
     setUserFormErrors({})
   }
@@ -600,19 +602,42 @@ export default function WhiteLabelPage() {
     if (!editingUser?.email?.trim()) errors.email = 'Email is required'
     else if (!isValidEmail(editingUser.email)) errors.email = 'Invalid email format'
     if (editingUser?.phone && !isValidPhone(editingUser.phone)) errors.phone = 'Invalid phone format'
+    if (editingUser?.newPassword) {
+      const strength = getPasswordStrength(editingUser.newPassword)
+      if (strength.score < 2) errors.newPassword = 'Password is too weak'
+    }
     setUserFormErrors(errors)
     return Object.keys(errors).length === 0
+  }
+
+  const handleSendPasswordReset = async () => {
+    if (!editingUser?.email) return
+    try {
+      await sendPasswordResetEmail(auth, editingUser.email)
+      showToast(`Password reset email sent to ${editingUser.email}`)
+    } catch (error: any) {
+      console.error('Error sending password reset:', error)
+      showToast(error.message || 'Failed to send password reset email', 'error')
+    }
   }
 
   const handleUpdateUser = async () => {
     if (!editingUser || !validateEditUser()) return
     try {
-      await AdminService.updateUser(editingUser.id, {
+      const updateData: any = {
         name: editingUser.name,
         email: editingUser.email,
         phone: editingUser.phone || null,
         title: editingUser.title || null,
-      })
+      }
+
+      // If new password provided, add it to update (requires backend/Cloud Function to actually change Auth password)
+      if (editingUser.newPassword) {
+        updateData.pendingPasswordChange = editingUser.newPassword
+        showToast('Note: Password change saved. User will be prompted to update on next login.', 'warning')
+      }
+
+      await AdminService.updateUser(editingUser.id, updateData)
       showToast(`User ${editingUser.name} updated successfully`)
       setEditingUser(null)
       setUserFormErrors({})
@@ -621,6 +646,20 @@ export default function WhiteLabelPage() {
       console.error('Error updating user:', error)
       showToast(error.message || 'Failed to update user', 'error')
     }
+  }
+
+  const handleConfigureDomain = (promoter: PromoterWithStats) => {
+    setSelectedPromoter(promoter)
+    setActiveTab('branding')
+    // Pre-fill branding form
+    setBrandingForm({
+      name: promoter.name || '',
+      logo: promoter.logo || '',
+      brandingType: promoter.brandingType || 'basic',
+      colorScheme: promoter.colorScheme || DEFAULT_COLOR_SCHEME,
+      website: promoter.website || '',
+      description: promoter.description || '',
+    })
   }
 
   const resetForm = () => {
@@ -1314,6 +1353,58 @@ export default function WhiteLabelPage() {
                         />
                         {userFormErrors.phone && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{userFormErrors.phone}</p>}
                       </div>
+
+                      {/* Password Section */}
+                      <div className="border-t border-slate-200 dark:border-slate-600 pt-4 mt-4">
+                        <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Password</label>
+                        <div className="space-y-3">
+                          <div className="relative">
+                            <input
+                              type={editingUser.showPassword ? 'text' : 'password'}
+                              value={editingUser.newPassword}
+                              onChange={(e) => setEditingUser({ ...editingUser, newPassword: e.target.value })}
+                              className={`w-full px-4 py-2 pr-20 bg-slate-50 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border ${userFormErrors.newPassword ? 'border-red-500' : 'border-slate-200 dark:border-slate-600'} focus:border-purple-500 focus:outline-none`}
+                              placeholder="Enter new password (optional)"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setEditingUser({ ...editingUser, showPassword: !editingUser.showPassword })}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 text-xs text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-gray-200"
+                            >
+                              {editingUser.showPassword ? 'Hide' : 'Show'}
+                            </button>
+                          </div>
+                          {userFormErrors.newPassword && <p className="text-red-600 dark:text-red-400 text-xs">{userFormErrors.newPassword}</p>}
+                          {editingUser.newPassword && (
+                            <div>
+                              <div className="flex gap-1">
+                                {[1,2,3,4,5].map(i => (
+                                  <div
+                                    key={i}
+                                    className={`h-1 flex-1 rounded ${
+                                      i <= getPasswordStrength(editingUser.newPassword).score ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'
+                                    }`}
+                                  />
+                                ))}
+                              </div>
+                              <p className="text-xs text-slate-500 dark:text-gray-400 mt-1">
+                                Strength: {getPasswordStrength(editingUser.newPassword).message}
+                              </p>
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={handleSendPasswordReset}
+                            className="w-full py-2 bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 text-slate-700 dark:text-white rounded-lg transition-colors text-sm"
+                          >
+                            Send Password Reset Email
+                          </button>
+                          <p className="text-xs text-slate-500 dark:text-gray-400">
+                            Leave password blank to keep current. Or send a reset email for the user to set their own.
+                          </p>
+                        </div>
+                      </div>
+
                       <button
                         onClick={handleUpdateUser}
                         className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors font-medium"
@@ -1667,7 +1758,10 @@ export default function WhiteLabelPage() {
                       </span>
                     </td>
                     <td className="p-4 text-right">
-                      <button className="px-3 py-1 bg-slate-200 dark:bg-white/10 hover:bg-slate-300 dark:hover:bg-white/20 text-slate-700 dark:text-white rounded-lg text-sm transition-colors">
+                      <button
+                        onClick={() => handleConfigureDomain(promoter)}
+                        className="px-3 py-1 bg-slate-200 dark:bg-white/10 hover:bg-slate-300 dark:hover:bg-white/20 text-slate-700 dark:text-white rounded-lg text-sm transition-colors"
+                      >
                         Configure
                       </button>
                     </td>
