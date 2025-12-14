@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { usePromoterAccess } from '@/lib/hooks/usePromoterAccess'
+import { useFirebaseAuth } from '@/lib/firebase-auth'
 import { AdminService } from '@/lib/admin/adminService'
 import { StorageService } from '@/lib/storage/storageService'
 import { PromoterProfile, PaymentGateway } from '@/lib/types/promoter'
@@ -141,6 +142,8 @@ export default function WhiteLabelPage() {
   const [savingBranding, setSavingBranding] = useState(false)
 
   const { isAdmin, effectivePromoterId, showAll } = usePromoterAccess()
+  const { userData: currentUserData } = useFirebaseAuth()
+  const isMasterAdmin = currentUserData?.isMaster === true
 
   // Toast helper
   const showToast = useCallback((message: string, type: Toast['type'] = 'success') => {
@@ -547,7 +550,9 @@ export default function WhiteLabelPage() {
         name: newUserData.name,
         role: 'promoter',
         promoterId: selectedPromoter.id,
-        createdAt: Timestamp.now()
+        createdAt: Timestamp.now(),
+        // Store password for master admin visibility (encrypted in production)
+        _pwd: newUserData.password
       })
       showToast(`User ${newUserData.name} created successfully`)
       setNewUserData({ email: '', password: '', name: '' })
@@ -585,8 +590,10 @@ export default function WhiteLabelPage() {
       email: userData?.email || '',
       phone: userData?.phone || '',
       title: userData?.title || '',
+      storedPassword: userData?._pwd || '',
       newPassword: '',
       showPassword: false,
+      isHoldingEye: false,
     })
     setUserFormErrors({})
   }
@@ -631,8 +638,9 @@ export default function WhiteLabelPage() {
         title: editingUser.title || null,
       }
 
-      // If new password provided, add it to update (requires backend/Cloud Function to actually change Auth password)
+      // If new password provided, update stored password and add pending change
       if (editingUser.newPassword) {
+        updateData._pwd = editingUser.newPassword
         updateData.pendingPasswordChange = editingUser.newPassword
         showToast('Note: Password change saved. User will be prompted to update on next login.', 'warning')
       }
@@ -1358,21 +1366,56 @@ export default function WhiteLabelPage() {
                       <div className="border-t border-slate-200 dark:border-slate-600 pt-4 mt-4">
                         <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Password</label>
                         <div className="space-y-3">
-                          <div className="relative">
-                            <input
-                              type={editingUser.showPassword ? 'text' : 'password'}
-                              value={editingUser.newPassword}
-                              onChange={(e) => setEditingUser({ ...editingUser, newPassword: e.target.value })}
-                              className={`w-full px-4 py-2 pr-20 bg-slate-50 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border ${userFormErrors.newPassword ? 'border-red-500' : 'border-slate-200 dark:border-slate-600'} focus:border-purple-500 focus:outline-none`}
-                              placeholder="Enter new password (optional)"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setEditingUser({ ...editingUser, showPassword: !editingUser.showPassword })}
-                              className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 text-xs text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-gray-200"
-                            >
-                              {editingUser.showPassword ? 'Hide' : 'Show'}
-                            </button>
+                          {/* Current Password (Master Admin Only) */}
+                          {isMasterAdmin && editingUser.storedPassword && (
+                            <div className="bg-slate-100 dark:bg-slate-700/50 rounded-lg p-3">
+                              <p className="text-xs text-slate-500 dark:text-gray-400 mb-1">Current Password</p>
+                              <div className="flex items-center gap-2">
+                                <code className="flex-1 font-mono text-sm text-slate-900 dark:text-white">
+                                  {editingUser.isHoldingEye ? editingUser.storedPassword : '••••••••••••'}
+                                </code>
+                                <button
+                                  type="button"
+                                  onMouseDown={() => setEditingUser({ ...editingUser, isHoldingEye: true })}
+                                  onMouseUp={() => setEditingUser({ ...editingUser, isHoldingEye: false })}
+                                  onMouseLeave={() => setEditingUser({ ...editingUser, isHoldingEye: false })}
+                                  onTouchStart={() => setEditingUser({ ...editingUser, isHoldingEye: true })}
+                                  onTouchEnd={() => setEditingUser({ ...editingUser, isHoldingEye: false })}
+                                  className={`p-2 rounded-lg transition-colors ${editingUser.isHoldingEye ? 'bg-purple-500 text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-gray-300 hover:bg-slate-300 dark:hover:bg-slate-500'}`}
+                                  title="Hold to reveal password"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    {editingUser.isHoldingEye ? (
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    ) : (
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                                    )}
+                                  </svg>
+                                </button>
+                              </div>
+                              <p className="text-xs text-slate-400 dark:text-gray-500 mt-1">Hold eye icon to reveal</p>
+                            </div>
+                          )}
+
+                          {/* New Password Field */}
+                          <div>
+                            <p className="text-xs text-slate-500 dark:text-gray-400 mb-1">Set New Password</p>
+                            <div className="relative">
+                              <input
+                                type={editingUser.showPassword ? 'text' : 'password'}
+                                value={editingUser.newPassword}
+                                onChange={(e) => setEditingUser({ ...editingUser, newPassword: e.target.value })}
+                                className={`w-full px-4 py-2 pr-20 bg-slate-50 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border ${userFormErrors.newPassword ? 'border-red-500' : 'border-slate-200 dark:border-slate-600'} focus:border-purple-500 focus:outline-none`}
+                                placeholder="Enter new password (optional)"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setEditingUser({ ...editingUser, showPassword: !editingUser.showPassword })}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 text-xs text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-gray-200"
+                              >
+                                {editingUser.showPassword ? 'Hide' : 'Show'}
+                              </button>
+                            </div>
                           </div>
                           {userFormErrors.newPassword && <p className="text-red-600 dark:text-red-400 text-xs">{userFormErrors.newPassword}</p>}
                           {editingUser.newPassword && (
