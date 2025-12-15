@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { usePromoterAccess } from '@/lib/hooks/usePromoterAccess'
 import { useFirebaseAuth } from '@/lib/firebase-auth'
@@ -18,7 +18,7 @@ interface ImportState {
   error: string | null
 }
 
-export default function ThemesPage() {
+function ThemesPageContent() {
   const searchParams = useSearchParams()
   const urlTenantId = searchParams.get('tenantId')
 
@@ -735,5 +735,18 @@ export default function ThemesPage() {
         </div>
       )}
     </div>
+  )
+}
+
+// Wrapper component with Suspense for useSearchParams
+export default function ThemesPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-purple-500"></div>
+      </div>
+    }>
+      <ThemesPageContent />
+    </Suspense>
   )
 }
