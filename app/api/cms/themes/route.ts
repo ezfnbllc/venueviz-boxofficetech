@@ -10,20 +10,18 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import {
-  ThemeAssetService,
-  createTheme,
-  getTheme,
-  getThemesByTenant,
-  getActiveTheme,
-  updateThemeConfig,
-  updateThemeAssets,
-  updateThemeTemplates,
-  publishTheme,
-  archiveTheme,
-  deleteTheme,
-  importThemeFromZip,
-  generateThemeCSS,
-} from '@/lib/services/themeAssetService'
+  getThemeServer,
+  getThemesByTenantServer,
+  getActiveThemeServer,
+  createThemeServer,
+  updateThemeConfigServer,
+  updateThemeAssetsServer,
+  updateThemeTemplatesServer,
+  publishThemeServer,
+  archiveThemeServer,
+  deleteThemeServer,
+  generateThemeCSSServer,
+} from '@/lib/services/themeAssetServiceServer'
 import {
   ThemeVersionService,
   createVersion,
@@ -47,7 +45,7 @@ export async function GET(request: NextRequest) {
 
     // Get specific theme
     if (action === 'get' && themeId) {
-      const theme = await getTheme(themeId)
+      const theme = await getThemeServer(themeId)
       if (!theme) {
         return NextResponse.json({ error: 'Theme not found' }, { status: 404 })
       }
@@ -56,17 +54,17 @@ export async function GET(request: NextRequest) {
 
     // Get active theme for tenant
     if (action === 'active' && tenantId) {
-      const theme = await getActiveTheme(tenantId)
+      const theme = await getActiveThemeServer(tenantId)
       return NextResponse.json({ theme })
     }
 
     // Get theme CSS
     if (action === 'css' && themeId) {
-      const theme = await getTheme(themeId)
+      const theme = await getThemeServer(themeId)
       if (!theme) {
         return NextResponse.json({ error: 'Theme not found' }, { status: 404 })
       }
-      const css = generateThemeCSS(theme.config)
+      const css = generateThemeCSSServer(theme.config)
       return new NextResponse(css, {
         headers: { 'Content-Type': 'text/css' },
       })
@@ -80,7 +78,7 @@ export async function GET(request: NextRequest) {
 
     // List all themes for tenant
     if (tenantId) {
-      const themes = await getThemesByTenant(tenantId)
+      const themes = await getThemesByTenantServer(tenantId)
       return NextResponse.json({ themes })
     }
 
@@ -123,7 +121,7 @@ export async function POST(request: NextRequest) {
           )
         }
 
-        const theme = await createTheme(tenantId, themeName, userId, {
+        const theme = await createThemeServer(tenantId, themeName, userId, {
           themeSource,
           themeforestId,
           licenseType,
@@ -143,9 +141,9 @@ export async function POST(request: NextRequest) {
         await createVersion(themeId, userId, changelog || 'Published theme')
 
         // Publish
-        await publishTheme(themeId, userId)
+        await publishThemeServer(themeId, userId)
 
-        const theme = await getTheme(themeId)
+        const theme = await getThemeServer(themeId)
         return NextResponse.json({ theme, message: 'Theme published successfully' })
       }
 
@@ -155,7 +153,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Theme ID required' }, { status: 400 })
         }
 
-        await archiveTheme(themeId, userId)
+        await archiveThemeServer(themeId, userId)
         return NextResponse.json({ message: 'Theme archived successfully' })
       }
 
@@ -170,7 +168,7 @@ export async function POST(request: NextRequest) {
         }
 
         await rollback(themeId, versionId, userId)
-        const theme = await getTheme(themeId)
+        const theme = await getThemeServer(themeId)
         return NextResponse.json({ theme, message: 'Rollback successful' })
       }
 
@@ -209,8 +207,8 @@ export async function POST(request: NextRequest) {
           )
         }
 
-        await updateThemeTemplates(themeId, templates, userId)
-        const theme = await getTheme(themeId)
+        await updateThemeTemplatesServer(themeId, templates, userId)
+        const theme = await getThemeServer(themeId)
         return NextResponse.json({ theme })
       }
 
@@ -244,20 +242,20 @@ export async function PUT(request: NextRequest) {
 
     // Update config if provided
     if (config) {
-      await updateThemeConfig(themeId, config, userId)
+      await updateThemeConfigServer(themeId, config, userId)
     }
 
     // Update assets if provided
     if (assets) {
-      await updateThemeAssets(themeId, assets, userId)
+      await updateThemeAssetsServer(themeId, assets, userId)
     }
 
     // Update templates if provided
     if (templates) {
-      await updateThemeTemplates(themeId, templates, userId)
+      await updateThemeTemplatesServer(themeId, templates, userId)
     }
 
-    const theme = await getTheme(themeId)
+    const theme = await getThemeServer(themeId)
     return NextResponse.json({ theme, message: 'Theme updated successfully' })
   } catch (error) {
     console.error('PUT /api/cms/themes error:', error)
@@ -284,13 +282,13 @@ export async function DELETE(request: NextRequest) {
 
     if (permanent) {
       // Permanently delete theme and all assets
-      await deleteTheme(themeId)
+      await deleteThemeServer(themeId)
       return NextResponse.json({ message: 'Theme permanently deleted' })
     } else {
       // Soft delete (archive)
       // Get userId from auth header or body
       const userId = request.headers.get('x-user-id') || 'system'
-      await archiveTheme(themeId, userId)
+      await archiveThemeServer(themeId, userId)
       return NextResponse.json({ message: 'Theme archived' })
     }
   } catch (error) {

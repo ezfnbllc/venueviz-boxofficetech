@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { doc, getDoc, updateDoc, deleteDoc, collection, getDocs, query, where, Timestamp, writeBatch } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { getAdminDb } from '@/lib/firebase-admin'
 
 export async function GET(
   request: NextRequest,
@@ -8,10 +9,11 @@ export async function GET(
 ) {
   try {
     const promoterId = params.id
-    const promoterRef = doc(db, 'promoters', promoterId)
-    const snapshot = await getDoc(promoterRef)
+    // Use Admin SDK for server-side operations
+    const adminDb = getAdminDb()
+    const snapshot = await adminDb.collection('promoters').doc(promoterId).get()
 
-    if (!snapshot.exists()) {
+    if (!snapshot.exists) {
       return NextResponse.json({
         success: false,
         error: 'Promoter not found'
