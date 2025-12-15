@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { usePromoterAccess } from '@/lib/hooks/usePromoterAccess'
 import { useFirebaseAuth } from '@/lib/firebase-auth'
 import { TenantPage, TenantTheme, PageType, SystemPageType } from '@/lib/types/cms'
@@ -31,6 +31,9 @@ const SYSTEM_PAGE_TYPES: { value: SystemPageType; label: string; description: st
 
 export default function PagesPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const urlTenantId = searchParams.get('tenantId')
+
   const [pages, setPages] = useState<TenantPage[]>([])
   const [themes, setThemes] = useState<TenantTheme[]>([])
   const [loading, setLoading] = useState(true)
@@ -49,19 +52,25 @@ export default function PagesPage() {
   const { effectivePromoterId, isAdmin } = usePromoterAccess()
   const { user } = useFirebaseAuth()
 
-  // Check if admin needs to select a specific tenant
-  const needsTenantSelection = isAdmin && effectivePromoterId === 'all'
+  // Use URL tenantId if provided, otherwise fall back to effectivePromoterId
+  const tenantId = urlTenantId || (effectivePromoterId !== 'all' ? effectivePromoterId : null)
+
+  // Check if we have a valid tenant context
+  const needsTenantSelection = !tenantId
 
   // Load pages and themes
   const loadData = useCallback(async () => {
-    if (!effectivePromoterId || effectivePromoterId === 'all') return
+    if (!tenantId) {
+      setLoading(false)
+      return
+    }
 
     setLoading(true)
     try {
       // Load pages and themes in parallel
       const [pagesRes, themesRes] = await Promise.all([
-        fetch(`/api/cms/pages?tenantId=${effectivePromoterId}`),
-        fetch(`/api/cms/themes?tenantId=${effectivePromoterId}`),
+        fetch(`/api/cms/pages?tenantId=${tenantId}`),
+        fetch(`/api/cms/themes?tenantId=${tenantId}`),
       ])
 
       const pagesData = await pagesRes.json()
@@ -86,7 +95,7 @@ export default function PagesPage() {
     } finally {
       setLoading(false)
     }
-  }, [effectivePromoterId])
+  }, [tenantId])
 
   useEffect(() => {
     loadData()
@@ -131,7 +140,7 @@ export default function PagesPage() {
 
   // Create new page
   const handleCreatePage = async () => {
-    if (!effectivePromoterId || !user || !selectedThemeId) return
+    if (!tenantId || !user || !selectedThemeId) return
 
     setCreateState(prev => ({ ...prev, creating: true, error: null }))
 
@@ -141,7 +150,7 @@ export default function PagesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'create',
-          tenantId: effectivePromoterId,
+          tenantId: tenantId,
           themeId: selectedThemeId,
           title: createState.title,
           slug: createState.slug,

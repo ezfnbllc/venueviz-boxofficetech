@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { usePromoterAccess } from '@/lib/hooks/usePromoterAccess'
 import { useFirebaseAuth } from '@/lib/firebase-auth'
 import { TenantTheme, TemplateParserResult, ParsedTemplate } from '@/lib/types/cms'
@@ -17,6 +18,9 @@ interface ImportState {
 }
 
 export default function ThemesPage() {
+  const searchParams = useSearchParams()
+  const urlTenantId = searchParams.get('tenantId')
+
   const [themes, setThemes] = useState<TenantTheme[]>([])
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState<ViewMode>('list')
@@ -35,16 +39,22 @@ export default function ThemesPage() {
   const { isAdmin, effectivePromoterId } = usePromoterAccess()
   const { user } = useFirebaseAuth()
 
-  // Check if admin needs to select a specific tenant
-  const needsTenantSelection = isAdmin && effectivePromoterId === 'all'
+  // Use URL tenantId if provided, otherwise fall back to effectivePromoterId
+  const tenantId = urlTenantId || (effectivePromoterId !== 'all' ? effectivePromoterId : null)
+
+  // Check if we have a valid tenant context
+  const needsTenantSelection = !tenantId
 
   // Load themes
   const loadThemes = useCallback(async () => {
-    if (!effectivePromoterId || effectivePromoterId === 'all') return
+    if (!tenantId) {
+      setLoading(false)
+      return
+    }
 
     setLoading(true)
     try {
-      const response = await fetch(`/api/cms/themes?tenantId=${effectivePromoterId}`)
+      const response = await fetch(`/api/cms/themes?tenantId=${tenantId}`)
       const data = await response.json()
       if (data.themes) {
         setThemes(data.themes)
@@ -55,7 +65,7 @@ export default function ThemesPage() {
     } finally {
       setLoading(false)
     }
-  }, [effectivePromoterId])
+  }, [tenantId])
 
   useEffect(() => {
     loadThemes()
@@ -108,7 +118,7 @@ export default function ThemesPage() {
 
   // Handle theme import
   const handleImport = async () => {
-    if (!importState.file || !effectivePromoterId || !user) return
+    if (!importState.file || !tenantId || !user) return
 
     setImportState(prev => ({ ...prev, importing: true, error: null }))
 
@@ -117,7 +127,7 @@ export default function ThemesPage() {
       formData.append('action', 'importZip')
       formData.append('file', importState.file)
       formData.append('themeName', importState.themeName)
-      formData.append('tenantId', effectivePromoterId)
+      formData.append('tenantId', tenantId)
       formData.append('userId', user.uid)
 
       const response = await fetch('/api/cms/themes/upload', {
@@ -268,15 +278,26 @@ export default function ThemesPage() {
         </div>
         <div className="flex gap-2">
           {viewMode === 'list' && (
-            <button
-              onClick={() => setViewMode('import')}
-              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors flex items-center gap-2"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-              </svg>
-              Import Theme
-            </button>
+            <>
+              <a
+                href={`/admin/white-label/pages?tenantId=${tenantId}`}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Manage Pages
+              </a>
+              <button
+                onClick={() => setViewMode('import')}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors flex items-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                Import Theme
+              </button>
+            </>
           )}
           {viewMode !== 'list' && (
             <button
