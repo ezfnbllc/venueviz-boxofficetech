@@ -13,6 +13,30 @@ let adminApp: App | null = null
 let adminDb: Firestore | null = null
 let adminStorage: Storage | null = null
 
+/**
+ * Format the private key properly for different environments
+ * Handles both escaped newlines (\n as string) and actual newlines
+ */
+function formatPrivateKey(key: string | undefined): string | undefined {
+  if (!key) return undefined
+
+  // If the key contains literal \n (as 2 characters), replace with actual newlines
+  // This handles the case when the key is stored in env vars with escaped newlines
+  let formattedKey = key
+
+  // Replace escaped newlines (\\n becomes \n)
+  if (key.includes('\\n')) {
+    formattedKey = key.replace(/\\n/g, '\n')
+  }
+
+  // Also handle the case where it might be double-escaped
+  if (formattedKey.includes('\\n')) {
+    formattedKey = formattedKey.replace(/\\n/g, '\n')
+  }
+
+  return formattedKey
+}
+
 function getAdminApp(): App {
   if (adminApp) return adminApp
 
@@ -22,38 +46,66 @@ function getAdminApp(): App {
     return adminApp
   }
 
-  // Try to get credentials from environment variables first (for Vercel)
-  const projectId = process.env.FIREBASE_PROJECT_ID || 'venueviz'
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL
-  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n')
-
-  if (clientEmail && privateKey) {
-    // Use environment variables
-    adminApp = initializeApp({
-      credential: cert({
-        projectId,
-        clientEmail,
-        privateKey,
-      }),
-      storageBucket: `${projectId}.firebasestorage.app`,
-    })
-  } else {
-    // Fallback to service account file for local development
+  // Option 1: Use FIREBASE_SERVICE_ACCOUNT_KEY (entire JSON as base64 or plain JSON)
+  const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY
+  if (serviceAccountKey) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const serviceAccount = require('../scripts/serviceAccountKey.json')
+      // Try to parse as JSON first (plain JSON string)
+      let serviceAccount
+      try {
+        serviceAccount = JSON.parse(serviceAccountKey)
+      } catch {
+        // If that fails, try base64 decoding first
+        const decoded = Buffer.from(serviceAccountKey, 'base64').toString('utf-8')
+        serviceAccount = JSON.parse(decoded)
+      }
+
       adminApp = initializeApp({
         credential: cert(serviceAccount),
         storageBucket: `${serviceAccount.project_id}.firebasestorage.app`,
       })
-    } catch {
-      // If no service account file, initialize without credentials
-      // This will only work if running in a Google Cloud environment
+      return adminApp
+    } catch (error) {
+      console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY:', error)
+    }
+  }
+
+  // Option 2: Use individual environment variables
+  const projectId = process.env.FIREBASE_PROJECT_ID || 'venueviz'
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL
+  const privateKey = formatPrivateKey(process.env.FIREBASE_PRIVATE_KEY)
+
+  if (clientEmail && privateKey) {
+    try {
       adminApp = initializeApp({
-        projectId,
+        credential: cert({
+          projectId,
+          clientEmail,
+          privateKey,
+        }),
         storageBucket: `${projectId}.firebasestorage.app`,
       })
+      return adminApp
+    } catch (error) {
+      console.error('Failed to initialize Firebase Admin with env vars:', error)
     }
+  }
+
+  // Option 3: Fallback to service account file for local development
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const serviceAccount = require('../scripts/serviceAccountKey.json')
+    adminApp = initializeApp({
+      credential: cert(serviceAccount),
+      storageBucket: `${serviceAccount.project_id}.firebasestorage.app`,
+    })
+  } catch (error) {
+    console.error('Failed to initialize Firebase Admin with service account file:', error)
+    // Last resort: initialize without credentials (only works in GCP environment)
+    adminApp = initializeApp({
+      projectId,
+      storageBucket: `${projectId}.firebasestorage.app`,
+    })
   }
 
   return adminApp
