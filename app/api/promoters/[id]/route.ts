@@ -29,7 +29,9 @@ export async function GET(
     console.error('Error fetching promoter:', error)
     return NextResponse.json({
       success: false,
-      error: error.message
+      error: error.message,
+      code: error.code,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     }, { status: 500 })
   }
 }

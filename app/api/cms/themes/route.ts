@@ -87,8 +87,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 })
   } catch (error) {
     console.error('GET /api/cms/themes error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch themes'
+    const errorDetails = error instanceof Error ? error.stack : String(error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to fetch themes' },
+      {
+        error: errorMessage,
+        details: process.env.NODE_ENV === 'development' ? errorDetails : undefined
+      },
       { status: 500 }
     )
   }

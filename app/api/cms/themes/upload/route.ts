@@ -145,8 +145,14 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     console.error('POST /api/cms/themes/upload error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Upload failed'
+    const errorDetails = error instanceof Error ? error.stack : String(error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Upload failed' },
+      {
+        error: errorMessage,
+        details: errorDetails,
+        code: (error as any)?.code
+      },
       { status: 500 }
     )
   }

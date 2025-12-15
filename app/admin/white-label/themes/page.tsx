@@ -56,6 +56,9 @@ function ThemesPageContent() {
       const data = await response.json()
       if (data.success && data.data) {
         setTenant(data.data)
+      } else if (data.error) {
+        console.error('Tenant API error:', data.error, data.code, data.details)
+        setMessage({ type: 'error', text: `Tenant load failed: ${data.error}` })
       }
     } catch (error) {
       console.error('Error loading tenant:', error)
@@ -75,6 +78,9 @@ function ThemesPageContent() {
       const data = await response.json()
       if (data.themes) {
         setThemes(data.themes)
+      } else if (data.error) {
+        console.error('Themes API error:', data.error, data.details)
+        setMessage({ type: 'error', text: `Themes load failed: ${data.error}` })
       }
     } catch (error) {
       console.error('Error loading themes:', error)
