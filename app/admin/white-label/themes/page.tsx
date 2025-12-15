@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { usePromoterAccess } from '@/lib/hooks/usePromoterAccess'
 import { useFirebaseAuth } from '@/lib/firebase-auth'
 import { TenantTheme, TemplateParserResult, ParsedTemplate } from '@/lib/types/cms'
+import { PromoterProfile } from '@/lib/types/promoter'
 
 type ViewMode = 'list' | 'import' | 'preview'
 
@@ -22,6 +23,7 @@ export default function ThemesPage() {
   const urlTenantId = searchParams.get('tenantId')
 
   const [themes, setThemes] = useState<TenantTheme[]>([])
+  const [tenant, setTenant] = useState<PromoterProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [selectedTheme, setSelectedTheme] = useState<TenantTheme | null>(null)
@@ -45,6 +47,21 @@ export default function ThemesPage() {
   // Check if we have a valid tenant context
   const needsTenantSelection = !tenantId
 
+  // Load tenant info
+  const loadTenant = useCallback(async () => {
+    if (!tenantId) return
+
+    try {
+      const response = await fetch(`/api/promoters/${tenantId}`)
+      const data = await response.json()
+      if (data.success && data.data) {
+        setTenant(data.data)
+      }
+    } catch (error) {
+      console.error('Error loading tenant:', error)
+    }
+  }, [tenantId])
+
   // Load themes
   const loadThemes = useCallback(async () => {
     if (!tenantId) {
@@ -66,6 +83,11 @@ export default function ThemesPage() {
       setLoading(false)
     }
   }, [tenantId])
+
+  // Load tenant info on mount
+  useEffect(() => {
+    loadTenant()
+  }, [loadTenant])
 
   useEffect(() => {
     loadThemes()
@@ -266,6 +288,63 @@ export default function ThemesPage() {
 
   return (
     <div className="space-y-6">
+      {/* Tenant Context Banner */}
+      {tenant && (
+        <div className="bg-gradient-to-r from-purple-600/10 to-blue-600/10 border border-purple-500/20 rounded-xl p-4">
+          <div className="flex items-center gap-4">
+            {/* Tenant Logo */}
+            <div className="w-14 h-14 rounded-xl bg-white dark:bg-white/10 border border-slate-200 dark:border-white/10 flex items-center justify-center overflow-hidden flex-shrink-0">
+              {tenant.logo ? (
+                <img src={tenant.logo} alt={tenant.name} className="w-full h-full object-contain p-1" />
+              ) : (
+                <span className="text-xl font-bold text-purple-600 dark:text-purple-400">
+                  {tenant.name?.charAt(0) || 'T'}
+                </span>
+              )}
+            </div>
+            {/* Tenant Info */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-3">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white truncate">
+                  {tenant.name}
+                </h2>
+                <span className="px-2 py-0.5 bg-purple-500/20 text-purple-600 dark:text-purple-400 rounded text-xs font-medium">
+                  Advanced Plan
+                </span>
+              </div>
+              <div className="flex items-center gap-4 mt-1 text-sm text-slate-500 dark:text-gray-400">
+                {tenant.email && (
+                  <span className="flex items-center gap-1">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    {tenant.email}
+                  </span>
+                )}
+                {tenant.slug && (
+                  <span className="flex items-center gap-1">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                    </svg>
+                    /{tenant.slug}
+                  </span>
+                )}
+              </div>
+            </div>
+            {/* Back to White-Label Link */}
+            <a
+              href="/admin/white-label"
+              className="px-3 py-2 bg-white/50 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-600 dark:text-gray-300 flex items-center gap-2 transition-colors flex-shrink-0"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Back to Tenants
+            </a>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>

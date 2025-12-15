@@ -335,8 +335,9 @@ export async function importThemeFromZip(
   })
 
   try {
-    // Extract ZIP
-    const zip = await JSZip.loadAsync(zipFile)
+    // Extract ZIP - Convert File to ArrayBuffer for server-side compatibility
+    const arrayBuffer = await zipFile.arrayBuffer()
+    const zip = await JSZip.loadAsync(arrayBuffer)
     const extractedAssets = await extractZipAssets(zip, theme)
 
     // Update theme with extracted assets

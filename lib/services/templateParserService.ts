@@ -163,7 +163,9 @@ export class TemplateParserService {
    * Parse a ZIP file containing theme files
    */
   async parseThemeZip(zipFile: File): Promise<TemplateParserResult> {
-    const zip = await JSZip.loadAsync(zipFile)
+    // Convert File to ArrayBuffer for server-side compatibility with JSZip
+    const arrayBuffer = await zipFile.arrayBuffer()
+    const zip = await JSZip.loadAsync(arrayBuffer)
     const result: TemplateParserResult = {
       templates: [],
       assets: {
