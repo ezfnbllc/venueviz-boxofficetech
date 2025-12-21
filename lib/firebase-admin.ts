@@ -12,6 +12,7 @@ import { getStorage, Storage } from 'firebase-admin/storage'
 let adminApp: App | null = null
 let adminDb: Firestore | null = null
 let adminStorage: Storage | null = null
+let initializationError: Error | null = null
 
 /**
  * Format the private key properly for different environments
@@ -38,7 +39,13 @@ function formatPrivateKey(key: string | undefined): string | undefined {
 }
 
 function getAdminApp(): App {
+  // If we already have an app, return it
   if (adminApp) return adminApp
+
+  // If we previously failed to initialize, throw the error
+  if (initializationError) {
+    throw initializationError
+  }
 
   const apps = getApps()
   if (apps.length > 0) {
@@ -46,28 +53,59 @@ function getAdminApp(): App {
     return adminApp
   }
 
+  const errors: string[] = []
+
   // Option 1: Use FIREBASE_SERVICE_ACCOUNT_KEY (entire JSON as base64 or plain JSON)
   const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY
   if (serviceAccountKey) {
+    console.log('[Firebase Admin] Attempting initialization with FIREBASE_SERVICE_ACCOUNT_KEY')
+    console.log('[Firebase Admin] Key length:', serviceAccountKey.length)
+    console.log('[Firebase Admin] Key starts with:', serviceAccountKey.substring(0, 20) + '...')
+
     try {
       // Try to parse as JSON first (plain JSON string)
       let serviceAccount
+      let decodingMethod = 'direct JSON'
+
       try {
         serviceAccount = JSON.parse(serviceAccountKey)
+        console.log('[Firebase Admin] Parsed as direct JSON')
       } catch {
         // If that fails, try base64 decoding first
+        decodingMethod = 'base64'
+        console.log('[Firebase Admin] Direct JSON parse failed, trying base64 decode')
         const decoded = Buffer.from(serviceAccountKey, 'base64').toString('utf-8')
+        console.log('[Firebase Admin] Base64 decoded length:', decoded.length)
         serviceAccount = JSON.parse(decoded)
+        console.log('[Firebase Admin] Parsed as base64-encoded JSON')
       }
+
+      console.log('[Firebase Admin] Service account project_id:', serviceAccount.project_id)
+      console.log('[Firebase Admin] Service account client_email:', serviceAccount.client_email)
+      console.log('[Firebase Admin] Private key length:', serviceAccount.private_key?.length || 0)
+      console.log('[Firebase Admin] Private key starts with:', serviceAccount.private_key?.substring(0, 30) || 'N/A')
+
+      // Determine the correct storage bucket format
+      // Firebase projects created after Sept 2023 use .firebasestorage.app
+      // Older projects use .appspot.com
+      const storageBucket = process.env.FIREBASE_STORAGE_BUCKET ||
+        `${serviceAccount.project_id}.firebasestorage.app`
 
       adminApp = initializeApp({
         credential: cert(serviceAccount),
-        storageBucket: `${serviceAccount.project_id}.firebasestorage.app`,
+        storageBucket,
       })
+
+      console.log('[Firebase Admin] Successfully initialized with', decodingMethod)
       return adminApp
     } catch (error) {
-      console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY:', error)
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      console.error('[Firebase Admin] Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY:', errorMsg)
+      errors.push(`FIREBASE_SERVICE_ACCOUNT_KEY: ${errorMsg}`)
     }
+  } else {
+    console.log('[Firebase Admin] FIREBASE_SERVICE_ACCOUNT_KEY not set')
+    errors.push('FIREBASE_SERVICE_ACCOUNT_KEY not set')
   }
 
   // Option 2: Use individual environment variables
@@ -76,39 +114,56 @@ function getAdminApp(): App {
   const privateKey = formatPrivateKey(process.env.FIREBASE_PRIVATE_KEY)
 
   if (clientEmail && privateKey) {
+    console.log('[Firebase Admin] Attempting initialization with individual env vars')
     try {
+      const storageBucket = process.env.FIREBASE_STORAGE_BUCKET ||
+        `${projectId}.firebasestorage.app`
+
       adminApp = initializeApp({
         credential: cert({
           projectId,
           clientEmail,
           privateKey,
         }),
-        storageBucket: `${projectId}.firebasestorage.app`,
+        storageBucket,
       })
+      console.log('[Firebase Admin] Successfully initialized with env vars')
       return adminApp
     } catch (error) {
-      console.error('Failed to initialize Firebase Admin with env vars:', error)
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      console.error('[Firebase Admin] Failed to initialize with env vars:', errorMsg)
+      errors.push(`Individual env vars: ${errorMsg}`)
     }
+  } else {
+    console.log('[Firebase Admin] Individual env vars not complete (clientEmail:', !!clientEmail, ', privateKey:', !!privateKey, ')')
+    errors.push('Individual env vars not complete')
   }
 
   // Option 3: Fallback to service account file for local development
+  console.log('[Firebase Admin] Attempting fallback to service account file')
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const serviceAccount = require('../scripts/serviceAccountKey.json')
+    const storageBucket = process.env.FIREBASE_STORAGE_BUCKET ||
+      `${serviceAccount.project_id}.firebasestorage.app`
+
     adminApp = initializeApp({
       credential: cert(serviceAccount),
-      storageBucket: `${serviceAccount.project_id}.firebasestorage.app`,
+      storageBucket,
     })
+    console.log('[Firebase Admin] Successfully initialized with service account file')
+    return adminApp
   } catch (error) {
-    console.error('Failed to initialize Firebase Admin with service account file:', error)
-    // Last resort: initialize without credentials (only works in GCP environment)
-    adminApp = initializeApp({
-      projectId,
-      storageBucket: `${projectId}.firebasestorage.app`,
-    })
+    const errorMsg = error instanceof Error ? error.message : String(error)
+    console.error('[Firebase Admin] Failed to load service account file:', errorMsg)
+    errors.push(`Service account file: ${errorMsg}`)
   }
 
-  return adminApp
+  // All methods failed - throw an error with all attempts
+  initializationError = new Error(
+    `Failed to initialize Firebase Admin SDK. Attempts:\n${errors.map((e, i) => `${i + 1}. ${e}`).join('\n')}`
+  )
+  throw initializationError
 }
 
 export function getAdminDb(): Firestore {
