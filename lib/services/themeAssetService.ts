@@ -89,8 +89,6 @@ export async function createTheme(
     tenantId,
     themeName,
     themeSource: options?.themeSource || 'custom',
-    themeforestId: options?.themeforestId,
-    licenseType: options?.licenseType,
     status: 'draft',
     version: '1.0.0',
     assets: {
@@ -103,6 +101,14 @@ export async function createTheme(
     updatedAt: Timestamp.now(),
     createdBy: userId,
     updatedBy: userId,
+  }
+
+  // Only add optional fields if they have values (Firestore doesn't accept undefined)
+  if (options?.themeforestId) {
+    theme.themeforestId = options.themeforestId
+  }
+  if (options?.licenseType) {
+    theme.licenseType = options.licenseType
   }
 
   await setDoc(doc(db, THEMES_COLLECTION, themeId), theme)
