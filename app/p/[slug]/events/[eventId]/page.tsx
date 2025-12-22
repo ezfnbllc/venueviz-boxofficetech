@@ -10,6 +10,7 @@ import { Metadata } from 'next'
 import {
   getPromoterBySlug,
   getEventBySlugOrId,
+  getVenueById,
 } from '@/lib/public/publicService'
 import { Layout } from '@/components/public/Layout'
 import { Button } from '@/components/public/Button'
@@ -43,6 +44,63 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 }
 
+// Format date as "Saturday, April 15, 2025"
+function formatDate(date: Date | undefined | null): string {
+  if (!date || isNaN(date.getTime())) {
+    return 'Date TBA'
+  }
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  }).format(date)
+}
+
+// Format time from HH:mm to "3:45 PM"
+function formatTimeString(time?: string): string {
+  if (!time) return ''
+  const [hours, minutes] = time.split(':').map(Number)
+  if (isNaN(hours)) return time
+  const period = hours >= 12 ? 'PM' : 'AM'
+  const displayHours = hours % 12 || 12
+  return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`
+}
+
+// Calculate duration between two times
+function calculateDuration(startTime?: string, endTime?: string): string {
+  if (!startTime || !endTime) return ''
+  const [startH, startM] = startTime.split(':').map(Number)
+  const [endH, endM] = endTime.split(':').map(Number)
+  if (isNaN(startH) || isNaN(endH)) return ''
+
+  let diffMinutes = (endH * 60 + endM) - (startH * 60 + startM)
+  if (diffMinutes < 0) diffMinutes += 24 * 60
+
+  const hours = Math.floor(diffMinutes / 60)
+  const minutes = diffMinutes % 60
+  if (hours === 0) return `${minutes} minutes`
+  if (minutes === 0) return `${hours} hour${hours > 1 ? 's' : ''}`
+  return `${hours}h ${minutes}m`
+}
+
+// Format price with currency
+function formatPrice(price: number | undefined, currency = 'USD'): string {
+  if (price === undefined || price === null || price === 0) {
+    return 'Free'
+  }
+  const formatter = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 2,
+  })
+  const formatted = formatter.format(price)
+  if (currency !== 'USD') {
+    return `${currency} ${formatted}`
+  }
+  return formatted
+}
+
 export default async function EventDetailPage({ params }: PageProps) {
   const { slug, eventId } = await params
   const [promoter, event] = await Promise.all([
@@ -54,39 +112,32 @@ export default async function EventDetailPage({ params }: PageProps) {
     notFound()
   }
 
-  // Format date safely
-  const formatDate = (date: Date | undefined | null) => {
-    if (!date || isNaN(date.getTime())) {
-      return 'Date TBA'
-    }
-    return new Intl.DateTimeFormat('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    }).format(date)
+  // Fetch full venue details if we have a venue ID
+  let venueDetails = null
+  if (event.venue?.id) {
+    venueDetails = await getVenueById(event.venue.id)
   }
 
-  const formatTime = (date: Date | undefined | null) => {
-    if (!date || isNaN(date.getTime())) {
-      return ''
-    }
-    return new Intl.DateTimeFormat('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    }).format(date)
-  }
+  // Build full address
+  const venueAddress = venueDetails
+    ? [
+        venueDetails.streetAddress1,
+        venueDetails.streetAddress2,
+        venueDetails.city,
+        venueDetails.state,
+        venueDetails.zipCode,
+      ].filter(Boolean).join(', ')
+    : event.venue?.city && event.venue?.state
+      ? `${event.venue.city}, ${event.venue.state}`
+      : event.venue?.address
 
-  const formatPrice = (price: number | undefined, currency = 'USD') => {
-    if (price === undefined || price === null) {
-      return 'Free'
-    }
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency,
-    }).format(price)
-  }
+  // Get coordinates for map
+  const coordinates = venueDetails?.coordinates || event.venue?.coordinates
+
+  // Format times
+  const startTimeFormatted = formatTimeString(event.startTime)
+  const doorsOpenFormatted = formatTimeString(event.doorsOpen)
+  const duration = calculateDuration(event.startTime, event.endTime)
 
   return (
     <Layout
@@ -144,6 +195,13 @@ export default async function EventDetailPage({ params }: PageProps) {
             <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white">
               {event.name}
             </h1>
+
+            {/* Performers */}
+            {event.performers && event.performers.length > 0 && (
+              <p className="text-white/80 mt-2 text-lg">
+                {event.performers.join(' • ')}
+              </p>
+            )}
           </div>
         </div>
       </section>
@@ -157,40 +215,58 @@ export default async function EventDetailPage({ params }: PageProps) {
               {/* Event Details */}
               <Card>
                 <CardContent className="p-6">
-                  <div className="flex flex-wrap gap-6 mb-6">
-                    {/* Date */}
+                  <div className="grid md:grid-cols-2 gap-6 mb-6">
+                    {/* Date & Time */}
                     <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 bg-[#e8f7f7] rounded-lg flex items-center justify-center">
-                        <svg className="w-5 h-5 text-[#6ac045]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="w-12 h-12 bg-[#e8f7f7] rounded-lg flex items-center justify-center flex-shrink-0">
+                        <svg className="w-6 h-6 text-[#6ac045]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
                       </div>
                       <div>
-                        <p className="text-sm text-[#717171]">Date & Time</p>
-                        <p className="font-medium text-[#1d1d1d]">{formatDate(event.startDate)}</p>
-                        <p className="text-[#717171]">{formatTime(event.startDate)}</p>
+                        <p className="text-sm text-[#717171] uppercase tracking-wide">Date & Time</p>
+                        <p className="font-semibold text-[#1d1d1d]">{formatDate(event.startDate)}</p>
+                        {startTimeFormatted && (
+                          <p className="text-[#717171]">
+                            {startTimeFormatted}
+                            {duration && <span className="text-[#6ac045]"> ({duration})</span>}
+                          </p>
+                        )}
+                        {doorsOpenFormatted && (
+                          <p className="text-sm text-[#717171]">Doors open: {doorsOpenFormatted}</p>
+                        )}
                       </div>
                     </div>
 
                     {/* Venue */}
-                    {event.venue && (
+                    {(event.venue?.name || venueDetails?.name) && (
                       <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 bg-[#e8f7f7] rounded-lg flex items-center justify-center">
-                          <svg className="w-5 h-5 text-[#6ac045]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div className="w-12 h-12 bg-[#e8f7f7] rounded-lg flex items-center justify-center flex-shrink-0">
+                          <svg className="w-6 h-6 text-[#6ac045]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                           </svg>
                         </div>
                         <div>
-                          <p className="text-sm text-[#717171]">Venue</p>
-                          <p className="font-medium text-[#1d1d1d]">{event.venue.name}</p>
-                          {event.venue.address && (
-                            <p className="text-[#717171]">{event.venue.address}</p>
+                          <p className="text-sm text-[#717171] uppercase tracking-wide">Venue</p>
+                          <p className="font-semibold text-[#1d1d1d]">
+                            {venueDetails?.name || event.venue?.name}
+                          </p>
+                          {venueAddress && (
+                            <p className="text-[#717171]">{venueAddress}</p>
                           )}
-                          {event.venue.city && (
-                            <p className="text-[#717171]">
-                              {event.venue.city}{event.venue.state && `, ${event.venue.state}`}
-                            </p>
+                          {coordinates && (
+                            <a
+                              href={`https://www.google.com/maps/search/?api=1&query=${coordinates.lat},${coordinates.lng}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-[#6ac045] hover:underline inline-flex items-center gap-1 mt-1"
+                            >
+                              Get Directions
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                            </a>
                           )}
                         </div>
                       </div>
@@ -198,7 +274,7 @@ export default async function EventDetailPage({ params }: PageProps) {
                   </div>
 
                   {/* Description */}
-                  <div>
+                  <div className="border-t border-[#efefef] pt-6">
                     <h2 className="text-xl font-bold text-[#1d1d1d] mb-4">About This Event</h2>
                     <div className="prose prose-lg max-w-none text-[#717171]">
                       {event.description ? (
@@ -208,21 +284,77 @@ export default async function EventDetailPage({ params }: PageProps) {
                       )}
                     </div>
                   </div>
+
+                  {/* Tags */}
+                  {event.tags && event.tags.length > 0 && (
+                    <div className="border-t border-[#efefef] pt-6 mt-6">
+                      <div className="flex flex-wrap gap-2">
+                        {event.tags.map((tag, i) => (
+                          <span
+                            key={i}
+                            className="px-3 py-1 bg-[#f1f2f3] text-[#717171] text-sm rounded-full"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
-              {/* Venue Map Placeholder */}
-              {event.venue && (
+              {/* Venue Map */}
+              {coordinates && (
                 <Card>
                   <CardContent className="p-6">
                     <h2 className="text-xl font-bold text-[#1d1d1d] mb-4">Location</h2>
-                    <div className="aspect-video bg-[#f1f2f3] rounded-lg flex items-center justify-center">
-                      <div className="text-center text-[#717171]">
-                        <svg className="w-12 h-12 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                        </svg>
-                        <p>Map coming soon</p>
+                    <div className="aspect-video rounded-lg overflow-hidden">
+                      <iframe
+                        src={`https://www.google.com/maps/embed/v1/place?key=AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8&q=${coordinates.lat},${coordinates.lng}&zoom=15`}
+                        width="100%"
+                        height="100%"
+                        style={{ border: 0 }}
+                        allowFullScreen
+                        loading="lazy"
+                        referrerPolicy="no-referrer-when-downgrade"
+                      />
+                    </div>
+                    <div className="mt-4 flex items-center justify-between">
+                      <div>
+                        <p className="font-semibold text-[#1d1d1d]">
+                          {venueDetails?.name || event.venue?.name}
+                        </p>
+                        {venueAddress && (
+                          <p className="text-sm text-[#717171]">{venueAddress}</p>
+                        )}
                       </div>
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${coordinates.lat},${coordinates.lng}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-4 py-2 bg-[#f1f2f3] hover:bg-[#e8f7f7] text-[#1d1d1d] rounded-lg text-sm font-medium transition-colors"
+                      >
+                        Open in Maps
+                      </a>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Venue Amenities */}
+              {venueDetails?.amenities && venueDetails.amenities.length > 0 && (
+                <Card>
+                  <CardContent className="p-6">
+                    <h2 className="text-xl font-bold text-[#1d1d1d] mb-4">Venue Amenities</h2>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      {venueDetails.amenities.map((amenity, i) => (
+                        <div key={i} className="flex items-center gap-2 text-[#717171]">
+                          <svg className="w-5 h-5 text-[#6ac045]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          {amenity}
+                        </div>
+                      ))}
                     </div>
                   </CardContent>
                 </Card>
@@ -231,7 +363,7 @@ export default async function EventDetailPage({ params }: PageProps) {
 
             {/* Sidebar - Ticket Purchase */}
             <div className="lg:col-span-1">
-              <div className="sticky top-24">
+              <div className="sticky top-24 space-y-4">
                 <Card className="border-2 border-[#efefef]">
                   <CardContent className="p-6">
                     {event.isSoldOut ? (
@@ -249,18 +381,39 @@ export default async function EventDetailPage({ params }: PageProps) {
                         <div className="mb-6">
                           <p className="text-sm text-[#717171] mb-1">Price from</p>
                           <p className="text-3xl font-bold text-[#1d1d1d]">
-                            {event.pricing?.minPrice
-                              ? formatPrice(event.pricing.minPrice, event.pricing.currency)
-                              : 'Free'}
+                            {formatPrice(event.pricing?.minPrice, event.pricing?.currency)}*
                           </p>
                           {event.pricing?.maxPrice && event.pricing.maxPrice !== event.pricing.minPrice && (
                             <p className="text-sm text-[#717171]">
                               to {formatPrice(event.pricing.maxPrice, event.pricing.currency)}
                             </p>
                           )}
+                          <p className="text-xs text-[#717171] mt-2">*Fees may apply</p>
                         </div>
 
-                        <Link href={`/p/${slug}/events/${eventId}/checkout`}>
+                        {/* Ticket Tiers Preview */}
+                        {event.pricing?.tiers && event.pricing.tiers.length > 0 && (
+                          <div className="border-t border-[#efefef] pt-4 mb-4">
+                            <p className="text-sm font-medium text-[#1d1d1d] mb-3">Ticket Options</p>
+                            <div className="space-y-2">
+                              {event.pricing.tiers.slice(0, 3).map((tier) => (
+                                <div key={tier.id} className="flex justify-between items-center text-sm">
+                                  <span className="text-[#717171]">{tier.name}</span>
+                                  <span className="font-medium text-[#1d1d1d]">
+                                    {formatPrice(tier.basePrice, event.pricing?.currency)}
+                                  </span>
+                                </div>
+                              ))}
+                              {event.pricing.tiers.length > 3 && (
+                                <p className="text-xs text-[#717171]">
+                                  +{event.pricing.tiers.length - 3} more options
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        <Link href={`/p/${slug}/events/${event.slug || event.id}/checkout`}>
                           <Button variant="primary" size="lg" className="w-full">
                             Get Tickets
                             <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -269,9 +422,15 @@ export default async function EventDetailPage({ params }: PageProps) {
                           </Button>
                         </Link>
 
-                        {event.ticketsAvailable !== undefined && (
+                        {event.ticketsAvailable !== undefined && event.ticketsAvailable > 0 && (
                           <p className="text-center text-sm text-[#717171] mt-4">
-                            {event.ticketsAvailable} tickets remaining
+                            {event.ticketsAvailable < 50 ? (
+                              <span className="text-orange-500 font-medium">
+                                Only {event.ticketsAvailable} tickets remaining!
+                              </span>
+                            ) : (
+                              `${event.ticketsAvailable} tickets available`
+                            )}
                           </p>
                         )}
                       </>
@@ -280,7 +439,7 @@ export default async function EventDetailPage({ params }: PageProps) {
                 </Card>
 
                 {/* Share */}
-                <Card className="mt-4">
+                <Card>
                   <CardContent className="p-4">
                     <p className="text-sm text-[#717171] mb-3">Share this event</p>
                     <div className="flex gap-2">

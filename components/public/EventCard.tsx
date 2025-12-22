@@ -16,16 +16,92 @@ export interface EventCardProps {
   title: string
   slug?: string
   imageUrl?: string
-  date: string
+  // Schedule
+  startDate?: Date
+  startTime?: string  // HH:mm format
+  endTime?: string    // HH:mm format
+  // Legacy string date (for backwards compatibility)
+  date?: string
   time?: string
   duration?: string
+  // Pricing
   price?: number | string
   currency?: string
-  remaining?: number
+  // Venue
   venue?: string
+  location?: string
+  // Status
+  remaining?: number
   isOnline?: boolean
+  isSoldOut?: boolean
+  // Links
   promoterSlug?: string
   className?: string
+}
+
+/**
+ * Format time from HH:mm to h:mm AM/PM format
+ */
+function formatTime(time?: string): string {
+  if (!time) return ''
+  const [hours, minutes] = time.split(':').map(Number)
+  if (isNaN(hours)) return time
+  const period = hours >= 12 ? 'PM' : 'AM'
+  const displayHours = hours % 12 || 12
+  return `${displayHours}.${minutes.toString().padStart(2, '0')} ${period}`
+}
+
+/**
+ * Calculate duration between two times
+ */
+function calculateDuration(startTime?: string, endTime?: string): string {
+  if (!startTime || !endTime) return ''
+  const [startH, startM] = startTime.split(':').map(Number)
+  const [endH, endM] = endTime.split(':').map(Number)
+  if (isNaN(startH) || isNaN(endH)) return ''
+
+  let diffMinutes = (endH * 60 + endM) - (startH * 60 + startM)
+  if (diffMinutes < 0) diffMinutes += 24 * 60 // Handle next day
+
+  const hours = Math.floor(diffMinutes / 60)
+  const minutes = diffMinutes % 60
+  if (hours === 0) return `${minutes}m`
+  if (minutes === 0) return `${hours}h`
+  return `${hours}h ${minutes}m`
+}
+
+/**
+ * Format date as "15 Apr Fri"
+ */
+function formatDateShort(date?: Date): string {
+  if (!date || isNaN(date.getTime())) return 'TBA'
+  const day = date.getDate()
+  const month = date.toLocaleDateString('en-US', { month: 'short' })
+  const weekday = date.toLocaleDateString('en-US', { weekday: 'short' })
+  return `${day} ${month} ${weekday}`
+}
+
+/**
+ * Format price with currency symbol
+ */
+function formatPrice(price?: number | string, currency = 'USD'): string {
+  if (price === undefined || price === null || price === 0 || price === 'Free') {
+    return 'Free'
+  }
+  if (typeof price === 'string') return price
+
+  // Get currency symbol
+  const formatter = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 2,
+  })
+  const formatted = formatter.format(price)
+  // Add currency code prefix for non-USD
+  if (currency !== 'USD') {
+    return `${currency} ${formatted}`
+  }
+  return formatted
 }
 
 export function EventCard({
@@ -33,6 +109,9 @@ export function EventCard({
   title,
   slug,
   imageUrl,
+  startDate,
+  startTime,
+  endTime,
   date,
   time,
   duration,
@@ -40,7 +119,9 @@ export function EventCard({
   currency = 'USD',
   remaining,
   venue,
+  location,
   isOnline = false,
+  isSoldOut = false,
   promoterSlug,
   className,
 }: EventCardProps) {
@@ -48,12 +129,14 @@ export function EventCard({
     ? `/p/${promoterSlug}/events/${slug || id}`
     : `/events/${slug || id}`
 
-  const formattedPrice =
-    price === 0 || price === 'Free'
-      ? 'Free'
-      : typeof price === 'number'
-      ? `${currency} $${price.toFixed(2)}`
-      : price
+  // Format display values
+  const displayDate = startDate ? formatDateShort(startDate) : date || 'TBA'
+  const displayTime = startTime ? formatTime(startTime) : time || ''
+  const displayDuration = duration || (startTime && endTime ? calculateDuration(startTime, endTime) : '')
+  const displayPrice = formatPrice(price, currency)
+
+  // Build combined date/time/duration string: "15 Apr Fri, 3.45 PM 1h"
+  const dateTimeString = [displayDate, displayTime, displayDuration].filter(Boolean).join(', ')
 
   return (
     <div
@@ -61,6 +144,7 @@ export function EventCard({
         'bg-white border-2 border-[#efefef] rounded-lg overflow-hidden',
         'transition-all duration-200 hover:shadow-[0px_2px_15px_-9px_rgba(0,0,0,0.1)]',
         'hover:border-[#6ac045]',
+        isSoldOut && 'opacity-75',
         className
       )}
     >
@@ -115,12 +199,19 @@ export function EventCard({
           </svg>
         </button>
 
-        {/* Online Badge */}
-        {isOnline && (
-          <div className="absolute top-3 left-3 px-2 py-1 bg-[#6ac045] text-white text-xs font-medium rounded">
-            Online Event
-          </div>
-        )}
+        {/* Status Badges */}
+        <div className="absolute top-3 left-3 flex flex-col gap-1">
+          {isOnline && (
+            <div className="px-2 py-1 bg-[#6ac045] text-white text-xs font-medium rounded">
+              Online Event
+            </div>
+          )}
+          {isSoldOut && (
+            <div className="px-2 py-1 bg-red-500 text-white text-xs font-medium rounded">
+              Sold Out
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Event Content */}
@@ -131,57 +222,39 @@ export function EventCard({
           </h3>
         </Link>
 
-        {/* Price and Remaining */}
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-[#6ac045] font-medium">{formattedPrice}</span>
+        {/* Venue */}
+        {venue && (
+          <div className="flex items-center text-sm text-[#717171] mb-2">
+            <svg className="w-4 h-4 mr-1.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <span className="truncate">{venue}</span>
+          </div>
+        )}
+
+        {/* Price */}
+        <div className="flex items-center justify-between">
+          <span className="text-[#6ac045] font-semibold">{displayPrice}*</span>
           {remaining !== undefined && remaining > 0 && remaining < 20 && (
-            <span className="text-sm text-[#717171] flex items-center">
-              <svg
-                className="w-4 h-4 mr-1 rotate-90"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <path d="M2 6a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 100 4v2a2 2 0 01-2 2H4a2 2 0 01-2-2v-2a2 2 0 100-4V6z" />
-              </svg>
-              {remaining} Remaining
+            <span className="text-xs text-orange-500 font-medium">
+              Only {remaining} left
             </span>
           )}
         </div>
       </div>
 
-      {/* Event Footer */}
+      {/* Event Footer - Date/Time */}
       <div className="px-4 py-3 border-t border-[#efefef] bg-[#fafafa]">
-        <div className="flex items-center justify-between text-sm text-[#717171]">
-          <div className="flex items-center space-x-3">
-            <span className="flex items-center">
-              <svg className="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              {date}
-            </span>
-            {time && (
-              <>
-                <span className="text-[#efefef]">•</span>
-                <span>{time}</span>
-              </>
-            )}
-          </div>
-          {duration && (
-            <span className="flex items-center">
-              <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              {duration}
-            </span>
-          )}
+        <div className="flex items-center text-sm text-[#717171]">
+          <svg className="w-4 h-4 mr-1.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path
+              fillRule="evenodd"
+              d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z"
+              clipRule="evenodd"
+            />
+          </svg>
+          <span>{dateTimeString}</span>
         </div>
       </div>
     </div>
