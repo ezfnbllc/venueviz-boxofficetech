@@ -570,13 +570,13 @@ function categorizeAssetServer(
         .replace(/[-_]/g, ' ')
         .replace(/\b\w/g, c => c.toUpperCase())
 
+      // Don't include undefined fields - Firestore doesn't accept them
       templates.push({
         id: `template-${templates.length + 1}`,
         name: templateName || 'Page',
         type: 'page',
         htmlFile: url,
         slots: [], // Will be populated by template parser
-        thumbnail: undefined,
       })
       break
 
