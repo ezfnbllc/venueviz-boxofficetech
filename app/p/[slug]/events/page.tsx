@@ -30,12 +30,24 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     }
   }
 
+  const description = `Browse all upcoming events and buy tickets from ${promoter.name}. Find concerts, shows, and experiences near you.`
+
   return {
     title: `Events | ${promoter.name}`,
-    description: `Browse all upcoming events from ${promoter.name}`,
+    description,
     openGraph: {
       title: `Events | ${promoter.name}`,
-      description: `Browse all upcoming events from ${promoter.name}`,
+      description,
+      images: promoter.banner ? [promoter.banner] : promoter.logo ? [promoter.logo] : [],
+      type: 'website',
+      locale: 'en_US',
+      siteName: promoter.name,
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `Events | ${promoter.name}`,
+      description,
+      images: promoter.banner ? [promoter.banner] : promoter.logo ? [promoter.logo] : [],
     },
   }
 }
@@ -84,8 +96,59 @@ export default async function EventsPage({ params, searchParams }: PageProps) {
     })),
   ]
 
+  // Build ItemList structured data for SEO
+  const eventsListStructuredData = events.length > 0 ? {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    'name': `${promoter.name} Events`,
+    'description': `Upcoming events from ${promoter.name}`,
+    'numberOfItems': events.length,
+    'itemListElement': events.slice(0, 20).map((event, index) => ({
+      '@type': 'ListItem',
+      'position': index + 1,
+      'item': {
+        '@type': 'Event',
+        'name': event.name,
+        'startDate': event.startDate.toISOString(),
+        'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}/p/${slug}/events/${event.slug || event.id}`,
+        'image': event.thumbnail || event.bannerImage,
+        'description': event.shortDescription || event.description?.substring(0, 160),
+        'location': event.venue?.name ? {
+          '@type': 'Place',
+          'name': event.venue.name,
+          'address': event.venue.city && event.venue.state
+            ? `${event.venue.city}, ${event.venue.state}`
+            : undefined,
+        } : {
+          '@type': 'VirtualLocation',
+          'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}/p/${slug}/events/${event.slug || event.id}`,
+        },
+        'offers': {
+          '@type': 'Offer',
+          'price': event.pricing?.minPrice || 0,
+          'priceCurrency': event.pricing?.currency || 'USD',
+          'availability': event.isSoldOut
+            ? 'https://schema.org/SoldOut'
+            : 'https://schema.org/InStock',
+        },
+        'organizer': {
+          '@type': 'Organization',
+          'name': promoter.name,
+        },
+      },
+    })),
+  } : null
+
   return (
-    <Layout
+    <>
+      {/* Structured Data for SEO */}
+      {eventsListStructuredData && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(eventsListStructuredData) }}
+        />
+      )}
+      <Layout
       promoterSlug={slug}
       header={{
         logo: promoter.logo,
@@ -185,6 +248,7 @@ export default async function EventsPage({ params, searchParams }: PageProps) {
         </div>
       </section>
     </Layout>
+    </>
   )
 }
 

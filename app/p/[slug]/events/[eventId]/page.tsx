@@ -36,14 +36,32 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     }
   }
 
+  // Use SEO data from database if available, fallback to generated values
+  const seo = event.seo
+  const metaTitle = seo?.metaTitle || `${event.name} | ${promoter.name}`
+  const metaDescription = seo?.metaDescription || event.shortDescription || event.description?.substring(0, 160)
+  const ogImage = seo?.socialMediaImage || event.bannerImage || event.thumbnail
+
   return {
-    title: `${event.name} | ${promoter.name}`,
-    description: event.shortDescription || event.description?.substring(0, 160),
+    title: metaTitle,
+    description: metaDescription,
+    keywords: seo?.keywords?.join(', '),
     openGraph: {
-      title: event.name,
-      description: event.shortDescription || event.description?.substring(0, 160),
-      images: event.bannerImage || event.thumbnail ? [event.bannerImage || event.thumbnail!] : [],
+      title: seo?.metaTitle || event.name,
+      description: metaDescription,
+      images: ogImage ? [ogImage] : [],
+      type: 'website',
+      locale: 'en_US',
     },
+    twitter: {
+      card: 'summary_large_image',
+      title: seo?.metaTitle || event.name,
+      description: metaDescription,
+      images: ogImage ? [ogImage] : [],
+    },
+    other: seo?.aiSearchDescription ? {
+      'ai-search-description': seo.aiSearchDescription,
+    } : undefined,
   }
 }
 
@@ -169,8 +187,81 @@ export default async function EventDetailPage({ params }: PageProps) {
   // Determine if it's online event
   const isOnlineEvent = event.venue?.type === 'online' || !event.venue?.name
 
+  // Build FAQ structured data for SEO
+  const faqStructuredData = event.seo?.faqStructuredData && event.seo.faqStructuredData.length > 0 ? {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    'mainEntity': event.seo.faqStructuredData.map(faq => ({
+      '@type': 'Question',
+      'name': faq.question,
+      'acceptedAnswer': {
+        '@type': 'Answer',
+        'text': faq.answer,
+      },
+    })),
+  } : null
+
+  // Build Event structured data for SEO
+  const eventStructuredData = {
+    '@context': 'https://schema.org',
+    '@type': 'Event',
+    'name': event.name,
+    'description': event.description || event.shortDescription,
+    'startDate': event.startDate.toISOString(),
+    'endDate': event.endDate?.toISOString(),
+    'eventStatus': event.isSoldOut ? 'https://schema.org/EventPostponed' : 'https://schema.org/EventScheduled',
+    'eventAttendanceMode': isOnlineEvent
+      ? 'https://schema.org/OnlineEventAttendanceMode'
+      : 'https://schema.org/OfflineEventAttendanceMode',
+    'image': event.bannerImage || event.thumbnail,
+    'location': isOnlineEvent
+      ? {
+          '@type': 'VirtualLocation',
+          'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}/p/${slug}/events/${event.slug || event.id}`,
+        }
+      : {
+          '@type': 'Place',
+          'name': venueDetails?.name || event.venue?.name,
+          'address': {
+            '@type': 'PostalAddress',
+            'streetAddress': venueDetails?.streetAddress1 || event.venue?.streetAddress1,
+            'addressLocality': venueDetails?.city || event.venue?.city,
+            'addressRegion': venueDetails?.state || event.venue?.state,
+            'postalCode': venueDetails?.zipCode || event.venue?.zipCode,
+            'addressCountry': venueDetails?.country || event.venue?.country || 'US',
+          },
+          ...(coordinates && { 'geo': { '@type': 'GeoCoordinates', 'latitude': coordinates.lat, 'longitude': coordinates.lng } }),
+        },
+    'organizer': {
+      '@type': 'Organization',
+      'name': promoter.name,
+      'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}/p/${slug}`,
+    },
+    'offers': {
+      '@type': 'Offer',
+      'price': event.pricing?.minPrice || 0,
+      'priceCurrency': event.pricing?.currency || 'USD',
+      'availability': event.isSoldOut
+        ? 'https://schema.org/SoldOut'
+        : 'https://schema.org/InStock',
+      'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}/p/${slug}/events/${event.slug || event.id}/checkout`,
+    },
+  }
+
   return (
-    <Layout
+    <>
+      {/* Structured Data for SEO */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(eventStructuredData) }}
+      />
+      {faqStructuredData && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(faqStructuredData) }}
+        />
+      )}
+      <Layout
       promoterSlug={slug}
       header={{
         logo: promoter.logo,
@@ -234,7 +325,7 @@ export default async function EventDetailPage({ params }: PageProps) {
                 {event.name}
               </h1>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[#717171]">
-                {/* Event Type */}
+                {/* Event Type / Venue Name */}
                 <span className="flex items-center">
                   {isOnlineEvent ? (
                     <>
@@ -249,7 +340,7 @@ export default async function EventDetailPage({ params }: PageProps) {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
-                      Venue Event
+                      {venueDetails?.name || event.venue?.name || 'Venue Event'}
                     </>
                   )}
                 </span>
@@ -377,8 +468,8 @@ export default async function EventDetailPage({ params }: PageProps) {
                 </CardContent>
               </Card>
 
-              {/* Venue Map - Only for venue events */}
-              {!isOnlineEvent && coordinates && (
+              {/* Venue Map - Only for venue events with coordinates */}
+              {!isOnlineEvent && coordinates && coordinates.lat && coordinates.lng && (
                 <Card className="mt-6 overflow-hidden">
                   <CardContent className="p-6">
                     <h2 className="text-xl font-bold text-[#1d1d1d] mb-4">Location</h2>
@@ -415,24 +506,28 @@ export default async function EventDetailPage({ params }: PageProps) {
                 </Card>
               )}
 
-              {/* Venue Amenities */}
-              {venueDetails?.amenities && venueDetails.amenities.length > 0 && (
-                <Card className="mt-6">
-                  <CardContent className="p-6">
-                    <h2 className="text-xl font-bold text-[#1d1d1d] mb-4">Venue Amenities</h2>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                      {venueDetails.amenities.map((amenity, i) => (
-                        <div key={i} className="flex items-center gap-2 text-[#717171]">
-                          <svg className="w-5 h-5 text-[#6ac045]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                          {amenity}
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
+              {/* Venue Amenities - Use venueDetails or event.venue.amenities */}
+              {(() => {
+                const amenities = venueDetails?.amenities || event.venue?.amenities
+                if (!amenities || amenities.length === 0) return null
+                return (
+                  <Card className="mt-6">
+                    <CardContent className="p-6">
+                      <h2 className="text-xl font-bold text-[#1d1d1d] mb-4">Venue Amenities</h2>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {amenities.map((amenity, i) => (
+                          <div key={i} className="flex items-center gap-2 text-[#717171]">
+                            <svg className="w-5 h-5 text-[#6ac045]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            {amenity}
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              })()}
             </div>
 
             {/* Right Column - Event Details Sidebar */}
@@ -539,6 +634,19 @@ export default async function EventDetailPage({ params }: PageProps) {
                             {venueAddress && (
                               <p className="text-sm text-[#717171] mt-1">{venueAddress}</p>
                             )}
+                            {coordinates && (
+                              <a
+                                href={`https://www.google.com/maps/search/?api=1&query=${coordinates.lat},${coordinates.lng}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center text-[#6ac045] text-sm font-medium hover:text-[#5aa038] transition-colors mt-2"
+                              >
+                                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                                </svg>
+                                View Map
+                              </a>
+                            )}
                           </>
                         )}
                       </div>
@@ -632,5 +740,6 @@ export default async function EventDetailPage({ params }: PageProps) {
         </section>
       )}
     </Layout>
+    </>
   )
 }
