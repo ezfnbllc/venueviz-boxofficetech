@@ -63,16 +63,22 @@ export async function getPromoterBySlug(slug: string): Promise<PublicPromoter | 
   try {
     const db = getAdminDb()
     const promotersRef = db.collection('promoters')
+    console.log(`[PublicService] Looking for promoter with slug: ${slug}`)
+
     const snapshot = await promotersRef
       .where('slug', '==', slug)
       .where('active', '==', true)
       .limit(1)
       .get()
 
-    if (snapshot.empty) return null
+    if (snapshot.empty) {
+      console.log(`[PublicService] No promoter found with slug: ${slug}`)
+      return null
+    }
 
     const doc = snapshot.docs[0]
     const data = doc.data()
+    console.log(`[PublicService] Found promoter: id=${doc.id}, name=${data.name}`)
 
     return {
       id: doc.id,
@@ -106,6 +112,7 @@ export async function getPromoterEvents(
 ): Promise<PublicEvent[]> {
   try {
     const db = getAdminDb()
+    console.log(`[PublicService] Fetching events for promoterId: ${promoterId}`)
 
     // Events are stored with promoter info in nested 'promoter.promoterId' field
     let query = db.collection('events')
@@ -121,6 +128,18 @@ export async function getPromoterEvents(
     }
 
     const snapshot = await query.get()
+    console.log(`[PublicService] Query returned ${snapshot.size} events`)
+
+    // Debug: If no events found, let's check what promoterIds exist in events
+    if (snapshot.empty) {
+      console.log(`[PublicService] No events found. Checking sample events...`)
+      const sampleEvents = await db.collection('events').limit(3).get()
+      sampleEvents.docs.forEach(doc => {
+        const data = doc.data()
+        console.log(`[PublicService] Sample event: id=${doc.id}, promoter.promoterId=${data.promoter?.promoterId}, promoterId=${data.promoterId}, status=${data.status}`)
+      })
+    }
+
     const now = new Date()
 
     let events = snapshot.docs.map(doc => {
