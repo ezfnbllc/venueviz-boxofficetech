@@ -50,7 +50,7 @@ export default async function EventsPage({ params, searchParams }: PageProps) {
   }
 
   const [events, categories] = await Promise.all([
-    getPromoterEvents(promoter.id, { category, upcoming: true }),
+    getPromoterEvents(promoter.id, { category }),
     getPromoterCategories(promoter.id),
   ])
 

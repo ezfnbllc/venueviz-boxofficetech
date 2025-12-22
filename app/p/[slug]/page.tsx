@@ -8,8 +8,7 @@ import Link from 'next/link'
 import { Metadata } from 'next'
 import {
   getPromoterBySlug,
-  getUpcomingEvents,
-  getFeaturedEvents,
+  getPromoterEvents,
 } from '@/lib/public/publicService'
 import { Layout } from '@/components/public/Layout'
 import { HeroBanner } from '@/components/public/HeroBanner'
@@ -51,8 +50,8 @@ export default async function PromoterHomePage({ params }: PageProps) {
   }
 
   const [featuredEvents, upcomingEvents] = await Promise.all([
-    getFeaturedEvents(promoter.id, 4),
-    getUpcomingEvents(promoter.id, 8),
+    getPromoterEvents(promoter.id, { featured: true, limit: 4 }),
+    getPromoterEvents(promoter.id, { limit: 8 }),
   ])
 
   // Transform events to EventCardProps
