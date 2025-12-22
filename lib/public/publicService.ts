@@ -106,8 +106,10 @@ export async function getPromoterEvents(
 ): Promise<PublicEvent[]> {
   try {
     const db = getAdminDb()
+
+    // Events are stored with promoter info in nested 'promoter.promoterId' field
     let query = db.collection('events')
-      .where('promoterId', '==', promoterId)
+      .where('promoter.promoterId', '==', promoterId)
       .where('status', '==', 'published')
 
     if (options?.category) {
@@ -145,8 +147,8 @@ export async function getPromoterEvents(
           maxPrice: data.pricing?.maxPrice || data.maxPrice,
           currency: data.pricing?.currency || 'USD',
         },
-        promoterId: data.promoterId,
-        promoterSlug: data.promoterSlug,
+        promoterId: data.promoter?.promoterId || data.promoterId,
+        promoterSlug: data.promoter?.slug || data.promoterSlug,
         ticketsAvailable: data.ticketsAvailable,
         totalCapacity: data.totalCapacity || data.capacity,
         isFeatured: data.isFeatured,
