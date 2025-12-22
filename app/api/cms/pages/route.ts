@@ -6,32 +6,33 @@
  * - POST: Create page, add section, manage translations
  * - PUT: Update page, sections, SEO
  * - DELETE: Delete page
+ *
+ * Uses Firebase Admin SDK for server-side operations.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import {
-  CMSPageService,
-  createPage,
-  getPage,
-  getPagesByTenant,
-  getPublishedPages,
-  getPageBySlug,
-  updatePage,
-  updatePageSEO,
-  updatePageSections,
-  addSection,
-  removeSection,
-  updateSection,
-  reorderSections,
-  publishPage,
-  unpublishPage,
-  deletePage,
-  duplicatePage,
-  addLanguage,
-  updateTranslation,
-  publishTranslation,
-  removeLanguage,
-} from '@/lib/services/cmsPageService'
+  createPageServer,
+  getPageServer,
+  getPagesByTenantServer,
+  getPublishedPagesServer,
+  getPageBySlugServer,
+  updatePageServer,
+  updatePageSEOServer,
+  updatePageSectionsServer,
+  addSectionServer,
+  removeSectionServer,
+  updateSectionServer,
+  reorderSectionsServer,
+  publishPageServer,
+  unpublishPageServer,
+  deletePageServer,
+  duplicatePageServer,
+  addLanguageServer,
+  updateTranslationServer,
+  publishTranslationServer,
+  removeLanguageServer,
+} from '@/lib/services/cmsPageServiceServer'
 import { SectionType } from '@/lib/types/cms'
 
 // ============================================================================
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest) {
 
     // Get specific page
     if (action === 'get' && pageId) {
-      const page = await getPage(pageId)
+      const page = await getPageServer(pageId)
       if (!page) {
         return NextResponse.json({ error: 'Page not found' }, { status: 404 })
       }
@@ -57,7 +58,7 @@ export async function GET(request: NextRequest) {
 
     // Get page by slug
     if (action === 'getBySlug' && tenantId && slug) {
-      const page = await getPageBySlug(tenantId, slug)
+      const page = await getPageBySlugServer(tenantId, slug)
       if (!page) {
         return NextResponse.json({ error: 'Page not found' }, { status: 404 })
       }
@@ -66,13 +67,13 @@ export async function GET(request: NextRequest) {
 
     // Get published pages only
     if (action === 'published' && tenantId) {
-      const pages = await getPublishedPages(tenantId)
+      const pages = await getPublishedPagesServer(tenantId)
       return NextResponse.json({ pages })
     }
 
     // List all pages for tenant
     if (tenantId) {
-      const pages = await getPagesByTenant(tenantId)
+      const pages = await getPagesByTenantServer(tenantId)
       return NextResponse.json({ pages })
     }
 
@@ -110,7 +111,7 @@ export async function POST(request: NextRequest) {
           )
         }
 
-        const page = await createPage(tenantId, themeId, {
+        const page = await createPageServer(tenantId, themeId, {
           title,
           slug,
           type,
@@ -131,8 +132,8 @@ export async function POST(request: NextRequest) {
           )
         }
 
-        const section = await addSection(pageId, sectionType as SectionType, userId, position)
-        const page = await getPage(pageId)
+        const section = await addSectionServer(pageId, sectionType as SectionType, userId, position)
+        const page = await getPageServer(pageId)
         return NextResponse.json({ section, page })
       }
 
@@ -146,8 +147,8 @@ export async function POST(request: NextRequest) {
           )
         }
 
-        await removeSection(pageId, sectionId, userId)
-        const page = await getPage(pageId)
+        await removeSectionServer(pageId, sectionId, userId)
+        const page = await getPageServer(pageId)
         return NextResponse.json({ page, message: 'Section removed' })
       }
 
@@ -161,8 +162,8 @@ export async function POST(request: NextRequest) {
           )
         }
 
-        await reorderSections(pageId, sectionIds, userId)
-        const page = await getPage(pageId)
+        await reorderSectionsServer(pageId, sectionIds, userId)
+        const page = await getPageServer(pageId)
         return NextResponse.json({ page, message: 'Sections reordered' })
       }
 
@@ -172,8 +173,8 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Page ID required' }, { status: 400 })
         }
 
-        await publishPage(pageId, userId)
-        const page = await getPage(pageId)
+        await publishPageServer(pageId, userId)
+        const page = await getPageServer(pageId)
         return NextResponse.json({ page, message: 'Page published' })
       }
 
@@ -183,8 +184,8 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Page ID required' }, { status: 400 })
         }
 
-        await unpublishPage(pageId, userId)
-        const page = await getPage(pageId)
+        await unpublishPageServer(pageId, userId)
+        const page = await getPageServer(pageId)
         return NextResponse.json({ page, message: 'Page unpublished' })
       }
 
@@ -198,7 +199,7 @@ export async function POST(request: NextRequest) {
           )
         }
 
-        const page = await duplicatePage(pageId, newSlug, userId)
+        const page = await duplicatePageServer(pageId, newSlug, userId)
         return NextResponse.json({ page, message: 'Page duplicated' })
       }
 
@@ -212,8 +213,8 @@ export async function POST(request: NextRequest) {
           )
         }
 
-        await addLanguage(pageId, langCode, langName, userId)
-        const page = await getPage(pageId)
+        await addLanguageServer(pageId, langCode, langName, userId)
+        const page = await getPageServer(pageId)
         return NextResponse.json({ page, message: 'Language added' })
       }
 
@@ -227,8 +228,8 @@ export async function POST(request: NextRequest) {
           )
         }
 
-        await publishTranslation(pageId, langCode, userId)
-        const page = await getPage(pageId)
+        await publishTranslationServer(pageId, langCode, userId)
+        const page = await getPageServer(pageId)
         return NextResponse.json({ page, message: 'Translation published' })
       }
 
@@ -242,8 +243,8 @@ export async function POST(request: NextRequest) {
           )
         }
 
-        await removeLanguage(pageId, langCode, userId)
-        const page = await getPage(pageId)
+        await removeLanguageServer(pageId, langCode, userId)
+        const page = await getPageServer(pageId)
         return NextResponse.json({ page, message: 'Language removed' })
       }
 
@@ -279,7 +280,7 @@ export async function PUT(request: NextRequest) {
       // Update basic page info
       case 'updateInfo': {
         const { title, slug, description, showInNav, navOrder, navLabel, parentPageId } = body
-        await updatePage(pageId, {
+        await updatePageServer(pageId, {
           title,
           slug,
           description,
@@ -297,7 +298,7 @@ export async function PUT(request: NextRequest) {
         if (!seo) {
           return NextResponse.json({ error: 'SEO data required' }, { status: 400 })
         }
-        await updatePageSEO(pageId, seo, userId)
+        await updatePageSEOServer(pageId, seo, userId)
         break
       }
 
@@ -307,7 +308,7 @@ export async function PUT(request: NextRequest) {
         if (!sections) {
           return NextResponse.json({ error: 'Sections data required' }, { status: 400 })
         }
-        await updatePageSections(pageId, sections, userId)
+        await updatePageSectionsServer(pageId, sections, userId)
         break
       }
 
@@ -320,7 +321,7 @@ export async function PUT(request: NextRequest) {
             { status: 400 }
           )
         }
-        await updateSection(pageId, sectionId, updates, userId)
+        await updateSectionServer(pageId, sectionId, updates, userId)
         break
       }
 
@@ -333,17 +334,17 @@ export async function PUT(request: NextRequest) {
             { status: 400 }
           )
         }
-        await updateTranslation(pageId, langCode, translation, userId)
+        await updateTranslationServer(pageId, langCode, translation, userId)
         break
       }
 
       default:
         // Default: update basic page info
         const { title, slug, description, showInNav, navOrder } = body
-        await updatePage(pageId, { title, slug, description, showInNav, navOrder }, userId)
+        await updatePageServer(pageId, { title, slug, description, showInNav, navOrder }, userId)
     }
 
-    const page = await getPage(pageId)
+    const page = await getPageServer(pageId)
     return NextResponse.json({ page, message: 'Page updated successfully' })
   } catch (error) {
     console.error('PUT /api/cms/pages error:', error)
@@ -367,7 +368,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Page ID required' }, { status: 400 })
     }
 
-    await deletePage(pageId)
+    await deletePageServer(pageId)
     return NextResponse.json({ message: 'Page deleted successfully' })
   } catch (error) {
     console.error('DELETE /api/cms/pages error:', error)
