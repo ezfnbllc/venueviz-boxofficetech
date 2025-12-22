@@ -5,10 +5,12 @@
  * - ZIP file import (full theme)
  * - Individual asset uploads (CSS, JS, images, fonts)
  * - Parse ZIP for template detection
+ *
+ * Uses Firebase Admin SDK for server-side operations.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { importThemeFromZip, uploadThemeAsset } from '@/lib/services/themeAssetService'
+import { importThemeFromZipServer, uploadThemeAssetServer } from '@/lib/services/themeAssetServiceServer'
 import { parseThemeZip } from '@/lib/services/templateParserService'
 import { MAX_FILE_SIZES } from '@/lib/types/cms'
 
@@ -57,7 +59,9 @@ export async function POST(request: NextRequest) {
           )
         }
 
-        const theme = await importThemeFromZip(tenantId, file, themeName, userId)
+        // Convert File to ArrayBuffer for server-side processing
+        const zipBuffer = await file.arrayBuffer()
+        const theme = await importThemeFromZipServer(tenantId, zipBuffer, themeName, userId)
         return NextResponse.json({
           theme,
           message: 'Theme imported successfully',
@@ -98,7 +102,10 @@ export async function POST(request: NextRequest) {
           )
         }
 
-        const url = await uploadThemeAsset(themeId, file, subPath)
+        // Convert File to Buffer for server-side processing
+        const arrayBuffer = await file.arrayBuffer()
+        const fileBuffer = Buffer.from(arrayBuffer)
+        const url = await uploadThemeAssetServer(themeId, fileBuffer, file.name, file.type, subPath)
         return NextResponse.json({
           url,
           filename: file.name,
@@ -122,7 +129,10 @@ export async function POST(request: NextRequest) {
 
         for (const file of files) {
           try {
-            const url = await uploadThemeAsset(themeId, file, subPath)
+            // Convert File to Buffer for server-side processing
+            const arrayBuffer = await file.arrayBuffer()
+            const fileBuffer = Buffer.from(arrayBuffer)
+            const url = await uploadThemeAssetServer(themeId, fileBuffer, file.name, file.type, subPath)
             results.push({ filename: file.name, url })
           } catch (error) {
             results.push({
