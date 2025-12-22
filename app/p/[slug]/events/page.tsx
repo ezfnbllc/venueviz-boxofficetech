@@ -54,20 +54,27 @@ export default async function EventsPage({ params, searchParams }: PageProps) {
     getPromoterCategories(promoter.id),
   ])
 
+  // Helper to format date string
+  const formatDateString = (date: Date | undefined | null) => {
+    if (!date || isNaN(date.getTime())) {
+      return 'Date TBA'
+    }
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    }).format(date)
+  }
+
   // Transform events to EventCardProps
   const eventCards: EventCardProps[] = events.map(event => ({
     id: event.id,
     title: event.name,
-    date: event.startDate,
+    slug: event.slug,
+    date: formatDateString(event.startDate),
     venue: event.venue?.name,
-    location: event.venue?.city
-      ? `${event.venue.city}${event.venue.state ? `, ${event.venue.state}` : ''}`
-      : undefined,
-    thumbnail: event.thumbnail || '/images/placeholder-event.jpg',
+    imageUrl: event.thumbnail,
     price: event.pricing?.minPrice,
-    category: event.category,
-    isFeatured: event.isFeatured,
-    isSoldOut: event.isSoldOut,
     promoterSlug: slug,
   }))
 
