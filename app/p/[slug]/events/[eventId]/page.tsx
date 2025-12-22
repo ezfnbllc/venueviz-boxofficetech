@@ -9,7 +9,7 @@ import Image from 'next/image'
 import { Metadata } from 'next'
 import {
   getPromoterBySlug,
-  getEventById,
+  getEventBySlugOrId,
 } from '@/lib/public/publicService'
 import { Layout } from '@/components/public/Layout'
 import { Button } from '@/components/public/Button'
@@ -23,7 +23,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { slug, eventId } = await params
   const [promoter, event] = await Promise.all([
     getPromoterBySlug(slug),
-    getEventById(eventId),
+    getEventBySlugOrId(eventId),
   ])
 
   if (!promoter || !event) {
@@ -47,7 +47,7 @@ export default async function EventDetailPage({ params }: PageProps) {
   const { slug, eventId } = await params
   const [promoter, event] = await Promise.all([
     getPromoterBySlug(slug),
-    getEventById(eventId),
+    getEventBySlugOrId(eventId),
   ])
 
   if (!promoter || !event) {

@@ -326,6 +326,111 @@ export async function getEventById(eventId: string): Promise<PublicEvent | null>
 }
 
 /**
+ * Get event by slug or ID (tries slug first, falls back to ID)
+ */
+export async function getEventBySlugOrId(slugOrId: string): Promise<PublicEvent | null> {
+  try {
+    const db = getAdminDb()
+
+    // First try to find by slug
+    const slugQuery = await db.collection('events')
+      .where('slug', '==', slugOrId)
+      .limit(1)
+      .get()
+
+    if (!slugQuery.empty) {
+      const doc = slugQuery.docs[0]
+      return parseEventDoc(doc.id, doc.data())
+    }
+
+    // Also check communications.seo.urlSlug
+    const urlSlugQuery = await db.collection('events')
+      .where('communications.seo.urlSlug', '==', slugOrId)
+      .limit(1)
+      .get()
+
+    if (!urlSlugQuery.empty) {
+      const doc = urlSlugQuery.docs[0]
+      return parseEventDoc(doc.id, doc.data())
+    }
+
+    // Fall back to ID lookup
+    const doc = await db.collection('events').doc(slugOrId).get()
+    if (doc.exists) {
+      return parseEventDoc(doc.id, doc.data()!)
+    }
+
+    return null
+  } catch (error) {
+    console.error('Error fetching event by slug or ID:', error)
+    return null
+  }
+}
+
+/**
+ * Helper to parse event document data
+ */
+function parseEventDoc(id: string, data: any): PublicEvent {
+  // Get start date from schedule.performances[0].date (primary) or fallback fields
+  const firstPerformance = data.schedule?.performances?.[0]
+  let startDate: Date
+  if (firstPerformance?.date) {
+    const rawDate = firstPerformance.date
+    if (typeof rawDate?.toDate === 'function') {
+      startDate = rawDate.toDate()
+    } else if (rawDate?._seconds) {
+      startDate = new Date(rawDate._seconds * 1000)
+    } else {
+      startDate = new Date(rawDate)
+    }
+  } else if (data.startDate) {
+    const rawDate = data.startDate
+    if (typeof rawDate?.toDate === 'function') {
+      startDate = rawDate.toDate()
+    } else if (rawDate?._seconds) {
+      startDate = new Date(rawDate._seconds * 1000)
+    } else {
+      startDate = new Date(rawDate)
+    }
+  } else {
+    startDate = new Date(NaN)
+  }
+
+  const thumbnail = data.images?.cover || data.thumbnail || data.image || data.bannerImage
+
+  return {
+    id,
+    name: data.name || data.basics?.name || '',
+    slug: data.slug || data.communications?.seo?.urlSlug,
+    description: data.description || data.basics?.description,
+    shortDescription: data.shortDescription || data.basics?.shortDescription,
+    thumbnail,
+    bannerImage: data.bannerImage || data.images?.cover,
+    startDate,
+    endDate: data.endDate?.toDate?.(),
+    venue: data.venue || {
+      name: data.venueName,
+      address: data.venueAddress,
+      city: data.venueCity,
+      state: data.venueState,
+    },
+    category: data.category || data.basics?.category,
+    status: data.status,
+    pricing: {
+      minPrice: data.pricing?.minPrice || data.minPrice,
+      maxPrice: data.pricing?.maxPrice || data.maxPrice,
+      currency: data.pricing?.currency || 'USD',
+    },
+    promoterId: data.promoter?.promoterId || data.promoterId,
+    promoterSlug: data.promoter?.slug || data.promoterSlug,
+    ticketsAvailable: data.ticketsAvailable,
+    totalCapacity: data.totalCapacity || data.capacity,
+    isFeatured: data.isFeatured,
+    isSoldOut: data.isSoldOut || (data.ticketsAvailable === 0),
+  }
+}
+
+/**
  * Get event categories for a promoter
  */
 export async function getPromoterCategories(promoterId: string): Promise<string[]> {
