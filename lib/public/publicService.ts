@@ -151,14 +151,45 @@ export async function getPromoterEvents(
       .map(doc => {
       const data = doc.data()
 
+      // Debug: Log first event's data structure
+      if (snapshot.docs.indexOf(doc) === 0) {
+        console.log('[PublicService] Sample event data structure:', {
+          name: data.name,
+          hasImages: !!data.images,
+          imagesCover: data.images?.cover,
+          thumbnail: data.thumbnail,
+          image: data.image,
+          hasSchedule: !!data.schedule,
+          schedulePerformances: data.schedule?.performances?.length,
+          firstPerfDate: data.schedule?.performances?.[0]?.date,
+          firstPerfDateType: typeof data.schedule?.performances?.[0]?.date,
+          hasToDate: typeof data.schedule?.performances?.[0]?.date?.toDate,
+        })
+      }
+
       // Get start date from schedule.performances[0].date (primary) or fallback fields
       const firstPerformance = data.schedule?.performances?.[0]
       let startDate: Date
       if (firstPerformance?.date) {
         // Handle Firestore Timestamp or ISO string
-        startDate = firstPerformance.date.toDate?.() || new Date(firstPerformance.date)
+        const rawDate = firstPerformance.date
+        if (typeof rawDate?.toDate === 'function') {
+          startDate = rawDate.toDate()
+        } else if (rawDate?._seconds) {
+          // Firestore Timestamp serialized format
+          startDate = new Date(rawDate._seconds * 1000)
+        } else {
+          startDate = new Date(rawDate)
+        }
       } else if (data.startDate) {
-        startDate = data.startDate.toDate?.() || new Date(data.startDate)
+        const rawDate = data.startDate
+        if (typeof rawDate?.toDate === 'function') {
+          startDate = rawDate.toDate()
+        } else if (rawDate?._seconds) {
+          startDate = new Date(rawDate._seconds * 1000)
+        } else {
+          startDate = new Date(rawDate)
+        }
       } else {
         startDate = new Date(NaN) // Invalid date - will show "Date TBA"
       }
@@ -234,9 +265,23 @@ export async function getEventById(eventId: string): Promise<PublicEvent | null>
     const firstPerformance = data.schedule?.performances?.[0]
     let startDate: Date
     if (firstPerformance?.date) {
-      startDate = firstPerformance.date.toDate?.() || new Date(firstPerformance.date)
+      const rawDate = firstPerformance.date
+      if (typeof rawDate?.toDate === 'function') {
+        startDate = rawDate.toDate()
+      } else if (rawDate?._seconds) {
+        startDate = new Date(rawDate._seconds * 1000)
+      } else {
+        startDate = new Date(rawDate)
+      }
     } else if (data.startDate) {
-      startDate = data.startDate.toDate?.() || new Date(data.startDate)
+      const rawDate = data.startDate
+      if (typeof rawDate?.toDate === 'function') {
+        startDate = rawDate.toDate()
+      } else if (rawDate?._seconds) {
+        startDate = new Date(rawDate._seconds * 1000)
+      } else {
+        startDate = new Date(rawDate)
+      }
     } else {
       startDate = new Date(NaN) // Invalid date - will show "Date TBA"
     }
