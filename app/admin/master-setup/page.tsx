@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAuth } from '@/lib/firebase-auth'
+import { useFirebaseAuth } from '@/lib/firebase-auth'
 import { useRouter } from 'next/navigation'
 
 interface SetupStatus {
@@ -30,7 +30,7 @@ interface SetupResult {
 }
 
 export default function MasterSetupPage() {
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading } = useFirebaseAuth()
   const router = useRouter()
 
   const [status, setStatus] = useState<SetupStatus | null>(null)
