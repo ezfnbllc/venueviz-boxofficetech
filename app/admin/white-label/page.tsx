@@ -1,99 +1,505 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { usePromoterAccess } from '@/lib/hooks/usePromoterAccess'
+import { useFirebaseAuth } from '@/lib/firebase-auth'
 import { AdminService } from '@/lib/admin/adminService'
-import { PromoterProfile } from '@/lib/types/promoter'
+import { StorageService } from '@/lib/storage/storageService'
+import { PromoterProfile, PaymentGateway } from '@/lib/types/promoter'
+import { db, auth } from '@/lib/firebase'
+import { collection, getDocs, query, where, Timestamp, writeBatch, doc, getDoc } from 'firebase/firestore'
+import { createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth'
+import PromoterOverview from '@/components/admin/promoters/PromoterOverview'
+import PaymentGatewaySetup from '@/components/admin/promoters/PaymentGatewaySetup'
+import PromoterEvents from '@/components/admin/promoters/PromoterEvents'
+import PromoterCommissions from '@/components/admin/promoters/PromoterCommissions'
+import PromoterDocuments from '@/components/admin/promoters/PromoterDocuments'
 
-type TabType = 'tenants' | 'branding' | 'domains' | 'billing'
+type TabType = 'tenants' | 'branding' | 'users' | 'payment' | 'events' | 'commissions' | 'documents' | 'domains'
+
+// Default color scheme
+const DEFAULT_COLOR_SCHEME = {
+  primary: '#3B82F6',
+  secondary: '#6366F1',
+  accent: '#F59E0B',
+  background: '#FFFFFF',
+  text: '#111827',
+}
+
+const DEFAULT_FORM_DATA = {
+  name: '',
+  email: '',
+  phone: '',
+  slug: '',
+  brandingType: 'basic' as 'basic' | 'advanced',
+  colorScheme: DEFAULT_COLOR_SCHEME,
+  logo: '',
+  commission: 10,
+  active: true,
+  users: [] as string[],
+  website: '',
+  description: ''
+}
+
+// Validation helpers
+const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+const isValidUrl = (url: string) => {
+  if (!url) return true
+  try { new URL(url); return true } catch { return false }
+}
+const isValidPhone = (phone: string) => {
+  if (!phone) return true
+  return /^[\d\s\-\(\)\+]{10,}$/.test(phone)
+}
+const isValidHexColor = (color: string) => /^#[0-9A-Fa-f]{6}$/.test(color)
+
+// Password strength checker
+const getPasswordStrength = (password: string): { score: number; message: string } => {
+  let score = 0
+  if (password.length >= 8) score++
+  if (password.length >= 12) score++
+  if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++
+  if (/\d/.test(password)) score++
+  if (/[^a-zA-Z0-9]/.test(password)) score++
+  const messages = ['Very weak', 'Weak', 'Fair', 'Good', 'Strong']
+  return { score, message: messages[Math.min(score, 4)] }
+}
+
+// Format phone number
+const formatPhoneNumber = (phone: string) => {
+  const cleaned = phone.replace(/\D/g, '')
+  if (cleaned.length === 10) {
+    return `(${cleaned.slice(0,3)}) ${cleaned.slice(3,6)}-${cleaned.slice(6)}`
+  }
+  return phone
+}
+
+interface PromoterWithStats extends PromoterProfile {
+  eventCount: number
+  totalRevenue: number
+  totalOrders: number
+}
+
+interface Toast {
+  id: string
+  message: string
+  type: 'success' | 'error' | 'warning'
+}
 
 export default function WhiteLabelPage() {
-  const [activeTab, setActiveTab] = useState<TabType>('branding')
+  const router = useRouter()
+  const [activeTab, setActiveTab] = useState<TabType>('tenants')
   const [loading, setLoading] = useState(true)
-  const [promoters, setPromoters] = useState<PromoterProfile[]>([])
-  const [selectedPromoter, setSelectedPromoter] = useState<PromoterProfile | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [promoters, setPromoters] = useState<PromoterWithStats[]>([])
+  const [events, setEvents] = useState<any[]>([])
+  const [users, setUsers] = useState<Record<string, any>>({})
+  const [selectedPromoter, setSelectedPromoter] = useState<PromoterWithStats | null>(null)
+  const [paymentGateway, setPaymentGateway] = useState<PaymentGateway | null>(null)
+  const [toasts, setToasts] = useState<Toast[]>([])
+
+  // Modal states
+  const [showForm, setShowForm] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [showUsersModal, setShowUsersModal] = useState(false)
+  const [editingPromoter, setEditingPromoter] = useState<PromoterWithStats | null>(null)
+
+  // Form state
+  const [formData, setFormData] = useState(DEFAULT_FORM_DATA)
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({})
+  const [submitting, setSubmitting] = useState(false)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
+  const [logoUrl, setLogoUrl] = useState('')
+
+  // Search, filter, sort state
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all')
+  const [sortBy, setSortBy] = useState<'name' | 'revenue' | 'events' | 'commission'>('name')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 12
+
+  // Delete state
+  const [deleteAction, setDeleteAction] = useState<'soft' | 'hard'>('soft')
+  const [reassignPromoterId, setReassignPromoterId] = useState('')
+
+  // New user form state
+  const [newUserData, setNewUserData] = useState({ email: '', password: '', name: '' })
+  const [userFormErrors, setUserFormErrors] = useState<Record<string, string>>({})
+  const [editingUser, setEditingUser] = useState<any>(null)
 
   // Branding form state
   const [brandingForm, setBrandingForm] = useState({
     name: '',
     logo: '',
     brandingType: 'basic' as 'basic' | 'advanced',
-    colorScheme: {
-      primary: '#3B82F6',
-      secondary: '#6366F1',
-      accent: '#F59E0B',
-      background: '#FFFFFF',
-      text: '#111827',
-    },
+    colorScheme: DEFAULT_COLOR_SCHEME,
     website: '',
     description: '',
   })
+  const [savingBranding, setSavingBranding] = useState(false)
 
   const { isAdmin, effectivePromoterId, showAll } = usePromoterAccess()
+  const { userData: currentUserData } = useFirebaseAuth()
+  const isMasterAdmin = currentUserData?.isMaster === true
 
-  useEffect(() => {
-    loadData()
-  }, [effectivePromoterId, showAll])
+  // Toast helper
+  const showToast = useCallback((message: string, type: Toast['type'] = 'success') => {
+    const id = Math.random().toString(36).slice(2)
+    setToasts(prev => [...prev, { id, message, type }])
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000)
+  }, [])
 
-  const loadData = async () => {
+  // Load data
+  const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const allPromoters = await AdminService.getPromoters()
+      const [promotersData, eventsData] = await Promise.all([
+        AdminService.getPromoters(),
+        AdminService.getEvents()
+      ])
+
+      // Group events by promoterId
+      const eventsByPromoter: Record<string, any[]> = {}
+      eventsData.forEach(event => {
+        const pid = event.promoterId || event.promoter?.promoterId
+        if (pid) {
+          if (!eventsByPromoter[pid]) eventsByPromoter[pid] = []
+          eventsByPromoter[pid].push(event)
+        }
+      })
+
+      // Fetch orders and group by event
+      const ordersSnapshot = await getDocs(collection(db, 'orders'))
+      const ordersByEvent: Record<string, { count: number; revenue: number }> = {}
+      ordersSnapshot.docs.forEach(orderDoc => {
+        const order = orderDoc.data()
+        const eventId = order.eventId
+        if (!ordersByEvent[eventId]) {
+          ordersByEvent[eventId] = { count: 0, revenue: 0 }
+        }
+        ordersByEvent[eventId].count++
+        ordersByEvent[eventId].revenue += order.pricing?.total || order.totalAmount || order.total || 0
+      })
+
+      // Build promoters with stats
+      const promotersWithStats: PromoterWithStats[] = promotersData.map(promoter => {
+        const promoterEvents = eventsByPromoter[promoter.id] || []
+        let totalRevenue = 0
+        let totalOrders = 0
+        promoterEvents.forEach(event => {
+          const eventStats = ordersByEvent[event.id]
+          if (eventStats) {
+            totalRevenue += eventStats.revenue
+            totalOrders += eventStats.count
+          }
+        })
+        return {
+          ...promoter,
+          eventCount: promoterEvents.length,
+          totalRevenue,
+          totalOrders,
+          commission: promoter.commission || 10
+        } as PromoterWithStats
+      })
+
+      // Fetch user details
+      const allUserIds = new Set<string>()
+      promotersWithStats.forEach(p => p.users?.forEach(uid => allUserIds.add(uid)))
+      if (allUserIds.size > 0) {
+        const usersSnapshot = await getDocs(collection(db, 'users'))
+        const usersMap: Record<string, any> = {}
+        usersSnapshot.docs.forEach(doc => {
+          if (allUserIds.has(doc.id)) {
+            usersMap[doc.id] = { id: doc.id, ...doc.data() }
+          }
+        })
+        setUsers(usersMap)
+      }
 
       if (showAll) {
-        // Admin sees all promoters
-        setPromoters(allPromoters)
-        if (allPromoters.length > 0) {
-          setSelectedPromoter(allPromoters[0])
-          populateForm(allPromoters[0])
+        setPromoters(promotersWithStats)
+        if (promotersWithStats.length > 0 && !selectedPromoter) {
+          setSelectedPromoter(promotersWithStats[0])
+          populateBrandingForm(promotersWithStats[0])
         }
       } else {
-        // Promoter sees only their own
-        const myPromoter = allPromoters.find(p => p.id === effectivePromoterId)
+        const myPromoter = promotersWithStats.find(p => p.id === effectivePromoterId)
         if (myPromoter) {
           setPromoters([myPromoter])
           setSelectedPromoter(myPromoter)
-          populateForm(myPromoter)
+          populateBrandingForm(myPromoter)
         }
       }
+
+      setEvents(eventsData)
     } catch (error) {
-      console.error('Error loading promoters:', error)
-      setMessage({ type: 'error', text: 'Failed to load data' })
+      console.error('Error loading data:', error)
+      showToast('Failed to load data', 'error')
     } finally {
       setLoading(false)
     }
-  }
+  }, [effectivePromoterId, showAll, showToast])
 
-  const populateForm = (promoter: PromoterProfile) => {
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  // Load payment gateway when selected promoter changes
+  useEffect(() => {
+    const loadPaymentGateway = async () => {
+      if (!selectedPromoter) {
+        setPaymentGateway(null)
+        return
+      }
+      try {
+        const gatewayQuery = query(
+          collection(db, 'payment_gateways'),
+          where('promoterId', '==', selectedPromoter.id)
+        )
+        const gatewaySnap = await getDocs(gatewayQuery)
+        if (!gatewaySnap.empty) {
+          setPaymentGateway({ id: gatewaySnap.docs[0].id, ...gatewaySnap.docs[0].data() } as PaymentGateway)
+        } else {
+          setPaymentGateway(null)
+        }
+      } catch (error) {
+        console.error('Error loading payment gateway:', error)
+      }
+    }
+    loadPaymentGateway()
+  }, [selectedPromoter])
+
+  const populateBrandingForm = (promoter: PromoterProfile) => {
     setBrandingForm({
       name: promoter.name || '',
       logo: promoter.logo || '',
       brandingType: promoter.brandingType || 'basic',
       colorScheme: {
-        primary: promoter.colorScheme?.primary || '#3B82F6',
-        secondary: promoter.colorScheme?.secondary || '#6366F1',
-        accent: promoter.colorScheme?.accent || '#F59E0B',
-        background: promoter.colorScheme?.background || '#FFFFFF',
-        text: promoter.colorScheme?.text || '#111827',
+        primary: promoter.colorScheme?.primary || DEFAULT_COLOR_SCHEME.primary,
+        secondary: promoter.colorScheme?.secondary || DEFAULT_COLOR_SCHEME.secondary,
+        accent: promoter.colorScheme?.accent || DEFAULT_COLOR_SCHEME.accent,
+        background: promoter.colorScheme?.background || DEFAULT_COLOR_SCHEME.background,
+        text: promoter.colorScheme?.text || DEFAULT_COLOR_SCHEME.text,
       },
       website: promoter.website || '',
       description: promoter.description || '',
     })
   }
 
-  const handleSelectPromoter = (promoter: PromoterProfile) => {
+  // Filtered and sorted promoters
+  const filteredPromoters = useMemo(() => {
+    let result = [...promoters]
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase()
+      result = result.filter(p =>
+        p.name?.toLowerCase().includes(q) ||
+        p.email?.toLowerCase().includes(q) ||
+        p.slug?.toLowerCase().includes(q)
+      )
+    }
+    if (filterStatus !== 'all') {
+      result = result.filter(p => filterStatus === 'active' ? p.active : !p.active)
+    }
+    result.sort((a, b) => {
+      let comparison = 0
+      switch (sortBy) {
+        case 'name': comparison = (a.name || '').localeCompare(b.name || ''); break
+        case 'revenue': comparison = (a.totalRevenue || 0) - (b.totalRevenue || 0); break
+        case 'events': comparison = (a.eventCount || 0) - (b.eventCount || 0); break
+        case 'commission': comparison = (a.commission || 0) - (b.commission || 0); break
+      }
+      return sortOrder === 'asc' ? comparison : -comparison
+    })
+    return result
+  }, [promoters, searchQuery, filterStatus, sortBy, sortOrder])
+
+  // Pagination
+  const paginatedPromoters = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage
+    return filteredPromoters.slice(start, start + itemsPerPage)
+  }, [filteredPromoters, currentPage])
+
+  const totalPages = Math.ceil(filteredPromoters.length / itemsPerPage)
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, filterStatus, sortBy, sortOrder])
+
+  // Stats
+  const stats = useMemo(() => ({
+    totalTenants: promoters.length,
+    activeTenants: promoters.filter(p => p.active).length,
+    advancedPlans: promoters.filter(p => p.brandingType === 'advanced').length,
+    basicPlans: promoters.filter(p => p.brandingType === 'basic' || !p.brandingType).length,
+    totalEvents: promoters.reduce((sum, p) => sum + (p.eventCount || 0), 0),
+    totalRevenue: promoters.reduce((sum, p) => sum + (p.totalRevenue || 0), 0),
+    totalCommissions: promoters.reduce((sum, p) => sum + (p.totalRevenue * (p.commission / 100)), 0),
+  }), [promoters])
+
+  // Form validation
+  const validateForm = useCallback(async (): Promise<boolean> => {
+    const errors: Record<string, string> = {}
+    if (!formData.name.trim()) errors.name = 'Name is required'
+    if (!formData.email.trim()) errors.email = 'Email is required'
+    else if (!isValidEmail(formData.email)) errors.email = 'Invalid email format'
+    if (formData.phone && !isValidPhone(formData.phone)) errors.phone = 'Invalid phone format'
+    if (formData.website && !isValidUrl(formData.website)) errors.website = 'Invalid URL format'
+    if (formData.commission < 0 || formData.commission > 100) errors.commission = 'Commission must be 0-100%'
+
+    const colors = Object.entries(formData.colorScheme)
+    for (const [key, value] of colors) {
+      if (!isValidHexColor(value)) errors[`color_${key}`] = `Invalid ${key} color`
+    }
+
+    const slug = formData.slug || formData.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+    const existingPromoter = promoters.find(p => p.slug === slug && p.id !== editingPromoter?.id)
+    if (existingPromoter) errors.slug = 'This slug is already in use'
+
+    setFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }, [formData, promoters, editingPromoter])
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingLogo(true)
+    try {
+      const url = await StorageService.uploadPromoterLogo(file, formData.name || 'promoter')
+      setLogoUrl(url)
+      setFormData(prev => ({ ...prev, logo: url }))
+      showToast('Logo uploaded successfully')
+    } catch (error) {
+      console.error('Error uploading logo:', error)
+      showToast('Failed to upload logo', 'error')
+    }
+    setUploadingLogo(false)
+  }
+
+  const handleBrandingLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingLogo(true)
+    try {
+      const url = await StorageService.uploadPromoterLogo(file, brandingForm.name || 'promoter')
+      setBrandingForm(prev => ({ ...prev, logo: url }))
+      showToast('Logo uploaded successfully')
+    } catch (error) {
+      console.error('Error uploading logo:', error)
+      showToast('Failed to upload logo', 'error')
+    }
+    setUploadingLogo(false)
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!(await validateForm())) {
+      showToast('Please fix the form errors', 'error')
+      return
+    }
+    setSubmitting(true)
+    try {
+      const finalData = {
+        ...formData,
+        slug: formData.slug || formData.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
+        phone: formatPhoneNumber(formData.phone)
+      }
+      if (editingPromoter) {
+        await AdminService.updatePromoter(editingPromoter.id, finalData)
+        showToast(`${formData.name} updated successfully`)
+      } else {
+        await AdminService.createPromoter(finalData)
+        showToast(`${formData.name} created successfully`)
+      }
+      setShowForm(false)
+      resetForm()
+      await loadData()
+    } catch (error) {
+      console.error('Error saving promoter:', error)
+      showToast('Failed to save promoter', 'error')
+    }
+    setSubmitting(false)
+  }
+
+  const handleEdit = (promoter: PromoterWithStats) => {
+    setEditingPromoter(promoter)
+    setFormData({
+      name: promoter.name || '',
+      email: promoter.email || '',
+      phone: promoter.phone || '',
+      slug: promoter.slug || '',
+      brandingType: promoter.brandingType || 'basic',
+      colorScheme: promoter.colorScheme || DEFAULT_COLOR_SCHEME,
+      logo: promoter.logo || '',
+      commission: promoter.commission || 10,
+      active: promoter.active !== false,
+      users: promoter.users || [],
+      website: promoter.website || '',
+      description: promoter.description || ''
+    })
+    setLogoUrl(promoter.logo || '')
+    setFormErrors({})
+    setShowForm(true)
+  }
+
+  const handleDeleteClick = (promoter: PromoterWithStats) => {
     setSelectedPromoter(promoter)
-    populateForm(promoter)
+    setDeleteAction('soft')
+    setReassignPromoterId('')
+    setShowDeleteModal(true)
+  }
+
+  const handleDelete = async () => {
+    if (!selectedPromoter) return
+    try {
+      if (deleteAction === 'soft') {
+        await AdminService.updatePromoter(selectedPromoter.id, {
+          active: false,
+          deletedAt: Timestamp.now()
+        })
+        showToast(`${selectedPromoter.name} has been deactivated`)
+      } else {
+        if (selectedPromoter.eventCount > 0 && reassignPromoterId) {
+          const batch = writeBatch(db)
+          const promoterEvents = events.filter(e =>
+            e.promoterId === selectedPromoter.id || e.promoter?.promoterId === selectedPromoter.id
+          )
+          const targetPromoter = promoters.find(p => p.id === reassignPromoterId)
+          for (const event of promoterEvents) {
+            const eventRef = doc(db, 'events', event.id)
+            batch.update(eventRef, {
+              promoterId: reassignPromoterId,
+              promoter: {
+                promoterId: reassignPromoterId,
+                promoterName: targetPromoter?.name || '',
+                commission: targetPromoter?.commission || 10
+              }
+            })
+          }
+          await batch.commit()
+        }
+        await AdminService.deletePromoter(selectedPromoter.id)
+        showToast(`${selectedPromoter.name} has been deleted`)
+      }
+      setShowDeleteModal(false)
+      setSelectedPromoter(null)
+      await loadData()
+    } catch (error) {
+      console.error('Error deleting promoter:', error)
+      showToast('Failed to delete promoter', 'error')
+    }
+  }
+
+  const handleSelectPromoter = (promoter: PromoterWithStats) => {
+    setSelectedPromoter(promoter)
+    populateBrandingForm(promoter)
   }
 
   const handleSaveBranding = async () => {
     if (!selectedPromoter) return
-
-    setSaving(true)
-    setMessage(null)
-
+    setSavingBranding(true)
     try {
       await AdminService.updatePromoter(selectedPromoter.id, {
         name: brandingForm.name,
@@ -103,39 +509,192 @@ export default function WhiteLabelPage() {
         website: brandingForm.website,
         description: brandingForm.description,
       })
-
-      setMessage({ type: 'success', text: 'Branding saved successfully!' })
-
-      // Refresh data
+      showToast('Branding saved successfully!')
       await loadData()
     } catch (error) {
       console.error('Error saving branding:', error)
-      setMessage({ type: 'error', text: 'Failed to save branding' })
+      showToast('Failed to save branding', 'error')
     } finally {
-      setSaving(false)
+      setSavingBranding(false)
     }
+  }
+
+  const handleShowUsers = (promoter: PromoterWithStats) => {
+    setSelectedPromoter(promoter)
+    setShowUsersModal(true)
+  }
+
+  const validateNewUser = (): boolean => {
+    const errors: Record<string, string> = {}
+    if (!newUserData.name.trim()) errors.name = 'Name is required'
+    if (!newUserData.email.trim()) errors.email = 'Email is required'
+    else if (!isValidEmail(newUserData.email)) errors.email = 'Invalid email format'
+    if (!newUserData.password) errors.password = 'Password is required'
+    else {
+      const strength = getPasswordStrength(newUserData.password)
+      if (strength.score < 2) errors.password = 'Password is too weak'
+    }
+    setUserFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
+  const handleAddUser = async () => {
+    if (!selectedPromoter || !validateNewUser()) return
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, newUserData.email, newUserData.password)
+      const updatedUsers = [...(selectedPromoter.users || []), userCredential.user.uid]
+      await AdminService.updatePromoter(selectedPromoter.id, { users: updatedUsers })
+      await AdminService.createUser({
+        uid: userCredential.user.uid,
+        email: newUserData.email,
+        name: newUserData.name,
+        role: 'promoter',
+        promoterId: selectedPromoter.id,
+        createdAt: Timestamp.now(),
+        // Store password for master admin visibility (encrypted in production)
+        _pwd: newUserData.password
+      })
+      showToast(`User ${newUserData.name} created successfully`)
+      setNewUserData({ email: '', password: '', name: '' })
+      setUserFormErrors({})
+      await loadData()
+    } catch (error: any) {
+      console.error('Error creating user:', error)
+      showToast(error.message || 'Failed to create user', 'error')
+    }
+  }
+
+  const handleRemoveUser = async (userId: string) => {
+    if (!selectedPromoter) return
+    if (!confirm('Remove this user from the tenant? The user account will still exist but will lose access.')) return
+    try {
+      // Handle both string IDs and user objects in the array
+      const updatedUsers = (selectedPromoter.users || []).filter((user: any) => {
+        const currentUserId = typeof user === 'string' ? user : (user?.id || user?.uid)
+        return currentUserId !== userId
+      })
+      await AdminService.updatePromoter(selectedPromoter.id, { users: updatedUsers })
+      await AdminService.updateUser(userId, { promoterId: null, role: 'user' })
+      showToast('User removed from tenant')
+      await loadData()
+    } catch (error) {
+      console.error('Error removing user:', error)
+      showToast('Failed to remove user', 'error')
+    }
+  }
+
+  const handleStartEditUser = (userId: string, userData: any) => {
+    setEditingUser({
+      id: userId,
+      name: userData?.name || '',
+      email: userData?.email || '',
+      phone: userData?.phone || '',
+      title: userData?.title || '',
+      storedPassword: userData?._pwd || '',
+      newPassword: '',
+      showPassword: false,
+      isHoldingEye: false,
+    })
+    setUserFormErrors({})
+  }
+
+  const handleCancelEditUser = () => {
+    setEditingUser(null)
+    setUserFormErrors({})
+  }
+
+  const validateEditUser = (): boolean => {
+    const errors: Record<string, string> = {}
+    if (!editingUser?.name?.trim()) errors.name = 'Name is required'
+    if (!editingUser?.email?.trim()) errors.email = 'Email is required'
+    else if (!isValidEmail(editingUser.email)) errors.email = 'Invalid email format'
+    if (editingUser?.phone && !isValidPhone(editingUser.phone)) errors.phone = 'Invalid phone format'
+    if (editingUser?.newPassword) {
+      const strength = getPasswordStrength(editingUser.newPassword)
+      if (strength.score < 2) errors.newPassword = 'Password is too weak'
+    }
+    setUserFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
+  const handleSendPasswordReset = async () => {
+    if (!editingUser?.email) return
+    try {
+      await sendPasswordResetEmail(auth, editingUser.email)
+      showToast(`Password reset email sent to ${editingUser.email}`)
+    } catch (error: any) {
+      console.error('Error sending password reset:', error)
+      showToast(error.message || 'Failed to send password reset email', 'error')
+    }
+  }
+
+  const handleUpdateUser = async () => {
+    if (!editingUser || !validateEditUser()) return
+    try {
+      const updateData: any = {
+        name: editingUser.name,
+        email: editingUser.email,
+        phone: editingUser.phone || null,
+        title: editingUser.title || null,
+      }
+
+      // If new password provided, update stored password and add pending change
+      if (editingUser.newPassword) {
+        updateData._pwd = editingUser.newPassword
+        updateData.pendingPasswordChange = editingUser.newPassword
+        showToast('Note: Password change saved. User will be prompted to update on next login.', 'warning')
+      }
+
+      await AdminService.updateUser(editingUser.id, updateData)
+      showToast(`User ${editingUser.name} updated successfully`)
+      setEditingUser(null)
+      setUserFormErrors({})
+      await loadData()
+    } catch (error: any) {
+      console.error('Error updating user:', error)
+      showToast(error.message || 'Failed to update user', 'error')
+    }
+  }
+
+  const handleConfigureDomain = (promoter: PromoterWithStats) => {
+    setSelectedPromoter(promoter)
+    setActiveTab('branding')
+    // Pre-fill branding form
+    setBrandingForm({
+      name: promoter.name || '',
+      logo: promoter.logo || '',
+      brandingType: promoter.brandingType || 'basic',
+      colorScheme: promoter.colorScheme || DEFAULT_COLOR_SCHEME,
+      website: promoter.website || '',
+      description: promoter.description || '',
+    })
+  }
+
+  const resetForm = () => {
+    setEditingPromoter(null)
+    setFormData(DEFAULT_FORM_DATA)
+    setLogoUrl('')
+    setFormErrors({})
+  }
+
+  const calculateEarnings = (promoter: PromoterWithStats) => {
+    return (promoter.totalRevenue * (promoter.commission / 100)).toFixed(2)
+  }
+
+  const getPromoterPortalUrl = (slug: string) => {
+    return `${typeof window !== 'undefined' ? window.location.origin : ''}/p/${slug}`
   }
 
   const getStatusColor = (active: boolean) => {
     return active
-      ? 'bg-green-500/20 text-green-400 border-green-500/30'
-      : 'bg-red-500/20 text-red-400 border-red-500/30'
+      ? 'bg-green-500/20 text-green-600 dark:text-green-400 border-green-500/30'
+      : 'bg-red-500/20 text-red-600 dark:text-red-400 border-red-500/30'
   }
 
   const getPlanColor = (brandingType: string) => {
     return brandingType === 'advanced'
-      ? 'bg-purple-500/20 text-purple-400 border-purple-500/30'
-      : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-  }
-
-  // Stats calculated from real data
-  const stats = {
-    totalTenants: promoters.length,
-    activeTenants: promoters.filter(p => p.active).length,
-    advancedPlans: promoters.filter(p => p.brandingType === 'advanced').length,
-    basicPlans: promoters.filter(p => p.brandingType === 'basic').length,
-    withLogos: promoters.filter(p => p.logo).length,
-    withWebsites: promoters.filter(p => p.website).length,
+      ? 'bg-purple-500/20 text-purple-600 dark:text-purple-400 border-purple-500/30'
+      : 'bg-blue-500/20 text-blue-600 dark:text-blue-400 border-blue-500/30'
   }
 
   if (loading) {
@@ -146,34 +705,54 @@ export default function WhiteLabelPage() {
     )
   }
 
+  const adminTabs: TabType[] = ['tenants', 'branding', 'users', 'payment', 'events', 'commissions', 'documents', 'domains']
+  const promoterTabs: TabType[] = ['branding', 'payment', 'events', 'commissions', 'documents']
+
   return (
     <div className="space-y-6">
+      {/* Toast Notifications */}
+      <div className="fixed top-20 right-4 z-50 space-y-2">
+        {toasts.map(toast => (
+          <div
+            key={toast.id}
+            className={`px-4 py-3 rounded-lg shadow-lg backdrop-blur-sm animate-slide-in ${
+              toast.type === 'success' ? 'bg-green-600/90 text-white' :
+              toast.type === 'error' ? 'bg-red-600/90 text-white' :
+              'bg-yellow-600/90 text-white'
+            }`}
+          >
+            {toast.message}
+          </div>
+        ))}
+      </div>
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
-            {isAdmin ? 'White-Label Platform' : 'Your Branding'}
+            {isAdmin ? 'White-Label Platform' : 'Your Portal'}
           </h1>
           <p className="text-slate-600 dark:text-gray-400 mt-1">
             {isAdmin
-              ? 'Manage promoter branding and platform settings'
-              : 'Customize your portal appearance and branding'}
+              ? 'Manage tenants, branding, users, and platform settings'
+              : 'Customize your portal appearance and settings'}
           </p>
         </div>
         {isAdmin && (
-          <div className="flex gap-2">
-            <button className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors">
-              + Add Promoter
-            </button>
-          </div>
+          <button
+            onClick={() => { resetForm(); setShowForm(true) }}
+            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
+          >
+            + Add Tenant
+          </button>
         )}
       </div>
 
       {/* Stats - Admin Only */}
       {isAdmin && (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
           <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-slate-200 dark:border-white/10">
-            <p className="text-slate-500 dark:text-gray-400 text-xs">Total Promoters</p>
+            <p className="text-slate-500 dark:text-gray-400 text-xs">Total Tenants</p>
             <p className="text-2xl font-bold text-slate-900 dark:text-white">{stats.totalTenants}</p>
           </div>
           <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-slate-200 dark:border-white/10">
@@ -189,136 +768,286 @@ export default function WhiteLabelPage() {
             <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.basicPlans}</p>
           </div>
           <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-slate-200 dark:border-white/10">
-            <p className="text-slate-500 dark:text-gray-400 text-xs">With Logos</p>
-            <p className="text-2xl font-bold text-slate-900 dark:text-white">{stats.withLogos}</p>
+            <p className="text-slate-500 dark:text-gray-400 text-xs">Total Events</p>
+            <p className="text-2xl font-bold text-slate-900 dark:text-white">{stats.totalEvents}</p>
           </div>
           <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-slate-200 dark:border-white/10">
-            <p className="text-slate-500 dark:text-gray-400 text-xs">With Websites</p>
-            <p className="text-2xl font-bold text-slate-900 dark:text-white">{stats.withWebsites}</p>
+            <p className="text-slate-500 dark:text-gray-400 text-xs">Total Revenue</p>
+            <p className="text-2xl font-bold text-slate-900 dark:text-white">${stats.totalRevenue.toLocaleString()}</p>
+          </div>
+          <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-4 border border-slate-200 dark:border-white/10">
+            <p className="text-slate-500 dark:text-gray-400 text-xs">Total Commissions</p>
+            <p className="text-2xl font-bold text-green-600 dark:text-green-400">${stats.totalCommissions.toLocaleString()}</p>
           </div>
         </div>
       )}
 
-      {/* Message */}
-      {message && (
-        <div className={`p-4 rounded-lg ${
-          message.type === 'success'
-            ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-            : 'bg-red-500/20 text-red-400 border border-red-500/30'
-        }`}>
-          {message.text}
-        </div>
-      )}
-
-      {/* Tabs - Show different tabs based on role */}
-      <div className="flex gap-1 bg-slate-100 dark:bg-white/5 p-1 rounded-lg w-fit">
-        {(isAdmin ? ['tenants', 'branding', 'domains', 'billing'] as const : ['branding'] as const).map((tab) => (
+      {/* Tabs */}
+      <div className="flex gap-1 bg-slate-100 dark:bg-white/5 p-1 rounded-lg w-fit overflow-x-auto">
+        {(isAdmin ? adminTabs : promoterTabs).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors capitalize ${
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors capitalize whitespace-nowrap ${
               activeTab === tab
                 ? 'bg-purple-600 text-white'
                 : 'text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/10'
             }`}
           >
-            {tab === 'tenants' ? 'Promoters' : tab}
+            {tab === 'tenants' ? 'Tenants' : tab}
           </button>
         ))}
       </div>
 
-      {/* Tenants/Promoters Tab - Admin Only */}
+      {/* TENANTS TAB - Card Grid with Search/Filter */}
       {activeTab === 'tenants' && isAdmin && (
-        <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl border border-slate-200 dark:border-white/10 overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-slate-200 dark:border-white/10">
-                <th className="text-left p-4 text-slate-500 dark:text-gray-400 font-medium">Promoter</th>
-                <th className="text-left p-4 text-slate-500 dark:text-gray-400 font-medium">Portal</th>
-                <th className="text-left p-4 text-slate-500 dark:text-gray-400 font-medium">Plan</th>
-                <th className="text-left p-4 text-slate-500 dark:text-gray-400 font-medium">Status</th>
-                <th className="text-left p-4 text-slate-500 dark:text-gray-400 font-medium">Commission</th>
-                <th className="text-right p-4 text-slate-500 dark:text-gray-400 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {promoters.map((promoter) => (
-                <tr key={promoter.id} className="border-b border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5">
-                  <td className="p-4">
-                    <div className="flex items-center gap-3">
-                      {promoter.logo ? (
-                        <img
-                          src={promoter.logo}
-                          alt={promoter.name}
-                          className="w-10 h-10 rounded-lg object-cover"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-lg bg-slate-200 dark:bg-white/10 flex items-center justify-center text-slate-500 dark:text-gray-400">
-                          {promoter.name?.charAt(0) || '?'}
+        <div className="space-y-6">
+          {/* Search, Filter, Sort Controls */}
+          <div className="flex flex-wrap gap-4">
+            <div className="flex-1 min-w-[200px]">
+              <input
+                type="text"
+                placeholder="Search tenants..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:border-purple-500 focus:outline-none text-slate-900 dark:text-white"
+              />
+            </div>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as any)}
+              className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+            >
+              <option value="all">All Status</option>
+              <option value="active">Active Only</option>
+              <option value="inactive">Inactive Only</option>
+            </select>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+            >
+              <option value="name">Sort by Name</option>
+              <option value="revenue">Sort by Revenue</option>
+              <option value="events">Sort by Events</option>
+              <option value="commission">Sort by Commission</option>
+            </select>
+            <button
+              onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+              className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-900 dark:text-white"
+            >
+              {sortOrder === 'asc' ? '↑ Asc' : '↓ Desc'}
+            </button>
+          </div>
+
+          {/* Card Grid */}
+          {filteredPromoters.length === 0 ? (
+            <div className="text-center py-12 bg-white dark:bg-white/5 rounded-xl border border-slate-200 dark:border-white/10">
+              <div className="text-6xl mb-4">🏢</div>
+              <p className="text-slate-500 dark:text-gray-400 mb-4">
+                {searchQuery || filterStatus !== 'all' ? 'No tenants match your filters' : 'No tenants yet. Add your first tenant!'}
+              </p>
+              {!searchQuery && filterStatus === 'all' && (
+                <button onClick={() => setShowForm(true)} className="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg">
+                  Add First Tenant
+                </button>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {paginatedPromoters.map(promoter => (
+                  <div
+                    key={promoter.id}
+                    className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl border border-slate-200 dark:border-white/10 overflow-hidden hover:border-purple-500/50 transition-all"
+                  >
+                    {/* Header */}
+                    <div className="p-6 pb-4">
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="flex items-center gap-3">
+                          {promoter.logo ? (
+                            <img src={promoter.logo} alt={promoter.name} className="w-12 h-12 rounded-lg object-cover" />
+                          ) : (
+                            <div className="w-12 h-12 bg-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-lg">
+                              {promoter.name?.charAt(0)?.toUpperCase() || '?'}
+                            </div>
+                          )}
+                          <div>
+                            <h3 className="text-lg font-bold text-slate-900 dark:text-white">{promoter.name}</h3>
+                            <div className="flex items-center gap-2">
+                              <span className={`px-2 py-0.5 rounded text-xs border ${getPlanColor(promoter.brandingType || 'basic')}`}>
+                                {promoter.brandingType || 'basic'}
+                              </span>
+                              <span className={`px-2 py-0.5 rounded text-xs border ${getStatusColor(promoter.active)}`}>
+                                {promoter.active ? 'Active' : 'Inactive'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Color Scheme Preview */}
+                      {promoter.colorScheme && (
+                        <div className="flex gap-1 mb-3">
+                          {['primary', 'secondary', 'accent'].map(key => (
+                            <div
+                              key={key}
+                              className="w-8 h-8 rounded"
+                              style={{ backgroundColor: promoter.colorScheme[key as keyof typeof promoter.colorScheme] }}
+                              title={key}
+                            />
+                          ))}
                         </div>
                       )}
-                      <div>
-                        <p className="text-slate-900 dark:text-white font-medium">{promoter.name}</p>
-                        <p className="text-slate-500 dark:text-gray-400 text-sm">{promoter.email}</p>
+
+                      {/* Portal URL */}
+                      {promoter.slug && (
+                        <div className="mb-3 p-2 bg-slate-100 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600">
+                          <p className="text-xs text-slate-500 dark:text-gray-400 mb-1">Portal URL</p>
+                          <a
+                            href={getPromoterPortalUrl(promoter.slug)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-purple-600 dark:text-purple-400 hover:underline truncate block font-medium"
+                          >
+                            /p/{promoter.slug}
+                          </a>
+                        </div>
+                      )}
+
+                      {/* Contact Info */}
+                      <div className="space-y-1 mb-3 text-sm">
+                        <div className="flex items-center gap-2 text-slate-500 dark:text-gray-400">
+                          <span>📧</span>
+                          <span className="truncate">{promoter.email}</span>
+                        </div>
+                        {promoter.phone && (
+                          <div className="flex items-center gap-2 text-slate-500 dark:text-gray-400">
+                            <span>📱</span>
+                            <span>{promoter.phone}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Stats Grid */}
+                      <div className="grid grid-cols-3 gap-2 mb-3">
+                        <div className="bg-slate-100 dark:bg-slate-700/50 p-2 rounded text-center border border-slate-200 dark:border-slate-600">
+                          <p className="text-xs text-slate-500 dark:text-gray-400">Events</p>
+                          <p className="text-lg font-bold text-slate-900 dark:text-white">{promoter.eventCount || 0}</p>
+                        </div>
+                        <div className="bg-slate-100 dark:bg-slate-700/50 p-2 rounded text-center border border-slate-200 dark:border-slate-600">
+                          <p className="text-xs text-slate-500 dark:text-gray-400">Orders</p>
+                          <p className="text-lg font-bold text-slate-900 dark:text-white">{promoter.totalOrders || 0}</p>
+                        </div>
+                        <div className="bg-slate-100 dark:bg-slate-700/50 p-2 rounded text-center border border-slate-200 dark:border-slate-600">
+                          <p className="text-xs text-slate-500 dark:text-gray-400">Users</p>
+                          <p className="text-lg font-bold text-slate-900 dark:text-white">{promoter.users?.length || 0}</p>
+                        </div>
+                      </div>
+
+                      {/* Commission Info */}
+                      <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800/30">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <span className="text-xs text-slate-500 dark:text-gray-400">Revenue</span>
+                            <p className="text-lg font-bold text-slate-900 dark:text-white">${(promoter.totalRevenue || 0).toLocaleString()}</p>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-xs text-slate-500 dark:text-gray-400">Commission ({promoter.commission}%)</span>
+                            <p className="text-lg font-bold text-green-600 dark:text-green-400">${calculateEarnings(promoter)}</p>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </td>
-                  <td className="p-4">
-                    {promoter.slug ? (
-                      <a
-                        href={`/p/${promoter.slug}`}
-                        target="_blank"
-                        className="text-purple-600 dark:text-purple-400 hover:text-purple-500"
+
+                    {/* Actions */}
+                    <div className="px-6 pb-6">
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => handleEdit(promoter)}
+                          className="px-3 py-2 bg-blue-600/20 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-600/30 text-sm"
+                        >
+                          Edit
+                        </button>
+                        {promoter.brandingType === 'advanced' ? (
+                          <a
+                            href={`/admin/white-label/themes?tenantId=${promoter.id}`}
+                            className="px-3 py-2 bg-purple-600/20 text-purple-600 dark:text-purple-400 rounded-lg hover:bg-purple-600/30 text-sm text-center"
+                          >
+                            Theme Manager
+                          </a>
+                        ) : (
+                          <button
+                            onClick={() => { handleSelectPromoter(promoter); setActiveTab('branding') }}
+                            className="px-3 py-2 bg-purple-600/20 text-purple-600 dark:text-purple-400 rounded-lg hover:bg-purple-600/30 text-sm"
+                          >
+                            Branding
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleShowUsers(promoter)}
+                          className="px-3 py-2 bg-green-600/20 text-green-600 dark:text-green-400 rounded-lg hover:bg-green-600/30 text-sm"
+                        >
+                          Users ({promoter.users?.length || 0})
+                        </button>
+                        <button
+                          onClick={() => handleDeleteClick(promoter)}
+                          className="px-3 py-2 bg-red-600/20 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-600/30 text-sm"
+                        >
+                          {promoter.active ? 'Deactivate' : 'Delete'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex justify-center items-center gap-2 mt-8">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-900 dark:text-white"
+                  >
+                    Previous
+                  </button>
+                  <div className="flex gap-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`w-10 h-10 rounded-lg ${
+                          currentPage === page
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-900 dark:text-white'
+                        }`}
                       >
-                        /p/{promoter.slug}
-                      </a>
-                    ) : (
-                      <span className="text-slate-400">Not configured</span>
-                    )}
-                  </td>
-                  <td className="p-4">
-                    <span className={`px-2 py-1 rounded text-xs border capitalize ${getPlanColor(promoter.brandingType)}`}>
-                      {promoter.brandingType || 'Basic'}
-                    </span>
-                  </td>
-                  <td className="p-4">
-                    <span className={`px-2 py-1 rounded text-xs border ${getStatusColor(promoter.active)}`}>
-                      {promoter.active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td className="p-4 text-slate-900 dark:text-white">{promoter.commission}%</td>
-                  <td className="p-4 text-right">
-                    <button
-                      onClick={() => {
-                        handleSelectPromoter(promoter)
-                        setActiveTab('branding')
-                      }}
-                      className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm transition-colors mr-2"
-                    >
-                      Edit Branding
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {promoters.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="p-8 text-center text-slate-500 dark:text-gray-400">
-                    No promoters found
-                  </td>
-                </tr>
+                        {page}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-900 dark:text-white"
+                  >
+                    Next
+                  </button>
+                </div>
               )}
-            </tbody>
-          </table>
+            </>
+          )}
         </div>
       )}
 
-      {/* Branding Tab */}
+      {/* BRANDING TAB */}
       {activeTab === 'branding' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Promoter Selector - Admin Only */}
+          {/* Tenant Selector - Admin Only */}
           {isAdmin && promoters.length > 1 && (
             <div className="lg:col-span-1 bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-slate-200 dark:border-white/10">
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Select Promoter</h3>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Select Tenant</h3>
               <div className="space-y-2 max-h-[400px] overflow-y-auto">
                 {promoters.map(promoter => (
                   <button
@@ -339,7 +1068,7 @@ export default function WhiteLabelPage() {
                     )}
                     <div className="flex-1 min-w-0">
                       <p className="text-slate-900 dark:text-white font-medium truncate">{promoter.name}</p>
-                      <p className="text-slate-500 dark:text-gray-400 text-sm capitalize">{promoter.brandingType} Plan</p>
+                      <p className="text-slate-500 dark:text-gray-400 text-sm capitalize">{promoter.brandingType || 'basic'} Plan</p>
                     </div>
                   </button>
                 ))}
@@ -356,7 +1085,7 @@ export default function WhiteLabelPage() {
                   <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Basic Information</h3>
                   <div className="space-y-4">
                     <div>
-                      <label className="text-slate-600 dark:text-gray-400 text-sm">Promoter Name</label>
+                      <label className="text-slate-600 dark:text-gray-400 text-sm">Tenant Name</label>
                       <input
                         type="text"
                         value={brandingForm.name}
@@ -365,19 +1094,22 @@ export default function WhiteLabelPage() {
                       />
                     </div>
                     <div>
-                      <label className="text-slate-600 dark:text-gray-400 text-sm">Logo URL</label>
-                      <input
-                        type="url"
-                        value={brandingForm.logo}
-                        onChange={(e) => setBrandingForm({ ...brandingForm, logo: e.target.value })}
-                        placeholder="https://..."
-                        className="w-full mt-1 px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      />
-                      {brandingForm.logo && (
-                        <div className="mt-2 p-2 bg-slate-100 dark:bg-white/5 rounded-lg inline-block">
-                          <img src={brandingForm.logo} alt="Preview" className="h-12 object-contain" />
-                        </div>
-                      )}
+                      <label className="text-slate-600 dark:text-gray-400 text-sm">Logo</label>
+                      <div className="mt-1 space-y-2">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleBrandingLogoUpload}
+                          disabled={uploadingLogo}
+                          className="w-full px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-900 dark:text-white"
+                        />
+                        {uploadingLogo && <p className="text-xs text-purple-600 dark:text-purple-400">Uploading logo...</p>}
+                        {brandingForm.logo && (
+                          <div className="p-2 bg-slate-100 dark:bg-white/5 rounded-lg inline-block">
+                            <img src={brandingForm.logo} alt="Preview" className="h-12 object-contain" />
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div>
                       <label className="text-slate-600 dark:text-gray-400 text-sm">Website</label>
@@ -407,7 +1139,7 @@ export default function WhiteLabelPage() {
                             name="brandingType"
                             value="basic"
                             checked={brandingForm.brandingType === 'basic'}
-                            onChange={(e) => setBrandingForm({ ...brandingForm, brandingType: 'basic' })}
+                            onChange={() => setBrandingForm({ ...brandingForm, brandingType: 'basic' })}
                             className="text-purple-600"
                           />
                           <span className="text-slate-900 dark:text-white">Basic</span>
@@ -418,7 +1150,7 @@ export default function WhiteLabelPage() {
                             name="brandingType"
                             value="advanced"
                             checked={brandingForm.brandingType === 'advanced'}
-                            onChange={(e) => setBrandingForm({ ...brandingForm, brandingType: 'advanced' })}
+                            onChange={() => setBrandingForm({ ...brandingForm, brandingType: 'advanced' })}
                             className="text-purple-600"
                           />
                           <span className="text-slate-900 dark:text-white">Advanced</span>
@@ -462,28 +1194,12 @@ export default function WhiteLabelPage() {
                   {/* Preview */}
                   <div className="mt-6 pt-6 border-t border-slate-200 dark:border-white/10">
                     <h4 className="text-sm font-medium text-slate-600 dark:text-gray-400 mb-3">Preview</h4>
-                    <div
-                      className="p-4 rounded-lg"
-                      style={{ backgroundColor: brandingForm.colorScheme.background }}
-                    >
-                      <div
-                        className="p-3 rounded"
-                        style={{ backgroundColor: brandingForm.colorScheme.primary }}
-                      >
+                    <div className="p-4 rounded-lg" style={{ backgroundColor: brandingForm.colorScheme.background }}>
+                      <div className="p-3 rounded" style={{ backgroundColor: brandingForm.colorScheme.primary }}>
                         <span style={{ color: '#fff' }}>Primary Button</span>
                       </div>
-                      <p
-                        className="mt-3 font-medium"
-                        style={{ color: brandingForm.colorScheme.text }}
-                      >
-                        Sample Text
-                      </p>
-                      <p
-                        className="text-sm"
-                        style={{ color: brandingForm.colorScheme.secondary }}
-                      >
-                        Secondary Element
-                      </p>
+                      <p className="mt-3 font-medium" style={{ color: brandingForm.colorScheme.text }}>Sample Text</p>
+                      <p className="text-sm" style={{ color: brandingForm.colorScheme.secondary }}>Secondary Element</p>
                     </div>
                   </div>
                 </div>
@@ -492,34 +1208,564 @@ export default function WhiteLabelPage() {
                 <div className="lg:col-span-2">
                   <button
                     onClick={handleSaveBranding}
-                    disabled={saving}
+                    disabled={savingBranding}
                     className="w-full py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-600/50 text-white rounded-lg transition-colors font-medium"
                   >
-                    {saving ? 'Saving...' : 'Save Branding'}
+                    {savingBranding ? 'Saving...' : 'Save Branding'}
                   </button>
                 </div>
               </div>
             ) : (
               <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-12 border border-slate-200 dark:border-white/10 text-center">
-                <p className="text-slate-500 dark:text-gray-400">Select a promoter to edit their branding</p>
+                <p className="text-slate-500 dark:text-gray-400">Select a tenant to edit their branding</p>
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* Domains Tab - Admin Only */}
+      {/* USERS TAB */}
+      {activeTab === 'users' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Tenant Selector */}
+          {isAdmin && promoters.length > 1 && (
+            <div className="lg:col-span-1 bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-slate-200 dark:border-white/10">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Select Tenant</h3>
+              <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                {promoters.map(promoter => (
+                  <button
+                    key={promoter.id}
+                    onClick={() => handleSelectPromoter(promoter)}
+                    className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-left ${
+                      selectedPromoter?.id === promoter.id
+                        ? 'bg-purple-500/20 border border-purple-500/30'
+                        : 'bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 border border-transparent'
+                    }`}
+                  >
+                    {promoter.logo ? (
+                      <img src={promoter.logo} alt={promoter.name} className="w-10 h-10 rounded-lg object-cover" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg bg-slate-200 dark:bg-white/10 flex items-center justify-center text-slate-500 dark:text-gray-400">
+                        {promoter.name?.charAt(0) || '?'}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-slate-900 dark:text-white font-medium truncate">{promoter.name}</p>
+                      <p className="text-slate-500 dark:text-gray-400 text-sm">{promoter.users?.length || 0} users</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Users Management */}
+          <div className={`${isAdmin && promoters.length > 1 ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
+            {selectedPromoter ? (
+              <div className="space-y-6">
+                {/* Current Users */}
+                <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-slate-200 dark:border-white/10">
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+                    Current Users ({selectedPromoter.users?.length || 0})
+                  </h3>
+                  {selectedPromoter.users?.length > 0 ? (
+                    <div className="space-y-2">
+                      {selectedPromoter.users.map((user: any, index: number) => {
+                        // Handle both string IDs and user objects
+                        const userId = typeof user === 'string' ? user : (user?.id || user?.uid || `user-${index}`)
+                        const userData = typeof user === 'string' ? users[user] : user
+                        const userName = userData?.name || 'Unknown User'
+                        const userEmail = userData?.email || (typeof user === 'string' ? user : 'No email')
+                        const userPhone = userData?.phone || ''
+                        const userTitle = userData?.title || ''
+                        return (
+                          <div key={userId} className="bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg p-3 flex justify-between items-center">
+                            <div>
+                              <p className="font-medium text-slate-900 dark:text-white">{userName}</p>
+                              <p className="text-sm text-slate-500 dark:text-gray-400">{userEmail}</p>
+                              {(userPhone || userTitle) && (
+                                <p className="text-xs text-slate-400 dark:text-gray-500">
+                                  {userTitle && <span>{userTitle}</span>}
+                                  {userTitle && userPhone && <span> • </span>}
+                                  {userPhone && <span>{userPhone}</span>}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleStartEditUser(userId, userData)}
+                                className="px-3 py-1 bg-blue-100 dark:bg-blue-600/20 text-blue-600 dark:text-blue-400 rounded hover:bg-blue-200 dark:hover:bg-blue-600/30 text-sm"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleRemoveUser(userId)}
+                                className="px-3 py-1 bg-red-100 dark:bg-red-600/20 text-red-600 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-600/30 text-sm"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-slate-500 dark:text-gray-400">No users assigned yet</p>
+                  )}
+                </div>
+
+                {/* Edit User Form */}
+                {editingUser && (
+                  <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-purple-500/30">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Edit User</h3>
+                      <button
+                        onClick={handleCancelEditUser}
+                        className="text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-gray-200"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Name *</label>
+                        <input
+                          type="text"
+                          value={editingUser.name}
+                          onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
+                          className={`w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border ${userFormErrors.name ? 'border-red-500' : 'border-slate-200 dark:border-slate-600'} focus:border-purple-500 focus:outline-none`}
+                          placeholder="User Name"
+                        />
+                        {userFormErrors.name && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{userFormErrors.name}</p>}
+                      </div>
+                      <div>
+                        <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Email *</label>
+                        <input
+                          type="email"
+                          value={editingUser.email}
+                          onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
+                          className={`w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border ${userFormErrors.email ? 'border-red-500' : 'border-slate-200 dark:border-slate-600'} focus:border-purple-500 focus:outline-none`}
+                          placeholder="user@example.com"
+                        />
+                        {userFormErrors.email && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{userFormErrors.email}</p>}
+                      </div>
+                      <div>
+                        <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Title</label>
+                        <input
+                          type="text"
+                          value={editingUser.title}
+                          onChange={(e) => setEditingUser({ ...editingUser, title: e.target.value })}
+                          className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 focus:border-purple-500 focus:outline-none"
+                          placeholder="e.g. Manager, Staff"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Phone</label>
+                        <input
+                          type="tel"
+                          value={editingUser.phone}
+                          onChange={(e) => setEditingUser({ ...editingUser, phone: e.target.value })}
+                          className={`w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border ${userFormErrors.phone ? 'border-red-500' : 'border-slate-200 dark:border-slate-600'} focus:border-purple-500 focus:outline-none`}
+                          placeholder="(555) 123-4567"
+                        />
+                        {userFormErrors.phone && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{userFormErrors.phone}</p>}
+                      </div>
+
+                      {/* Password Section */}
+                      <div className="border-t border-slate-200 dark:border-slate-600 pt-4 mt-4">
+                        <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Password</label>
+                        <div className="space-y-3">
+                          {/* Current Password (Master Admin Only) */}
+                          {isMasterAdmin && editingUser.storedPassword && (
+                            <div className="bg-slate-100 dark:bg-slate-700/50 rounded-lg p-3">
+                              <p className="text-xs text-slate-500 dark:text-gray-400 mb-1">Current Password</p>
+                              <div className="flex items-center gap-2">
+                                <code className="flex-1 font-mono text-sm text-slate-900 dark:text-white">
+                                  {editingUser.isHoldingEye ? editingUser.storedPassword : '••••••••••••'}
+                                </code>
+                                <button
+                                  type="button"
+                                  onMouseDown={() => setEditingUser({ ...editingUser, isHoldingEye: true })}
+                                  onMouseUp={() => setEditingUser({ ...editingUser, isHoldingEye: false })}
+                                  onMouseLeave={() => setEditingUser({ ...editingUser, isHoldingEye: false })}
+                                  onTouchStart={() => setEditingUser({ ...editingUser, isHoldingEye: true })}
+                                  onTouchEnd={() => setEditingUser({ ...editingUser, isHoldingEye: false })}
+                                  className={`p-2 rounded-lg transition-colors ${editingUser.isHoldingEye ? 'bg-purple-500 text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-gray-300 hover:bg-slate-300 dark:hover:bg-slate-500'}`}
+                                  title="Hold to reveal password"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    {editingUser.isHoldingEye ? (
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    ) : (
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                                    )}
+                                  </svg>
+                                </button>
+                              </div>
+                              <p className="text-xs text-slate-400 dark:text-gray-500 mt-1">Hold eye icon to reveal</p>
+                            </div>
+                          )}
+
+                          {/* New Password Field */}
+                          <div>
+                            <p className="text-xs text-slate-500 dark:text-gray-400 mb-1">Set New Password</p>
+                            <div className="relative">
+                              <input
+                                type={editingUser.showPassword ? 'text' : 'password'}
+                                value={editingUser.newPassword}
+                                onChange={(e) => setEditingUser({ ...editingUser, newPassword: e.target.value })}
+                                className={`w-full px-4 py-2 pr-20 bg-slate-50 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border ${userFormErrors.newPassword ? 'border-red-500' : 'border-slate-200 dark:border-slate-600'} focus:border-purple-500 focus:outline-none`}
+                                placeholder="Enter new password (optional)"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setEditingUser({ ...editingUser, showPassword: !editingUser.showPassword })}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 text-xs text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-gray-200"
+                              >
+                                {editingUser.showPassword ? 'Hide' : 'Show'}
+                              </button>
+                            </div>
+                          </div>
+                          {userFormErrors.newPassword && <p className="text-red-600 dark:text-red-400 text-xs">{userFormErrors.newPassword}</p>}
+                          {editingUser.newPassword && (
+                            <div>
+                              <div className="flex gap-1">
+                                {[1,2,3,4,5].map(i => (
+                                  <div
+                                    key={i}
+                                    className={`h-1 flex-1 rounded ${
+                                      i <= getPasswordStrength(editingUser.newPassword).score ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'
+                                    }`}
+                                  />
+                                ))}
+                              </div>
+                              <p className="text-xs text-slate-500 dark:text-gray-400 mt-1">
+                                Strength: {getPasswordStrength(editingUser.newPassword).message}
+                              </p>
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={handleSendPasswordReset}
+                            className="w-full py-2 bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 text-slate-700 dark:text-white rounded-lg transition-colors text-sm"
+                          >
+                            Send Password Reset Email
+                          </button>
+                          <p className="text-xs text-slate-500 dark:text-gray-400">
+                            Leave password blank to keep current. Or send a reset email for the user to set their own.
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={handleUpdateUser}
+                        className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors font-medium"
+                      >
+                        Update User
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Add New User */}
+                {!editingUser && (
+                  <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-slate-200 dark:border-white/10">
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Add New User</h3>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Name *</label>
+                        <input
+                          type="text"
+                          value={newUserData.name}
+                          onChange={(e) => setNewUserData({ ...newUserData, name: e.target.value })}
+                          className={`w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border ${userFormErrors.name ? 'border-red-500' : 'border-slate-200 dark:border-slate-600'} focus:border-purple-500 focus:outline-none`}
+                          placeholder="User Name"
+                        />
+                        {userFormErrors.name && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{userFormErrors.name}</p>}
+                      </div>
+                      <div>
+                        <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Email *</label>
+                        <input
+                          type="email"
+                          value={newUserData.email}
+                          onChange={(e) => setNewUserData({ ...newUserData, email: e.target.value })}
+                          className={`w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border ${userFormErrors.email ? 'border-red-500' : 'border-slate-200 dark:border-slate-600'} focus:border-purple-500 focus:outline-none`}
+                          placeholder="user@example.com"
+                        />
+                        {userFormErrors.email && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{userFormErrors.email}</p>}
+                      </div>
+                      <div>
+                        <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Password *</label>
+                        <input
+                          type="password"
+                          value={newUserData.password}
+                          onChange={(e) => setNewUserData({ ...newUserData, password: e.target.value })}
+                          className={`w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border ${userFormErrors.password ? 'border-red-500' : 'border-slate-200 dark:border-slate-600'} focus:border-purple-500 focus:outline-none`}
+                          placeholder="••••••••"
+                        />
+                        {userFormErrors.password && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{userFormErrors.password}</p>}
+                        {newUserData.password && (
+                          <div className="mt-2">
+                            <div className="flex gap-1">
+                              {[1,2,3,4,5].map(i => (
+                                <div
+                                  key={i}
+                                  className={`h-1 flex-1 rounded ${
+                                    i <= getPasswordStrength(newUserData.password).score ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                            <p className="text-xs text-slate-500 dark:text-gray-400 mt-1">
+                              Strength: {getPasswordStrength(newUserData.password).message}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={handleAddUser}
+                        className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors font-medium"
+                      >
+                        Create User
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-12 border border-slate-200 dark:border-white/10 text-center">
+                <p className="text-slate-500 dark:text-gray-400">Select a tenant to manage their users</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* PAYMENT TAB */}
+      {activeTab === 'payment' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Tenant Selector */}
+          {isAdmin && promoters.length > 1 && (
+            <div className="lg:col-span-1 bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-slate-200 dark:border-white/10">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Select Tenant</h3>
+              <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                {promoters.map(promoter => (
+                  <button
+                    key={promoter.id}
+                    onClick={() => handleSelectPromoter(promoter)}
+                    className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-left ${
+                      selectedPromoter?.id === promoter.id
+                        ? 'bg-purple-500/20 border border-purple-500/30'
+                        : 'bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 border border-transparent'
+                    }`}
+                  >
+                    {promoter.logo ? (
+                      <img src={promoter.logo} alt={promoter.name} className="w-10 h-10 rounded-lg object-cover" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg bg-slate-200 dark:bg-white/10 flex items-center justify-center text-slate-500 dark:text-gray-400">
+                        {promoter.name?.charAt(0) || '?'}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-slate-900 dark:text-white font-medium truncate">{promoter.name}</p>
+                      <p className="text-slate-500 dark:text-gray-400 text-sm capitalize">{promoter.brandingType || 'basic'} Plan</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Payment Gateway Setup */}
+          <div className={`${isAdmin && promoters.length > 1 ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
+            {selectedPromoter ? (
+              <PaymentGatewaySetup
+                key={`payment-${selectedPromoter.id}`}
+                promoterId={selectedPromoter.id}
+                currentGateway={paymentGateway}
+                isMaster={isAdmin || false}
+                onUpdate={loadData}
+              />
+            ) : (
+              <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-12 border border-slate-200 dark:border-white/10 text-center">
+                <p className="text-slate-500 dark:text-gray-400">Select a tenant to configure their payment gateway</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* EVENTS TAB */}
+      {activeTab === 'events' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Tenant Selector */}
+          {isAdmin && promoters.length > 1 && (
+            <div className="lg:col-span-1 bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-slate-200 dark:border-white/10">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Select Tenant</h3>
+              <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                {promoters.map(promoter => (
+                  <button
+                    key={promoter.id}
+                    onClick={() => handleSelectPromoter(promoter)}
+                    className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-left ${
+                      selectedPromoter?.id === promoter.id
+                        ? 'bg-purple-500/20 border border-purple-500/30'
+                        : 'bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 border border-transparent'
+                    }`}
+                  >
+                    {promoter.logo ? (
+                      <img src={promoter.logo} alt={promoter.name} className="w-10 h-10 rounded-lg object-cover" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg bg-slate-200 dark:bg-white/10 flex items-center justify-center text-slate-500 dark:text-gray-400">
+                        {promoter.name?.charAt(0) || '?'}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-slate-900 dark:text-white font-medium truncate">{promoter.name}</p>
+                      <p className="text-slate-500 dark:text-gray-400 text-sm">{promoter.eventCount || 0} events</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Events List */}
+          <div className={`${isAdmin && promoters.length > 1 ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
+            {selectedPromoter ? (
+              <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-slate-200 dark:border-white/10">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+                  Events for {selectedPromoter.name}
+                </h3>
+                <PromoterEvents promoterId={selectedPromoter.id} />
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-12 border border-slate-200 dark:border-white/10 text-center">
+                <p className="text-slate-500 dark:text-gray-400">Select a tenant to view their events</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* COMMISSIONS TAB */}
+      {activeTab === 'commissions' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Tenant Selector */}
+          {isAdmin && promoters.length > 1 && (
+            <div className="lg:col-span-1 bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-slate-200 dark:border-white/10">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Select Tenant</h3>
+              <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                {promoters.map(promoter => (
+                  <button
+                    key={promoter.id}
+                    onClick={() => handleSelectPromoter(promoter)}
+                    className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-left ${
+                      selectedPromoter?.id === promoter.id
+                        ? 'bg-purple-500/20 border border-purple-500/30'
+                        : 'bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 border border-transparent'
+                    }`}
+                  >
+                    {promoter.logo ? (
+                      <img src={promoter.logo} alt={promoter.name} className="w-10 h-10 rounded-lg object-cover" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg bg-slate-200 dark:bg-white/10 flex items-center justify-center text-slate-500 dark:text-gray-400">
+                        {promoter.name?.charAt(0) || '?'}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-slate-900 dark:text-white font-medium truncate">{promoter.name}</p>
+                      <p className="text-slate-500 dark:text-gray-400 text-sm">{promoter.commission}% commission</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Commissions */}
+          <div className={`${isAdmin && promoters.length > 1 ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
+            {selectedPromoter ? (
+              <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-slate-200 dark:border-white/10">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+                  Commissions for {selectedPromoter.name}
+                </h3>
+                <PromoterCommissions promoterId={selectedPromoter.id} />
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-12 border border-slate-200 dark:border-white/10 text-center">
+                <p className="text-slate-500 dark:text-gray-400">Select a tenant to view their commissions</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* DOCUMENTS TAB */}
+      {activeTab === 'documents' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Tenant Selector */}
+          {isAdmin && promoters.length > 1 && (
+            <div className="lg:col-span-1 bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-slate-200 dark:border-white/10">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Select Tenant</h3>
+              <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                {promoters.map(promoter => (
+                  <button
+                    key={promoter.id}
+                    onClick={() => handleSelectPromoter(promoter)}
+                    className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-left ${
+                      selectedPromoter?.id === promoter.id
+                        ? 'bg-purple-500/20 border border-purple-500/30'
+                        : 'bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 border border-transparent'
+                    }`}
+                  >
+                    {promoter.logo ? (
+                      <img src={promoter.logo} alt={promoter.name} className="w-10 h-10 rounded-lg object-cover" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg bg-slate-200 dark:bg-white/10 flex items-center justify-center text-slate-500 dark:text-gray-400">
+                        {promoter.name?.charAt(0) || '?'}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-slate-900 dark:text-white font-medium truncate">{promoter.name}</p>
+                      <p className="text-slate-500 dark:text-gray-400 text-sm capitalize">{promoter.brandingType || 'basic'} Plan</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Documents */}
+          <div className={`${isAdmin && promoters.length > 1 ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
+            {selectedPromoter ? (
+              <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-slate-200 dark:border-white/10">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+                  Documents for {selectedPromoter.name}
+                </h3>
+                <PromoterDocuments promoterId={selectedPromoter.id} />
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-12 border border-slate-200 dark:border-white/10 text-center">
+                <p className="text-slate-500 dark:text-gray-400">Select a tenant to view their documents</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* DOMAINS TAB - Admin Only */}
       {activeTab === 'domains' && isAdmin && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Promoter Portals</h3>
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Tenant Portals</h3>
           </div>
 
           <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl border border-slate-200 dark:border-white/10 overflow-hidden">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-200 dark:border-white/10">
-                  <th className="text-left p-4 text-slate-500 dark:text-gray-400 font-medium">Promoter</th>
+                  <th className="text-left p-4 text-slate-500 dark:text-gray-400 font-medium">Tenant</th>
                   <th className="text-left p-4 text-slate-500 dark:text-gray-400 font-medium">Portal Slug</th>
                   <th className="text-left p-4 text-slate-500 dark:text-gray-400 font-medium">Custom Domain</th>
                   <th className="text-left p-4 text-slate-500 dark:text-gray-400 font-medium">Status</th>
@@ -564,7 +1810,10 @@ export default function WhiteLabelPage() {
                       </span>
                     </td>
                     <td className="p-4 text-right">
-                      <button className="px-3 py-1 bg-slate-200 dark:bg-white/10 hover:bg-slate-300 dark:hover:bg-white/20 text-slate-700 dark:text-white rounded-lg text-sm transition-colors">
+                      <button
+                        onClick={() => handleConfigureDomain(promoter)}
+                        className="px-3 py-1 bg-slate-200 dark:bg-white/10 hover:bg-slate-300 dark:hover:bg-white/20 text-slate-700 dark:text-white rounded-lg text-sm transition-colors"
+                      >
                         Configure
                       </button>
                     </td>
@@ -576,48 +1825,398 @@ export default function WhiteLabelPage() {
         </div>
       )}
 
-      {/* Billing Tab - Admin Only */}
-      {activeTab === 'billing' && isAdmin && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-slate-200 dark:border-white/10">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Promoters by Plan</h3>
-            <div className="space-y-4">
-              {[
-                { plan: 'Advanced', count: stats.advancedPlans, color: 'bg-purple-500' },
-                { plan: 'Basic', count: stats.basicPlans, color: 'bg-blue-500' },
-              ].map((item, i) => (
-                <div key={i}>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-slate-900 dark:text-white">{item.plan}</span>
-                    <span className="text-slate-500 dark:text-gray-400">{item.count} promoters</span>
-                  </div>
-                  <div className="h-4 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${item.color}`}
-                      style={{ width: `${stats.totalTenants > 0 ? (item.count / stats.totalTenants) * 100 : 0}%` }}
+      {/* CREATE/EDIT TENANT MODAL */}
+      {showForm && (
+        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 w-full max-w-3xl my-8 border border-slate-200 dark:border-slate-700 shadow-xl">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+                {editingPromoter ? 'Edit Tenant' : 'Add New Tenant'}
+              </h2>
+              <button onClick={() => { setShowForm(false); resetForm() }} className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Basic Info */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Name *</label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className={`w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border ${formErrors.name ? 'border-red-500' : 'border-slate-200 dark:border-slate-600'} focus:border-purple-500 focus:outline-none`}
+                    placeholder="Tenant Name"
+                  />
+                  {formErrors.name && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{formErrors.name}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Portal Slug *</label>
+                  <div className="flex items-center">
+                    <span className="text-slate-500 dark:text-gray-400 mr-2">/p/</span>
+                    <input
+                      type="text"
+                      value={formData.slug}
+                      onChange={(e) => setFormData({ ...formData, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })}
+                      className={`flex-1 px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border ${formErrors.slug ? 'border-red-500' : 'border-slate-200 dark:border-slate-600'} focus:border-purple-500 focus:outline-none`}
+                      placeholder="tenant-name"
                     />
                   </div>
+                  {formErrors.slug ? (
+                    <p className="text-red-600 dark:text-red-400 text-xs mt-1">{formErrors.slug}</p>
+                  ) : (
+                    <p className="text-xs text-slate-500 dark:text-gray-400 mt-1">Auto-generated if left empty</p>
+                  )}
                 </div>
-              ))}
-            </div>
-          </div>
+              </div>
 
-          <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-slate-200 dark:border-white/10">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Commission Overview</h3>
-            <div className="space-y-3">
-              {promoters.slice(0, 5).map((promoter) => (
-                <div key={promoter.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-white/5 rounded-lg">
-                  <div>
-                    <p className="text-slate-900 dark:text-white font-medium">{promoter.name}</p>
-                    <p className="text-slate-500 dark:text-gray-400 text-sm capitalize">{promoter.brandingType} Plan</p>
-                  </div>
-                  <span className="text-purple-600 dark:text-purple-400 font-medium">{promoter.commission}%</span>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Email *</label>
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    className={`w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border ${formErrors.email ? 'border-red-500' : 'border-slate-200 dark:border-slate-600'} focus:border-purple-500 focus:outline-none`}
+                    placeholder="tenant@example.com"
+                  />
+                  {formErrors.email && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{formErrors.email}</p>}
                 </div>
-              ))}
+                <div>
+                  <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Phone</label>
+                  <input
+                    type="tel"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    className={`w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border ${formErrors.phone ? 'border-red-500' : 'border-slate-200 dark:border-slate-600'} focus:border-purple-500 focus:outline-none`}
+                    placeholder="(555) 123-4567"
+                  />
+                  {formErrors.phone && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{formErrors.phone}</p>}
+                </div>
+              </div>
+
+              {/* Branding */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Branding Type</label>
+                  <select
+                    value={formData.brandingType}
+                    onChange={(e) => setFormData({ ...formData, brandingType: e.target.value as 'basic' | 'advanced' })}
+                    className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 focus:border-purple-500 focus:outline-none"
+                  >
+                    <option value="basic">Basic</option>
+                    <option value="advanced">Advanced</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Commission (%)</label>
+                  <input
+                    type="number"
+                    value={formData.commission}
+                    onChange={(e) => setFormData({ ...formData, commission: Math.max(0, Math.min(100, parseInt(e.target.value) || 0)) })}
+                    className={`w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border ${formErrors.commission ? 'border-red-500' : 'border-slate-200 dark:border-slate-600'} focus:border-purple-500 focus:outline-none`}
+                    min="0"
+                    max="100"
+                  />
+                  {formErrors.commission && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{formErrors.commission}</p>}
+                </div>
+              </div>
+
+              {/* Logo Upload */}
+              <div>
+                <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Logo</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleLogoUpload}
+                  className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600"
+                  disabled={uploadingLogo}
+                />
+                {uploadingLogo && <p className="text-xs text-purple-600 dark:text-purple-400 mt-2">Uploading logo...</p>}
+                {logoUrl && (
+                  <div className="mt-2">
+                    <img src={logoUrl} alt="Logo preview" className="h-20 object-contain rounded" />
+                  </div>
+                )}
+              </div>
+
+              {/* Color Scheme */}
+              <div>
+                <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Color Scheme</label>
+                <div className="grid grid-cols-5 gap-3">
+                  {(['primary', 'secondary', 'accent', 'background', 'text'] as const).map(key => (
+                    <div key={key}>
+                      <label className="text-xs text-slate-500 dark:text-gray-400 capitalize">{key}</label>
+                      <input
+                        type="color"
+                        value={formData.colorScheme[key]}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          colorScheme: { ...formData.colorScheme, [key]: e.target.value }
+                        })}
+                        className="w-full h-10 rounded cursor-pointer border border-slate-200 dark:border-slate-600"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Website</label>
+                  <input
+                    type="url"
+                    value={formData.website}
+                    onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                    className={`w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border ${formErrors.website ? 'border-red-500' : 'border-slate-200 dark:border-slate-600'} focus:border-purple-500 focus:outline-none`}
+                    placeholder="https://example.com"
+                  />
+                  {formErrors.website && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{formErrors.website}</p>}
+                </div>
+                <div className="flex items-end">
+                  <label className="flex items-center gap-2 text-slate-900 dark:text-white">
+                    <input
+                      type="checkbox"
+                      checked={formData.active}
+                      onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
+                      className="rounded border-slate-300 dark:border-slate-600"
+                    />
+                    <span>Active (Can manage events)</span>
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Description</label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg h-20 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 focus:border-purple-500 focus:outline-none"
+                  placeholder="Notes about this tenant..."
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => { setShowForm(false); resetForm() }}
+                  className="px-6 py-2 bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                >
+                  {submitting ? 'Saving...' : editingPromoter ? 'Update' : 'Add'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CONFIRMATION MODAL */}
+      {showDeleteModal && selectedPromoter && (
+        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 w-full max-w-lg border border-slate-200 dark:border-slate-700 shadow-xl">
+            <h2 className="text-xl font-bold mb-4 text-slate-900 dark:text-white">
+              {selectedPromoter.active ? 'Deactivate' : 'Delete'} {selectedPromoter.name}?
+            </h2>
+
+            <div className="space-y-4 mb-6">
+              <label className="flex items-start gap-3 p-3 bg-yellow-50 dark:bg-yellow-600/10 border border-yellow-300 dark:border-yellow-600/30 rounded-lg cursor-pointer">
+                <input
+                  type="radio"
+                  name="deleteAction"
+                  checked={deleteAction === 'soft'}
+                  onChange={() => setDeleteAction('soft')}
+                  className="mt-1"
+                />
+                <div>
+                  <p className="font-medium text-yellow-700 dark:text-yellow-400">Deactivate (Recommended)</p>
+                  <p className="text-sm text-slate-500 dark:text-gray-400">Tenant will be hidden but data preserved for reporting</p>
+                </div>
+              </label>
+
+              <label className="flex items-start gap-3 p-3 bg-red-50 dark:bg-red-600/10 border border-red-300 dark:border-red-600/30 rounded-lg cursor-pointer">
+                <input
+                  type="radio"
+                  name="deleteAction"
+                  checked={deleteAction === 'hard'}
+                  onChange={() => setDeleteAction('hard')}
+                  className="mt-1"
+                />
+                <div>
+                  <p className="font-medium text-red-700 dark:text-red-400">Permanently Delete</p>
+                  <p className="text-sm text-slate-500 dark:text-gray-400">Cannot be undone. All tenant data will be lost.</p>
+                </div>
+              </label>
+
+              {deleteAction === 'hard' && selectedPromoter.eventCount > 0 && (
+                <div className="p-3 bg-slate-100 dark:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600">
+                  <p className="text-sm text-slate-500 dark:text-gray-400 mb-2">
+                    This tenant has {selectedPromoter.eventCount} events. Reassign to:
+                  </p>
+                  <select
+                    value={reassignPromoterId}
+                    onChange={(e) => setReassignPromoterId(e.target.value)}
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-600 rounded-lg text-slate-900 dark:text-white border border-slate-200 dark:border-slate-500"
+                  >
+                    <option value="">Select a tenant...</option>
+                    {promoters.filter(p => p.id !== selectedPromoter.id && p.active).map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+              <button
+                onClick={() => { setShowDeleteModal(false); setSelectedPromoter(null) }}
+                className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleteAction === 'hard' && selectedPromoter.eventCount > 0 && !reassignPromoterId}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {deleteAction === 'soft' ? 'Deactivate' : 'Delete'}
+              </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* USERS MANAGEMENT MODAL */}
+      {showUsersModal && selectedPromoter && (
+        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 w-full max-w-2xl my-8 border border-slate-200 dark:border-slate-700 shadow-xl">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Manage Users for {selectedPromoter.name}</h2>
+              <button
+                onClick={() => {
+                  setShowUsersModal(false)
+                  setNewUserData({ email: '', password: '', name: '' })
+                  setUserFormErrors({})
+                }}
+                className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold mb-3 text-slate-900 dark:text-white">Current Users</h3>
+              {selectedPromoter.users?.length > 0 ? (
+                <div className="space-y-2">
+                  {selectedPromoter.users.map((user: any, index: number) => {
+                    // Handle both string IDs and user objects
+                    const userId = typeof user === 'string' ? user : (user?.id || user?.uid || `user-${index}`)
+                    const userData = typeof user === 'string' ? users[user] : user
+                    const userName = userData?.name || 'Unknown User'
+                    const userEmail = userData?.email || (typeof user === 'string' ? user : 'No email')
+                    return (
+                      <div key={userId} className="bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg p-3 flex justify-between items-center">
+                        <div>
+                          <p className="font-medium text-slate-900 dark:text-white">{userName}</p>
+                          <p className="text-sm text-slate-500 dark:text-gray-400">{userEmail}</p>
+                        </div>
+                        <button
+                          onClick={() => handleRemoveUser(userId)}
+                          className="px-3 py-1 bg-red-100 dark:bg-red-600/20 text-red-600 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-600/30 text-sm"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-slate-500 dark:text-gray-400">No users assigned yet</p>
+              )}
+            </div>
+
+            <div className="border-t border-slate-200 dark:border-slate-700 pt-6">
+              <h3 className="text-lg font-semibold mb-3 text-slate-900 dark:text-white">Add New User</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Name *</label>
+                  <input
+                    type="text"
+                    value={newUserData.name}
+                    onChange={(e) => setNewUserData({ ...newUserData, name: e.target.value })}
+                    className={`w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border ${userFormErrors.name ? 'border-red-500' : 'border-slate-200 dark:border-slate-600'} focus:border-purple-500 focus:outline-none`}
+                    placeholder="User Name"
+                  />
+                  {userFormErrors.name && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{userFormErrors.name}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Email *</label>
+                  <input
+                    type="email"
+                    value={newUserData.email}
+                    onChange={(e) => setNewUserData({ ...newUserData, email: e.target.value })}
+                    className={`w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border ${userFormErrors.email ? 'border-red-500' : 'border-slate-200 dark:border-slate-600'} focus:border-purple-500 focus:outline-none`}
+                    placeholder="user@example.com"
+                  />
+                  {userFormErrors.email && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{userFormErrors.email}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm mb-2 text-slate-900 dark:text-white font-medium">Password *</label>
+                  <input
+                    type="password"
+                    value={newUserData.password}
+                    onChange={(e) => setNewUserData({ ...newUserData, password: e.target.value })}
+                    className={`w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border ${userFormErrors.password ? 'border-red-500' : 'border-slate-200 dark:border-slate-600'} focus:border-purple-500 focus:outline-none`}
+                    placeholder="••••••••"
+                  />
+                  {userFormErrors.password && <p className="text-red-600 dark:text-red-400 text-xs mt-1">{userFormErrors.password}</p>}
+                  {newUserData.password && (
+                    <div className="mt-2">
+                      <div className="flex gap-1">
+                        {[1,2,3,4,5].map(i => (
+                          <div
+                            key={i}
+                            className={`h-1 flex-1 rounded ${
+                              i <= getPasswordStrength(newUserData.password).score ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-gray-400 mt-1">
+                        Strength: {getPasswordStrength(newUserData.password).message}
+                      </p>
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={handleAddUser}
+                  className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors font-medium"
+                >
+                  Create User
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style jsx>{`
+        @keyframes slide-in {
+          from { transform: translateX(100%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+        .animate-slide-in {
+          animation: slide-in 0.3s ease-out;
+        }
+      `}</style>
     </div>
   )
 }

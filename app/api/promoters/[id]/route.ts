@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { doc, getDoc, updateDoc, deleteDoc, collection, getDocs, query, where, Timestamp, writeBatch } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { getAdminDb } from '@/lib/firebase-admin'
+import { FieldValue } from 'firebase-admin/firestore'
 
 export async function GET(
   request: NextRequest,
@@ -8,10 +8,11 @@ export async function GET(
 ) {
   try {
     const promoterId = params.id
-    const promoterRef = doc(db, 'promoters', promoterId)
-    const snapshot = await getDoc(promoterRef)
+    // Use Admin SDK for server-side operations
+    const adminDb = getAdminDb()
+    const snapshot = await adminDb.collection('promoters').doc(promoterId).get()
 
-    if (!snapshot.exists()) {
+    if (!snapshot.exists) {
       return NextResponse.json({
         success: false,
         error: 'Promoter not found'
@@ -29,7 +30,9 @@ export async function GET(
     console.error('Error fetching promoter:', error)
     return NextResponse.json({
       success: false,
-      error: error.message
+      error: error.message,
+      code: error.code,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     }, { status: 500 })
   }
 }
@@ -42,11 +45,12 @@ export async function PUT(
     const promoterId = params.id
     const body = await request.json()
 
-    // Verify promoter exists
-    const promoterRef = doc(db, 'promoters', promoterId)
-    const existing = await getDoc(promoterRef)
+    // Use Admin SDK for server-side operations
+    const adminDb = getAdminDb()
+    const promoterRef = adminDb.collection('promoters').doc(promoterId)
+    const existing = await promoterRef.get()
 
-    if (!existing.exists()) {
+    if (!existing.exists) {
       return NextResponse.json({
         success: false,
         error: 'Promoter not found'
@@ -55,9 +59,9 @@ export async function PUT(
 
     // Check if new slug is unique (if slug is being changed)
     if (body.slug && body.slug !== existing.data()?.slug) {
-      const promotersRef = collection(db, 'promoters')
-      const slugQuery = query(promotersRef, where('slug', '==', body.slug))
-      const existingSlug = await getDocs(slugQuery)
+      const existingSlug = await adminDb.collection('promoters')
+        .where('slug', '==', body.slug)
+        .get()
 
       if (!existingSlug.empty) {
         return NextResponse.json({
@@ -70,7 +74,7 @@ export async function PUT(
     // Update promoter
     const updateData = {
       ...body,
-      updatedAt: Timestamp.now()
+      updatedAt: FieldValue.serverTimestamp()
     }
 
     // Remove undefined values
@@ -80,9 +84,9 @@ export async function PUT(
       }
     })
 
-    await updateDoc(promoterRef, updateData)
+    await promoterRef.update(updateData)
 
-    const updated = await getDoc(promoterRef)
+    const updated = await promoterRef.get()
 
     return NextResponse.json({
       success: true,
@@ -110,11 +114,12 @@ export async function DELETE(
     const softDelete = searchParams.get('soft') === 'true'
     const reassignTo = searchParams.get('reassignTo')
 
-    // Verify promoter exists
-    const promoterRef = doc(db, 'promoters', promoterId)
-    const existing = await getDoc(promoterRef)
+    // Use Admin SDK for server-side operations
+    const adminDb = getAdminDb()
+    const promoterRef = adminDb.collection('promoters').doc(promoterId)
+    const existing = await promoterRef.get()
 
-    if (!existing.exists()) {
+    if (!existing.exists) {
       return NextResponse.json({
         success: false,
         error: 'Promoter not found'
@@ -122,16 +127,16 @@ export async function DELETE(
     }
 
     // Check for associated events
-    const eventsRef = collection(db, 'events')
-    const eventsQuery = query(eventsRef, where('promoterId', '==', promoterId))
-    const eventsSnap = await getDocs(eventsQuery)
+    const eventsSnap = await adminDb.collection('events')
+      .where('promoterId', '==', promoterId)
+      .get()
 
     if (softDelete) {
       // Soft delete - mark as inactive
-      await updateDoc(promoterRef, {
+      await promoterRef.update({
         active: false,
-        deletedAt: Timestamp.now(),
-        updatedAt: Timestamp.now()
+        deletedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
       })
 
       return NextResponse.json({
@@ -144,28 +149,28 @@ export async function DELETE(
     if (!eventsSnap.empty) {
       // Reassign events if target promoter specified
       if (reassignTo) {
-        const targetRef = doc(db, 'promoters', reassignTo)
-        const targetSnap = await getDoc(targetRef)
+        const targetRef = adminDb.collection('promoters').doc(reassignTo)
+        const targetSnap = await targetRef.get()
 
-        if (!targetSnap.exists()) {
+        if (!targetSnap.exists) {
           return NextResponse.json({
             success: false,
             error: 'Target promoter for reassignment not found'
           }, { status: 400 })
         }
 
-        const batch = writeBatch(db)
+        const batch = adminDb.batch()
         const targetData = targetSnap.data()
 
         eventsSnap.docs.forEach(eventDoc => {
-          batch.update(doc(db, 'events', eventDoc.id), {
+          batch.update(adminDb.collection('events').doc(eventDoc.id), {
             promoterId: reassignTo,
             promoter: {
               promoterId: reassignTo,
               promoterName: targetData?.name || '',
               commission: targetData?.commission || 10
             },
-            updatedAt: Timestamp.now()
+            updatedAt: FieldValue.serverTimestamp()
           })
         })
 
@@ -179,17 +184,17 @@ export async function DELETE(
     }
 
     // Delete the promoter
-    await deleteDoc(promoterRef)
+    await promoterRef.delete()
 
     // Also delete associated payment gateway
-    const gatewaysRef = collection(db, 'payment_gateways')
-    const gatewayQuery = query(gatewaysRef, where('promoterId', '==', promoterId))
-    const gatewaySnap = await getDocs(gatewayQuery)
+    const gatewaySnap = await adminDb.collection('payment_gateways')
+      .where('promoterId', '==', promoterId)
+      .get()
 
     if (!gatewaySnap.empty) {
-      const batch = writeBatch(db)
+      const batch = adminDb.batch()
       gatewaySnap.docs.forEach(gw => {
-        batch.delete(doc(db, 'payment_gateways', gw.id))
+        batch.delete(adminDb.collection('payment_gateways').doc(gw.id))
       })
       await batch.commit()
     }
