@@ -54,8 +54,11 @@ export default async function EventDetailPage({ params }: PageProps) {
     notFound()
   }
 
-  // Format date
-  const formatDate = (date: Date) => {
+  // Format date safely
+  const formatDate = (date: Date | undefined | null) => {
+    if (!date || isNaN(date.getTime())) {
+      return 'Date TBA'
+    }
     return new Intl.DateTimeFormat('en-US', {
       weekday: 'long',
       year: 'numeric',
@@ -64,7 +67,10 @@ export default async function EventDetailPage({ params }: PageProps) {
     }).format(date)
   }
 
-  const formatTime = (date: Date) => {
+  const formatTime = (date: Date | undefined | null) => {
+    if (!date || isNaN(date.getTime())) {
+      return ''
+    }
     return new Intl.DateTimeFormat('en-US', {
       hour: 'numeric',
       minute: '2-digit',
@@ -72,7 +78,10 @@ export default async function EventDetailPage({ params }: PageProps) {
     }).format(date)
   }
 
-  const formatPrice = (price: number, currency = 'USD') => {
+  const formatPrice = (price: number | undefined, currency = 'USD') => {
+    if (price === undefined || price === null) {
+      return 'Free'
+    }
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency,
