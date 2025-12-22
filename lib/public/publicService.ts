@@ -115,9 +115,9 @@ export async function getPromoterEvents(
     console.log(`[PublicService] Fetching events for promoterId: ${promoterId}`)
 
     // Events are stored with promoter info in nested 'promoter.promoterId' field
+    // Events can have status 'active' or 'published' - both are visible on public site
     let query = db.collection('events')
       .where('promoter.promoterId', '==', promoterId)
-      .where('status', '==', 'published')
 
     if (options?.category) {
       query = query.where('category', '==', options.category)
@@ -128,7 +128,7 @@ export async function getPromoterEvents(
     }
 
     const snapshot = await query.get()
-    console.log(`[PublicService] Query returned ${snapshot.size} events`)
+    console.log(`[PublicService] Query returned ${snapshot.size} events for promoterId: ${promoterId}`)
 
     // Debug: If no events found, let's check what promoterIds exist in events
     if (snapshot.empty) {
@@ -141,8 +141,14 @@ export async function getPromoterEvents(
     }
 
     const now = new Date()
+    const validStatuses = ['active', 'published']
 
-    let events = snapshot.docs.map(doc => {
+    let events = snapshot.docs
+      .filter(doc => {
+        const status = doc.data().status
+        return validStatuses.includes(status)
+      })
+      .map(doc => {
       const data = doc.data()
       const startDate = data.startDate?.toDate?.() ||
                        data.schedule?.date?.toDate?.() ||
