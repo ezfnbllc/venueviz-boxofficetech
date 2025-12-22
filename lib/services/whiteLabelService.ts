@@ -34,6 +34,11 @@ export interface Tenant {
   metadata?: Record<string, any>
   createdAt: Date
   updatedAt: Date
+
+  // Master Tenant Fields
+  isMaster?: boolean                   // true only for BoxOfficeTech platform owner
+  defaultThemeId?: string              // Theme ID to use as default (master's core theme)
+  customThemeId?: string               // Tenant's own uploaded theme (overrides default)
 }
 
 export interface TenantOwner {
@@ -292,11 +297,16 @@ export interface TenantUser {
   userId: string
   email: string
   name: string
-  role: 'owner' | 'admin' | 'manager' | 'staff' | 'readonly'
+  role: 'owner' | 'admin' | 'manager' | 'staff' | 'readonly' | 'superadmin'
   permissions: string[]
   lastLogin?: Date
   status: 'active' | 'suspended' | 'invited'
   createdAt: Date
+
+  // Superadmin Fields (platform-level access)
+  canAccessAllTenants?: boolean        // true for superadmin role
+  canImpersonate?: boolean             // Can impersonate other tenant admins
+  canManageBilling?: boolean           // Can access all tenant billing
 }
 
 export interface TenantAuditLog {

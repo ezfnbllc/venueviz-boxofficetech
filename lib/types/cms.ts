@@ -15,7 +15,7 @@ export interface TenantTheme {
   id: string
   tenantId: string
   themeName: string                    // e.g., "EventHub Pro"
-  themeSource: 'themeforest' | 'custom'
+  themeSource: 'themeforest' | 'custom' | 'core'  // 'core' = platform default
   themeforestId?: string               // ThemeForest item ID
   purchasedAt?: Timestamp
   licenseType?: 'regular' | 'extended'
@@ -37,6 +37,10 @@ export interface TenantTheme {
   publishedAt?: Timestamp
   createdBy: string
   updatedBy: string
+
+  // Core/Default Theme Fields
+  isDefault?: boolean                  // true = platform default theme (Barren)
+  isMasterTheme?: boolean              // true = owned by master tenant, inheritable
 }
 
 export interface ThemeAssets {
