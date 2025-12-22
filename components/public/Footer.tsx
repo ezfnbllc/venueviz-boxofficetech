@@ -91,7 +91,6 @@ export function Footer({
       title: 'Events',
       links: [
         { label: 'Browse Events', href: `${baseUrl}/events` },
-        { label: 'Create Event', href: `${baseUrl}/create` },
       ],
     },
     {
