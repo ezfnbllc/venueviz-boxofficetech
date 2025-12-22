@@ -150,22 +150,39 @@ export async function getPromoterEvents(
       })
       .map(doc => {
       const data = doc.data()
-      const startDate = data.startDate?.toDate?.() ||
-                       data.schedule?.date?.toDate?.() ||
-                       new Date(data.startDate || data.schedule?.date)
+
+      // Get start date from schedule.performances[0].date (primary) or fallback fields
+      const firstPerformance = data.schedule?.performances?.[0]
+      let startDate: Date
+      if (firstPerformance?.date) {
+        // Handle Firestore Timestamp or ISO string
+        startDate = firstPerformance.date.toDate?.() || new Date(firstPerformance.date)
+      } else if (data.startDate) {
+        startDate = data.startDate.toDate?.() || new Date(data.startDate)
+      } else {
+        startDate = new Date(NaN) // Invalid date - will show "Date TBA"
+      }
+
+      // Get image from images.cover (primary) or fallback fields
+      const thumbnail = data.images?.cover || data.thumbnail || data.image || data.bannerImage
 
       return {
         id: doc.id,
-        name: data.name || '',
-        slug: data.slug,
-        description: data.description,
-        shortDescription: data.shortDescription,
-        thumbnail: data.thumbnail || data.image,
-        bannerImage: data.bannerImage,
+        name: data.name || data.basics?.name || '',
+        slug: data.slug || data.communications?.seo?.urlSlug,
+        description: data.description || data.basics?.description,
+        shortDescription: data.shortDescription || data.basics?.shortDescription,
+        thumbnail,
+        bannerImage: data.bannerImage || data.images?.cover,
         startDate,
         endDate: data.endDate?.toDate?.(),
-        venue: data.venue,
-        category: data.category,
+        venue: data.venue || {
+          name: data.venueName,
+          address: data.venueAddress,
+          city: data.venueCity,
+          state: data.venueState,
+        },
+        category: data.category || data.basics?.category,
         status: data.status,
         pricing: {
           minPrice: data.pricing?.minPrice || data.minPrice,
@@ -212,30 +229,46 @@ export async function getEventById(eventId: string): Promise<PublicEvent | null>
     if (!doc.exists) return null
 
     const data = doc.data()!
-    const startDate = data.startDate?.toDate?.() ||
-                     data.schedule?.date?.toDate?.() ||
-                     new Date(data.startDate || data.schedule?.date)
+
+    // Get start date from schedule.performances[0].date (primary) or fallback fields
+    const firstPerformance = data.schedule?.performances?.[0]
+    let startDate: Date
+    if (firstPerformance?.date) {
+      startDate = firstPerformance.date.toDate?.() || new Date(firstPerformance.date)
+    } else if (data.startDate) {
+      startDate = data.startDate.toDate?.() || new Date(data.startDate)
+    } else {
+      startDate = new Date(NaN) // Invalid date - will show "Date TBA"
+    }
+
+    // Get image from images.cover (primary) or fallback fields
+    const thumbnail = data.images?.cover || data.thumbnail || data.image || data.bannerImage
 
     return {
       id: doc.id,
-      name: data.name || '',
-      slug: data.slug,
-      description: data.description,
-      shortDescription: data.shortDescription,
-      thumbnail: data.thumbnail || data.image,
-      bannerImage: data.bannerImage,
+      name: data.name || data.basics?.name || '',
+      slug: data.slug || data.communications?.seo?.urlSlug,
+      description: data.description || data.basics?.description,
+      shortDescription: data.shortDescription || data.basics?.shortDescription,
+      thumbnail,
+      bannerImage: data.bannerImage || data.images?.cover,
       startDate,
       endDate: data.endDate?.toDate?.(),
-      venue: data.venue,
-      category: data.category,
+      venue: data.venue || {
+        name: data.venueName,
+        address: data.venueAddress,
+        city: data.venueCity,
+        state: data.venueState,
+      },
+      category: data.category || data.basics?.category,
       status: data.status,
       pricing: {
         minPrice: data.pricing?.minPrice || data.minPrice,
         maxPrice: data.pricing?.maxPrice || data.maxPrice,
         currency: data.pricing?.currency || 'USD',
       },
-      promoterId: data.promoterId,
-      promoterSlug: data.promoterSlug,
+      promoterId: data.promoter?.promoterId || data.promoterId,
+      promoterSlug: data.promoter?.slug || data.promoterSlug,
       ticketsAvailable: data.ticketsAvailable,
       totalCapacity: data.totalCapacity || data.capacity,
       isFeatured: data.isFeatured,
