@@ -8,10 +8,12 @@
 import { initializeApp, getApps, cert, App } from 'firebase-admin/app'
 import { getFirestore, Firestore } from 'firebase-admin/firestore'
 import { getStorage, Storage } from 'firebase-admin/storage'
+import { getAuth, Auth } from 'firebase-admin/auth'
 
 let adminApp: App | null = null
 let adminDb: Firestore | null = null
 let adminStorage: Storage | null = null
+let adminAuth: Auth | null = null
 let initializationError: Error | null = null
 
 /**
@@ -177,6 +179,15 @@ export function getAdminStorage(): Storage {
   adminStorage = getStorage(getAdminApp())
   return adminStorage
 }
+
+export function getAdminAuth(): Auth {
+  if (adminAuth) return adminAuth
+  adminAuth = getAuth(getAdminApp())
+  return adminAuth
+}
+
+// Aliases for compatibility
+export const getAdminFirestore = getAdminDb
 
 // Export for convenience
 export { getAdminApp }
