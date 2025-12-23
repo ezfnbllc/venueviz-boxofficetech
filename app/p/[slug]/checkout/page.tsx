@@ -348,7 +348,7 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [couponCode, setCouponCode] = useState('')
-  const [isClient, setIsClient] = useState(false)
+  const [cartReady, setCartReady] = useState(false)
 
   const [formData, setFormData] = useState({
     firstName: '',
@@ -363,14 +363,18 @@ export default function CheckoutPage() {
   const [emailError, setEmailError] = useState<string | null>(null)
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Handle client-side hydration
+  // Handle client-side hydration - wait for Zustand to rehydrate from localStorage
   useEffect(() => {
-    setIsClient(true)
+    // Small delay to ensure Zustand has rehydrated from localStorage
+    const timer = setTimeout(() => {
+      setCartReady(true)
+    }, 50)
+    return () => clearTimeout(timer)
   }, [])
 
   // Create payment intent when form is complete (with debouncing)
   useEffect(() => {
-    if (!isClient || items.length === 0) {
+    if (!cartReady || items.length === 0) {
       setLoading(false)
       return
     }
@@ -452,7 +456,7 @@ export default function CheckoutPage() {
         clearTimeout(debounceTimerRef.current)
       }
     }
-  }, [isClient, items, formData.email, formData.firstName, formData.lastName, slug])
+  }, [cartReady, items, formData.email, formData.firstName, formData.lastName, slug])
 
   const handleApplyCoupon = () => {
     // TODO: Implement coupon validation
@@ -464,11 +468,11 @@ export default function CheckoutPage() {
     router.push(`/p/${slug}/confirmation/${orderId}`)
   }
 
-  // Show loading during hydration
-  if (!isClient) {
+  // Show loading during hydration - use suppressHydrationWarning to prevent mismatch errors
+  if (!cartReady) {
     return (
       <Layout promoterSlug={slug}>
-        <div className="min-h-screen flex items-center justify-center">
+        <div className="min-h-screen flex items-center justify-center" suppressHydrationWarning>
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#6ac045]"></div>
         </div>
       </Layout>
