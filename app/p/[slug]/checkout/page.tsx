@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { loadStripe } from '@stripe/stripe-js'
 import {
@@ -15,6 +15,12 @@ import Link from 'next/link'
 
 // Initialize Stripe
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
+
+// Email validation helper
+function isValidEmail(email: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  return emailRegex.test(email)
+}
 
 interface CheckoutFormProps {
   clientSecret: string
@@ -115,9 +121,11 @@ function CheckoutForm({ clientSecret, orderId, promoterSlug, onSuccess }: Checko
 function BillingForm({
   formData,
   setFormData,
+  emailError,
 }: {
   formData: { firstName: string; lastName: string; email: string; address: string; city: string; state: string; zipCode: string; country: string }
   setFormData: React.Dispatch<React.SetStateAction<typeof formData>>
+  emailError?: string
 }) {
   return (
     <div className="main-card">
@@ -149,12 +157,15 @@ function BillingForm({
           <div className="form-group">
             <label className="form-label">Email*</label>
             <input
-              className="form-control h-12"
+              className={`form-control h-12 ${emailError ? 'border-red-500' : ''}`}
               type="email"
               required
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
             />
+            {emailError && (
+              <p className="text-red-500 text-sm mt-1">{emailError}</p>
+            )}
           </div>
           <div className="form-group">
             <label className="form-label">Address*</label>
@@ -349,26 +360,46 @@ export default function CheckoutPage() {
     zipCode: '',
     country: 'US',
   })
+  const [emailError, setEmailError] = useState<string | null>(null)
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Handle client-side hydration
   useEffect(() => {
     setIsClient(true)
   }, [])
 
-  // Create payment intent when form is complete
+  // Create payment intent when form is complete (with debouncing)
   useEffect(() => {
     if (!isClient || items.length === 0) {
       setLoading(false)
       return
     }
 
-    const createPaymentIntent = async () => {
-      // Only create payment intent if we have billing info
-      if (!formData.email || !formData.firstName || !formData.lastName) {
-        setLoading(false)
-        return
-      }
+    // Clear any pending debounce timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+    }
 
+    // Only proceed if we have required billing info
+    if (!formData.email || !formData.firstName || !formData.lastName) {
+      setLoading(false)
+      setEmailError(null)
+      return
+    }
+
+    // Validate email format before making API call
+    if (!isValidEmail(formData.email)) {
+      setEmailError('Please enter a valid email address')
+      setLoading(false)
+      return
+    }
+
+    // Clear email error if valid
+    setEmailError(null)
+    setLoading(true)
+
+    // Debounce the API call to prevent requests on every keystroke
+    debounceTimerRef.current = setTimeout(async () => {
       try {
         const response = await fetch('/api/stripe/create-payment-intent', {
           method: 'POST',
@@ -407,14 +438,20 @@ export default function CheckoutPage() {
 
         setClientSecret(data.clientSecret)
         setOrderId(data.orderId)
+        setError(null)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to initialize payment')
       } finally {
         setLoading(false)
       }
-    }
+    }, 500) // 500ms debounce delay
 
-    createPaymentIntent()
+    // Cleanup function to clear timer on unmount or re-run
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+      }
+    }
   }, [isClient, items, formData.email, formData.firstName, formData.lastName, slug])
 
   const handleApplyCoupon = () => {
@@ -537,7 +574,7 @@ export default function CheckoutPage() {
             {/* Left Column - Forms */}
             <div className="lg:col-span-2 space-y-6">
               {/* Billing Information */}
-              <BillingForm formData={formData} setFormData={setFormData} />
+              <BillingForm formData={formData} setFormData={setFormData} emailError={emailError || undefined} />
 
               {/* Payment Section */}
               {clientSecret ? (
