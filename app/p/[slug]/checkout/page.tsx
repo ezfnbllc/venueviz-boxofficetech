@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { loadStripe } from '@stripe/stripe-js'
 import {
@@ -633,83 +633,6 @@ export default function CheckoutPage() {
         </div>
       </div>
 
-      {/* Inline Styles for Barren Theme */}
-      <style jsx global>{`
-        .main-card {
-          background: #fff;
-          border-radius: 8px;
-          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-          border: 1px solid #efefef;
-        }
-
-        .bp-title {
-          padding: 20px 24px;
-          border-bottom: 1px solid #efefef;
-        }
-
-        .bp-title h4 {
-          font-size: 18px;
-          font-weight: 600;
-          color: #000;
-          margin: 0;
-        }
-
-        .form-label {
-          display: block;
-          font-size: 14px;
-          font-weight: 500;
-          color: #000;
-          margin-bottom: 8px;
-        }
-
-        .form-control {
-          width: 100%;
-          padding: 12px 16px;
-          font-size: 14px;
-          border: 1px solid #efefef;
-          border-radius: 8px;
-          background: #fff;
-          transition: border-color 0.2s;
-        }
-
-        .form-control:focus {
-          outline: none;
-          border-color: #6ac045;
-        }
-
-        .form-group {
-          margin-bottom: 0;
-        }
-
-        .main-btn {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          padding: 12px 24px;
-          font-size: 16px;
-          font-weight: 600;
-          color: #fff;
-          background: #6ac045;
-          border: none;
-          border-radius: 8px;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-
-        .main-btn:hover {
-          background: #5aa038;
-        }
-
-        .btn-hover {
-          position: relative;
-          overflow: hidden;
-        }
-
-        .order-summary {
-          position: sticky;
-          top: 90px;
-        }
-      `}</style>
     </Layout>
   )
 }
