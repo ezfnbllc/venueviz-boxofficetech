@@ -680,7 +680,7 @@ export default async function EventDetailPage({ params }: PageProps) {
                         Sold Out
                       </div>
                     ) : (
-                      <Link href={`/p/${slug}/events/${event.slug || event.id}/checkout`} className="block">
+                      <Link href={`/p/${slug}/events/${event.slug || event.id}/tickets`} className="block">
                         <Button variant="primary" size="lg" className="w-full">
                           Book Now
                         </Button>
