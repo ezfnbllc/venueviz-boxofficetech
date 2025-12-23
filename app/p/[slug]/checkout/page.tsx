@@ -342,13 +342,13 @@ export default function CheckoutPage() {
   const router = useRouter()
   const slug = params.slug as string
 
-  const { items, currentEvent, calculateTotal, clearCart } = useCart()
+  const cart = useCart()
+  const { items, currentEvent, calculateTotal, clearCart, _hasHydrated } = cart
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [orderId, setOrderId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [couponCode, setCouponCode] = useState('')
-  const [cartReady, setCartReady] = useState(false)
 
   const [formData, setFormData] = useState({
     firstName: '',
@@ -363,18 +363,9 @@ export default function CheckoutPage() {
   const [emailError, setEmailError] = useState<string | null>(null)
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Handle client-side hydration - wait for Zustand to rehydrate from localStorage
-  useEffect(() => {
-    // Small delay to ensure Zustand has rehydrated from localStorage
-    const timer = setTimeout(() => {
-      setCartReady(true)
-    }, 50)
-    return () => clearTimeout(timer)
-  }, [])
-
   // Create payment intent when form is complete (with debouncing)
   useEffect(() => {
-    if (!cartReady || items.length === 0) {
+    if (!_hasHydrated || items.length === 0) {
       setLoading(false)
       return
     }
@@ -456,7 +447,7 @@ export default function CheckoutPage() {
         clearTimeout(debounceTimerRef.current)
       }
     }
-  }, [cartReady, items, formData.email, formData.firstName, formData.lastName, slug])
+  }, [_hasHydrated, items, formData.email, formData.firstName, formData.lastName, slug])
 
   const handleApplyCoupon = () => {
     // TODO: Implement coupon validation
@@ -468,11 +459,11 @@ export default function CheckoutPage() {
     router.push(`/p/${slug}/confirmation/${orderId}`)
   }
 
-  // Show loading during hydration - use suppressHydrationWarning to prevent mismatch errors
-  if (!cartReady) {
+  // Show loading during hydration
+  if (!_hasHydrated) {
     return (
       <Layout promoterSlug={slug}>
-        <div className="min-h-screen flex items-center justify-center" suppressHydrationWarning>
+        <div className="min-h-screen flex items-center justify-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#6ac045]"></div>
         </div>
       </Layout>

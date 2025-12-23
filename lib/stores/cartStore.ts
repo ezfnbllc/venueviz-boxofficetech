@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
+import { useEffect, useState } from 'react'
 
 interface CartItem {
   id: string
@@ -30,6 +31,7 @@ interface CartState {
   items: CartItem[]
   currentEvent: CartEvent | null
   promoterSlug: string | null
+  _hasHydrated: boolean
 
   // Legacy support for seat selection
   selectedSeats: CartItem[]
@@ -40,6 +42,7 @@ interface CartState {
   updateQuantity: (id: string, quantity: number) => void
   setCurrentEvent: (event: CartEvent) => void
   clearCart: () => void
+  setHasHydrated: (state: boolean) => void
 
   // Computed
   calculateSubtotal: () => number
@@ -50,16 +53,20 @@ interface CartState {
   // Legacy support
   selectSeat: (seat: CartItem) => void
   deselectSeat: (id: string) => void
-  calculateTotal: () => number
 }
 
-export const useCart = create<CartState>()(
+export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
       items: [],
       currentEvent: null,
       promoterSlug: null,
       selectedSeats: [],
+      _hasHydrated: false,
+
+      setHasHydrated: (state) => {
+        set({ _hasHydrated: state })
+      },
 
       addItem: (item) => set((state) => {
         const existingIndex = state.items.findIndex(
@@ -148,12 +155,63 @@ export const useCart = create<CartState>()(
     }),
     {
       name: 'cart-storage',
+      storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         items: state.items,
         currentEvent: state.currentEvent,
         promoterSlug: state.promoterSlug,
         selectedSeats: state.selectedSeats,
       }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true)
+      },
     }
   )
 )
+
+/**
+ * Custom hook that handles hydration properly for SSR
+ * Returns empty values until hydration is complete to prevent hydration mismatches
+ */
+export function useCart() {
+  const store = useCartStore()
+  const [isHydrated, setIsHydrated] = useState(false)
+
+  useEffect(() => {
+    // Wait a tick for Zustand to fully rehydrate from localStorage
+    const timer = setTimeout(() => {
+      setIsHydrated(true)
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [])
+
+  // Return empty/default values during SSR and initial client render
+  // This ensures server and client render the same initial content
+  if (!isHydrated) {
+    return {
+      items: [] as CartItem[],
+      currentEvent: null as CartEvent | null,
+      promoterSlug: null as string | null,
+      selectedSeats: [] as CartItem[],
+      _hasHydrated: false,
+      addItem: store.addItem,
+      removeItem: store.removeItem,
+      updateQuantity: store.updateQuantity,
+      setCurrentEvent: store.setCurrentEvent,
+      clearCart: store.clearCart,
+      setHasHydrated: store.setHasHydrated,
+      calculateSubtotal: () => 0,
+      calculateServiceFee: () => 0,
+      calculateTotal: () => 0,
+      getItemCount: () => 0,
+      selectSeat: store.selectSeat,
+      deselectSeat: store.deselectSeat,
+    }
+  }
+
+  // After hydration, return the actual store values
+  return {
+    ...store,
+    _hasHydrated: true, // Force this to true after our local hydration check
+  }
+}
