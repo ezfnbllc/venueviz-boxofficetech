@@ -6,6 +6,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import Layout from '@/components/public/Layout'
 import { useCart } from '@/lib/stores/cartStore'
+import InteractiveSeatingChart from '@/components/public/InteractiveSeatingChart'
 
 interface TicketType {
   id: string
@@ -14,6 +15,33 @@ interface TicketType {
   price: number
   available: number
   maxPerOrder: number
+}
+
+interface PriceCategory {
+  id: string
+  name: string
+  color: string
+  price: number
+}
+
+interface LayoutData {
+  id: string
+  name: string
+  type: string
+  sections: any[]
+  priceCategories: PriceCategory[]
+  stage?: any
+  totalCapacity?: number
+}
+
+interface SelectedSeat {
+  id: string
+  sectionId: string
+  sectionName: string
+  row: string
+  number: string | number
+  price: number
+  priceCategoryName: string
 }
 
 interface EventData {
@@ -36,6 +64,12 @@ interface EventData {
   }
   ticketTypes?: TicketType[]
   isSoldOut?: boolean
+  // Seating chart data
+  seatingType?: 'general' | 'reserved'
+  layoutType?: 'general_admission' | 'seating_chart'
+  layoutId?: string
+  layout?: LayoutData
+  availableSections?: any[]
 }
 
 export default function TicketSelectionPage() {
@@ -50,6 +84,10 @@ export default function TicketSelectionPage() {
   const [loading, setLoading] = useState(true)
   const [quantities, setQuantities] = useState<Record<string, number>>({})
   const [isClient, setIsClient] = useState(false)
+  const [selectedSeats, setSelectedSeats] = useState<SelectedSeat[]>([])
+
+  // Check if event uses reserved seating
+  const isReservedSeating = event?.seatingType === 'reserved' || event?.layoutType === 'seating_chart'
 
   // Handle hydration
   useEffect(() => {
@@ -102,6 +140,11 @@ export default function TicketSelectionPage() {
     })
   }
 
+  // Handle seat selection from seating chart
+  const handleSeatSelection = (seats: SelectedSeat[]) => {
+    setSelectedSeats(seats)
+  }
+
   const handleAddToCart = () => {
     if (!event) return
 
@@ -118,26 +161,50 @@ export default function TicketSelectionPage() {
       promoterSlug: slug,
     })
 
-    // Add selected tickets to cart
-    Object.entries(quantities).forEach(([ticketId, quantity]) => {
-      if (quantity > 0) {
-        const ticketType = event.ticketTypes?.find(t => t.id === ticketId)
-        if (ticketType) {
-          addItem({
-            id: `${event.id}-${ticketId}-${Date.now()}`,
-            type: 'ticket',
-            eventId: event.id,
-            eventName: event.name,
-            eventImage: event.bannerImage || event.thumbnail,
-            eventDate: formatDate(event.startDate, event.startTime),
-            venueName: event.venue?.name,
-            ticketType: ticketType.name,
-            price: ticketType.price,
-            quantity,
-          })
+    if (isReservedSeating && selectedSeats.length > 0) {
+      // Add selected seats to cart (reserved seating)
+      selectedSeats.forEach(seat => {
+        addItem({
+          id: `${event.id}-${seat.id}-${Date.now()}`,
+          type: 'ticket',
+          eventId: event.id,
+          eventName: event.name,
+          eventImage: event.bannerImage || event.thumbnail,
+          eventDate: formatDate(event.startDate, event.startTime),
+          venueName: event.venue?.name,
+          ticketType: `${seat.sectionName} - Row ${seat.row}, Seat ${seat.number}`,
+          price: seat.price,
+          quantity: 1,
+          seatInfo: {
+            sectionId: seat.sectionId,
+            sectionName: seat.sectionName,
+            row: seat.row,
+            seat: seat.number,
+          },
+        })
+      })
+    } else {
+      // Add selected tickets to cart (general admission)
+      Object.entries(quantities).forEach(([ticketId, quantity]) => {
+        if (quantity > 0) {
+          const ticketType = event.ticketTypes?.find(t => t.id === ticketId)
+          if (ticketType) {
+            addItem({
+              id: `${event.id}-${ticketId}-${Date.now()}`,
+              type: 'ticket',
+              eventId: event.id,
+              eventName: event.name,
+              eventImage: event.bannerImage || event.thumbnail,
+              eventDate: formatDate(event.startDate, event.startTime),
+              venueName: event.venue?.name,
+              ticketType: ticketType.name,
+              price: ticketType.price,
+              quantity,
+            })
+          }
         }
-      }
-    })
+      })
+    }
 
     // Navigate to checkout
     router.push(`/p/${slug}/checkout`)
@@ -161,10 +228,16 @@ export default function TicketSelectionPage() {
   }
 
   const getTotalQuantity = () => {
+    if (isReservedSeating) {
+      return selectedSeats.length
+    }
     return Object.values(quantities).reduce((sum, q) => sum + q, 0)
   }
 
   const getTotalPrice = () => {
+    if (isReservedSeating) {
+      return selectedSeats.reduce((sum, seat) => sum + seat.price, 0)
+    }
     return Object.entries(quantities).reduce((sum, [ticketId, quantity]) => {
       const ticketType = event?.ticketTypes?.find(t => t.id === ticketId)
       return sum + (ticketType?.price || 0) * quantity
@@ -273,7 +346,9 @@ export default function TicketSelectionPage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Left Column - Ticket Selection */}
             <div className="lg:col-span-2">
-              <h2 className="text-xl font-bold text-gray-900 mb-6">Select Tickets</h2>
+              <h2 className="text-xl font-bold text-gray-900 mb-6">
+                {isReservedSeating ? 'Select Your Seats' : 'Select Tickets'}
+              </h2>
 
               {event.isSoldOut ? (
                 <div className="main-card p-8 text-center">
@@ -283,7 +358,46 @@ export default function TicketSelectionPage() {
                   <h2 className="text-xl font-semibold text-gray-900 mb-2">Sold Out</h2>
                   <p className="text-gray-600">Sorry, tickets for this event are no longer available.</p>
                 </div>
+              ) : isReservedSeating && event.layout ? (
+                /* Interactive Seating Chart for Reserved Seating */
+                <div className="main-card overflow-hidden">
+                  <InteractiveSeatingChart
+                    layout={event.layout}
+                    soldSeats={[]} // TODO: Fetch sold seats from backend
+                    maxSeats={10}
+                    onSeatSelection={handleSeatSelection}
+                    className="h-[500px] md:h-[600px]"
+                  />
+
+                  {/* Selected Seats Summary */}
+                  {selectedSeats.length > 0 && (
+                    <div className="p-4 bg-gray-50 border-t border-gray-200">
+                      <h3 className="font-semibold text-gray-900 mb-3">Your Selected Seats</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedSeats.map(seat => (
+                          <div
+                            key={seat.id}
+                            className="px-3 py-2 bg-green-100 border border-green-300 rounded-lg text-sm"
+                          >
+                            <span className="font-medium text-gray-900">
+                              {seat.sectionName}
+                            </span>
+                            <span className="text-gray-600 mx-1">•</span>
+                            <span className="text-gray-700">
+                              Row {seat.row}, Seat {seat.number}
+                            </span>
+                            <span className="text-gray-600 mx-1">•</span>
+                            <span className="font-semibold text-green-700">
+                              ${seat.price}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               ) : (
+                /* General Admission Ticket Selection */
                 <div className="space-y-4">
                   {event.ticketTypes?.map((ticketType) => (
                     <div
@@ -365,24 +479,39 @@ export default function TicketSelectionPage() {
                       </div>
                     </div>
 
-                    {/* Selected Tickets */}
+                    {/* Selected Tickets/Seats */}
                     {getTotalQuantity() > 0 && (
                       <div className="space-y-2 mb-6 pb-6 border-b border-gray-100">
-                        {Object.entries(quantities).map(([ticketId, quantity]) => {
-                          if (quantity === 0) return null
-                          const ticketType = event.ticketTypes?.find(t => t.id === ticketId)
-                          if (!ticketType) return null
-                          return (
-                            <div key={ticketId} className="flex justify-between text-sm">
+                        {isReservedSeating ? (
+                          /* Selected Seats for Reserved Seating */
+                          selectedSeats.map(seat => (
+                            <div key={seat.id} className="flex justify-between text-sm">
                               <span className="text-gray-600">
-                                {ticketType.name} x{quantity}
+                                {seat.sectionName} Row {seat.row}, Seat {seat.number}
                               </span>
                               <span className="font-medium">
-                                ${(ticketType.price * quantity).toFixed(2)}
+                                ${seat.price.toFixed(2)}
                               </span>
                             </div>
-                          )
-                        })}
+                          ))
+                        ) : (
+                          /* Selected Ticket Types for GA */
+                          Object.entries(quantities).map(([ticketId, quantity]) => {
+                            if (quantity === 0) return null
+                            const ticketType = event.ticketTypes?.find(t => t.id === ticketId)
+                            if (!ticketType) return null
+                            return (
+                              <div key={ticketId} className="flex justify-between text-sm">
+                                <span className="text-gray-600">
+                                  {ticketType.name} x{quantity}
+                                </span>
+                                <span className="font-medium">
+                                  ${(ticketType.price * quantity).toFixed(2)}
+                                </span>
+                              </div>
+                            )
+                          })
+                        )}
                       </div>
                     )}
 
@@ -398,7 +527,10 @@ export default function TicketSelectionPage() {
                       disabled={getTotalQuantity() === 0}
                       className="main-btn btn-hover h-12 w-full disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {getTotalQuantity() === 0 ? 'Select Tickets' : `Checkout (${getTotalQuantity()} tickets)`}
+                      {getTotalQuantity() === 0
+                        ? (isReservedSeating ? 'Select Seats' : 'Select Tickets')
+                        : `Checkout (${getTotalQuantity()} ${isReservedSeating ? 'seats' : 'tickets'})`
+                      }
                     </button>
 
                     <p className="text-xs text-gray-500 mt-4 text-center">
