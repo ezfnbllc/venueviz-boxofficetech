@@ -145,12 +145,11 @@ export function Footer({
           <div className="lg:col-span-2">
             <Link href={`${baseUrl}/`} className="inline-block mb-4">
               {logo ? (
-                <Image
+                // Use regular img for external URLs to avoid Next.js Image optimization issues
+                <img
                   src={logo}
                   alt={displayName}
-                  width={150}
-                  height={40}
-                  className="h-10 w-auto brightness-0 invert"
+                  className="h-10 w-auto brightness-0 invert object-contain"
                 />
               ) : (
                 <span className="text-xl font-bold">{displayName}</span>

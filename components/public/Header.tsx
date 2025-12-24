@@ -112,7 +112,14 @@ export function Header({
         <nav className="flex items-center justify-between h-[70px]">
           {/* Logo */}
           <Link href={`${baseUrl}/`} className="flex items-center">
-            {logo ? (
+            {logo && logo !== '/images/logo.svg' ? (
+              // Use regular img for external URLs to avoid Next.js Image optimization issues
+              <img
+                src={logo}
+                alt={logoAlt}
+                className="h-10 w-auto object-contain"
+              />
+            ) : logo === '/images/logo.svg' ? (
               <Image
                 src={logo}
                 alt={logoAlt}
