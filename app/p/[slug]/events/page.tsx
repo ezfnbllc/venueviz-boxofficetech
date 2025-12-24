@@ -62,18 +62,19 @@ export default async function EventsPage({ params, searchParams }: PageProps) {
   }
 
   const [events, categories] = await Promise.all([
-    getPromoterEvents(promoter.id, { category }),
+    getPromoterEvents(promoter.id, { category, upcoming: true }),
     getPromoterCategories(promoter.id),
   ])
 
   // Transform events to EventCardProps with full schedule/venue/pricing data
+  // Serialize dates to ISO strings for safe SSR transfer to client components
   const eventCards: EventCardProps[] = events.map(event => ({
     id: event.id,
     title: event.name,
     slug: event.slug,
     imageUrl: event.thumbnail,
-    // Schedule
-    startDate: event.startDate,
+    // Schedule - serialize Date to ISO string for SSR compatibility
+    startDate: event.startDate instanceof Date ? event.startDate.toISOString() : event.startDate,
     startTime: event.startTime,
     endTime: event.endTime,
     // Venue
