@@ -162,7 +162,8 @@ export async function POST(
 
       // Check each seat for availability
       for (const seat of seats) {
-        const seatId = seat.id || `${seat.sectionId}-${seat.row}-${seat.number}`
+        // Always construct seatId from parts to ensure consistency across the system
+        const seatId = `${seat.sectionId}-${seat.row}-${seat.number}`
         const holdRef = db.collection('seat_holds').doc(`${eventId}_${seatId}`)
         const holdDoc = await transaction.get(holdRef)
 

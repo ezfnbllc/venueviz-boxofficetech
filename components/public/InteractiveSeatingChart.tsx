@@ -255,9 +255,11 @@ export default function InteractiveSeatingChart({
         setHoldError(data.error || 'Some seats are no longer available')
 
         // Remove conflicting seats from selection
+        // Note: conflicts are in format ${sectionId}-${row}-${number}
         if (data.conflicts && Array.isArray(data.conflicts)) {
-          setSelectedSeats(prev => prev.filter(s => !data.conflicts.includes(s.id)))
-          onSeatSelection(selectedSeats.filter(s => !data.conflicts.includes(s.id)))
+          const getConsistentId = (s: SelectedSeat) => `${s.sectionId}-${s.row}-${s.number}`
+          setSelectedSeats(prev => prev.filter(s => !data.conflicts.includes(getConsistentId(s))))
+          onSeatSelection(selectedSeats.filter(s => !data.conflicts.includes(getConsistentId(s))))
         }
         return false
       }
@@ -352,31 +354,38 @@ export default function InteractiveSeatingChart({
     return priceCategory?.price || 0
   }, [layout.priceCategories])
 
-  // Check if seat is sold
-  const isSeatSold = useCallback((seatId: string): boolean => {
-    return soldSeats.includes(seatId)
-  }, [soldSeats])
+  // Helper to construct consistent seat ID (matches format used in API)
+  const getConsistentSeatId = useCallback((seat: Seat, section: Section): string => {
+    return `${section.id}-${seat.row}-${seat.number}`
+  }, [])
 
-  // Check if seat is held by someone else
-  const isSeatHeldByOther = useCallback((seatId: string): boolean => {
+  // Check if seat is sold (using consistent ID format)
+  const isSeatSold = useCallback((seat: Seat, section: Section): boolean => {
+    const consistentId = getConsistentSeatId(seat, section)
+    return soldSeats.includes(consistentId)
+  }, [soldSeats, getConsistentSeatId])
+
+  // Check if seat is held by someone else (using consistent ID format)
+  const isSeatHeldByOther = useCallback((seat: Seat, section: Section): boolean => {
+    const consistentId = getConsistentSeatId(seat, section)
     // Check if seat is in heldSeats but not in myHolds
-    if (!heldSeats.includes(seatId)) return false
-    return !myHolds.some(h => h.seatId === seatId)
-  }, [heldSeats, myHolds])
+    if (!heldSeats.includes(consistentId)) return false
+    return !myHolds.some(h => h.seatId === consistentId)
+  }, [heldSeats, myHolds, getConsistentSeatId])
 
   // Check if seat is unavailable (sold or held by others)
-  const isSeatUnavailable = useCallback((seatId: string): boolean => {
-    return isSeatSold(seatId) || isSeatHeldByOther(seatId)
+  const isSeatUnavailable = useCallback((seat: Seat, section: Section): boolean => {
+    return isSeatSold(seat, section) || isSeatHeldByOther(seat, section)
   }, [isSeatSold, isSeatHeldByOther])
 
-  // Check if seat is selected
+  // Check if seat is selected (uses original seat.id for selection tracking)
   const isSeatSelected = useCallback((seatId: string): boolean => {
     return selectedSeats.some(s => s.id === seatId)
   }, [selectedSeats])
 
   // Handle seat click
   const handleSeatClick = useCallback(async (seat: Seat, section: Section) => {
-    if (isSeatUnavailable(seat.id) || seat.status === 'sold' || seat.status === 'blocked' || seat.status === 'disabled') return
+    if (isSeatUnavailable(seat, section) || seat.status === 'sold' || seat.status === 'blocked' || seat.status === 'disabled') return
 
     // Get price from seat or look up from category
     const categoryId = seat.category || section.pricing
@@ -439,7 +448,7 @@ export default function InteractiveSeatingChart({
 
     processedSections.forEach(section => {
       section.seats.forEach(seat => {
-        if (!isSeatUnavailable(seat.id) && seat.status === 'available') {
+        if (!isSeatUnavailable(seat, section) && seat.status === 'available') {
           // Calculate seat score based on multiple factors
           let score = 0
 
@@ -469,7 +478,7 @@ export default function InteractiveSeatingChart({
           // Prefer seats with neighbors available (better for groups)
           const neighbors = allSeatsInRow.filter(s =>
             Math.abs(allSeatsInRow.indexOf(s) - seatIndex) === 1 &&
-            !isSeatUnavailable(s.id) && s.status === 'available'
+            !isSeatUnavailable(s, section) && s.status === 'available'
           )
           score += neighbors.length * 2
 
@@ -496,13 +505,13 @@ export default function InteractiveSeatingChart({
         const rightNeighbor = allSeatsInRow[seatIndex + 1]
 
         if (recommendations.length < count && rightNeighbor &&
-            !isSeatUnavailable(rightNeighbor.id) && rightNeighbor.status === 'available' &&
+            !isSeatUnavailable(rightNeighbor, section) && rightNeighbor.status === 'available' &&
             !recommendations.includes(rightNeighbor.id)) {
           recommendations.push(rightNeighbor.id)
         }
 
         if (recommendations.length < count && leftNeighbor &&
-            !isSeatUnavailable(leftNeighbor.id) && leftNeighbor.status === 'available' &&
+            !isSeatUnavailable(leftNeighbor, section) && leftNeighbor.status === 'available' &&
             !recommendations.includes(leftNeighbor.id)) {
           recommendations.push(leftNeighbor.id)
         }
@@ -664,8 +673,8 @@ export default function InteractiveSeatingChart({
 
   // Get seat color based on state and price category
   const getSeatColor = useCallback((seat: Seat, section: Section): string => {
-    if (isSeatSold(seat.id) || seat.status === 'sold') return '#374151' // gray-700 - sold
-    if (isSeatHeldByOther(seat.id)) return '#6b7280' // gray-500 - held by others
+    if (isSeatSold(seat, section) || seat.status === 'sold') return '#374151' // gray-700 - sold
+    if (isSeatHeldByOther(seat, section)) return '#6b7280' // gray-500 - held by others
     if (seat.status === 'blocked' || seat.status === 'disabled') return '#4b5563' // gray-600
     if (isSeatSelected(seat.id)) return '#22c55e' // green-500 - selected
     if (showAIRecommendation && aiRecommendedSeats.includes(seat.id)) return '#f59e0b' // amber-500 - AI pick
@@ -841,7 +850,7 @@ export default function InteractiveSeatingChart({
 
               {/* Seats */}
               {section.seats.map(seat => {
-                const isClickable = !isSeatUnavailable(seat.id) && seat.status !== 'sold' && seat.status !== 'blocked'
+                const isClickable = !isSeatUnavailable(seat, section) && seat.status !== 'sold' && seat.status !== 'blocked'
 
                 return (
                   <g
