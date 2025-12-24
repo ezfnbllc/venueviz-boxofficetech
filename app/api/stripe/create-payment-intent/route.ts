@@ -17,6 +17,8 @@ interface CartItem {
   type: 'ticket' | 'seat'
   eventId: string
   eventName: string
+  eventDate?: string
+  venueName?: string
   ticketType?: string
   section?: string
   row?: number
@@ -150,20 +152,46 @@ export async function POST(request: NextRequest) {
       customerId = customer.id
     }
 
-    // Create the payment intent
+    // Extract event info from first item (assuming all items are from same event)
+    const firstItem = items[0]
+    const eventId = firstItem?.eventId || null
+    const eventName = firstItem?.eventName || null
+    const eventDate = firstItem?.eventDate || null
+    const venueName = firstItem?.venueName || null
+
+    // Calculate total quantity
+    const ticketQuantity = items.reduce((sum, item) => sum + (item.quantity || 1), 0)
+
+    // Build description for Stripe dashboard
+    const descriptionParts = [eventName]
+    if (eventDate) descriptionParts.push(eventDate)
+    if (venueName) descriptionParts.push(venueName)
+    const description = descriptionParts.filter(Boolean).join(' | ') || 'Event Tickets'
+
+    // Create the payment intent with event details
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amountInCents,
       currency: 'usd',
       customer: customerId,
       receipt_email: customerEmail,
+      description,
       metadata: {
+        // Customer info
         customerName,
-        tenantId: tenantId || '',
-        promoterSlug: promoterSlug || '',
+        // Event info
+        eventName: eventName || '',
+        eventDate: eventDate || '',
+        venueName: venueName || '',
+        eventId: eventId || '',
+        // Order info
+        ticketQuantity: ticketQuantity.toString(),
         itemCount: items.length.toString(),
         subtotal: subtotal.toString(),
         serviceFee: serviceFee.toString(),
         total: total.toString(),
+        // Promoter info
+        tenantId: tenantId || '',
+        promoterSlug: promoterSlug || '',
         ...metadata,
       },
       automatic_payment_methods: {
@@ -174,14 +202,6 @@ export async function POST(request: NextRequest) {
     // Store pending order in Firestore
     const db = getAdminFirestore()
     const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
-
-    // Extract event info from first item (assuming all items are from same event)
-    const firstItem = items[0]
-    const eventId = firstItem?.eventId || null
-    const eventName = firstItem?.eventName || null
-
-    // Calculate total quantity
-    const quantity = items.reduce((sum, item) => sum + (item.quantity || 1), 0)
 
     // Map items to tickets array format for admin display
     const tickets = items.flatMap(item => {
@@ -211,11 +231,13 @@ export async function POST(request: NextRequest) {
       // Event info for admin display
       eventId,
       eventName,
+      eventDate,
+      venueName,
       // Original items
       items,
       // Tickets array for admin display
       tickets,
-      quantity,
+      quantity: ticketQuantity,
       // Pricing
       subtotal,
       serviceFee,

@@ -451,6 +451,8 @@ export default function CheckoutPage() {
               type: item.type,
               eventId: item.eventId,
               eventName: item.eventName,
+              eventDate: item.eventDate,
+              venueName: item.venueName,
               ticketType: item.ticketType,
               section: item.section,
               row: item.row,
