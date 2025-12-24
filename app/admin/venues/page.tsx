@@ -553,7 +553,12 @@ export default function VenuesManagement() {
                           type="text"
                           value={venueQuery || formData.name}
                           onChange={(e) => handleVenueQueryChange(e.target.value)}
-                          onFocus={() => venueQuery.length >= 3 && setSuggestions.length > 0 && setShowSuggestions(true)}
+                          onFocus={() => {
+                            // Only show suggestions on focus if we have them cached
+                            if (venueQuery.length >= 3 && suggestions.length > 0) {
+                              setShowSuggestions(true)
+                            }
+                          }}
                           className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white"
                           placeholder="Start typing venue name..."
                         />
