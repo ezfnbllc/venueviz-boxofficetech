@@ -12,8 +12,8 @@ import { getAdminFirestore } from '@/lib/firebase-admin'
 import Layout from '@/components/public/Layout'
 
 interface PageProps {
-  params: { slug: string; orderId: string }
-  searchParams: { payment_intent?: string; payment_intent_client_secret?: string; redirect_status?: string }
+  params: Promise<{ slug: string; orderId: string }>
+  searchParams: Promise<{ payment_intent?: string; payment_intent_client_secret?: string; redirect_status?: string }>
 }
 
 interface OrderData {
@@ -67,8 +67,22 @@ async function getOrder(orderId: string): Promise<OrderData | null> {
   }
 }
 
+async function updateOrderStatus(orderId: string, status: string): Promise<void> {
+  try {
+    const db = getAdminFirestore()
+    await db.collection('orders').doc(orderId).update({
+      status,
+      paidAt: status === 'completed' ? new Date() : null,
+      updatedAt: new Date(),
+    })
+  } catch (error) {
+    console.error('Error updating order status:', error)
+  }
+}
+
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const order = await getOrder(params.orderId)
+  const resolvedParams = await params
+  const order = await getOrder(resolvedParams.orderId)
 
   if (!order) {
     return {
@@ -87,12 +101,20 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export default async function ConfirmationPage({ params, searchParams }: PageProps) {
-  const { slug, orderId } = params
+  const { slug, orderId } = await params
+  const resolvedSearchParams = await searchParams
 
   const order = await getOrder(orderId)
 
   if (!order) {
     notFound()
+  }
+
+  // Update order status based on Stripe redirect status
+  // Only update if order is still pending and payment succeeded
+  if (order.status === 'pending' && resolvedSearchParams.redirect_status === 'succeeded') {
+    await updateOrderStatus(orderId, 'completed')
+    order.status = 'completed' // Update local reference for display
   }
 
   // Format date

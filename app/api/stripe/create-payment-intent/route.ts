@@ -175,6 +175,30 @@ export async function POST(request: NextRequest) {
     const db = getAdminFirestore()
     const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
 
+    // Extract event info from first item (assuming all items are from same event)
+    const firstItem = items[0]
+    const eventId = firstItem?.eventId || null
+    const eventName = firstItem?.eventName || null
+
+    // Calculate total quantity
+    const quantity = items.reduce((sum, item) => sum + (item.quantity || 1), 0)
+
+    // Map items to tickets array format for admin display
+    const tickets = items.flatMap(item => {
+      const ticketCount = item.quantity || 1
+      return Array.from({ length: ticketCount }, (_, i) => ({
+        id: `${orderId}-${item.id}-${i}`,
+        tierName: item.ticketType || 'General Admission',
+        section: item.section,
+        row: item.row,
+        seat: item.seat,
+        price: item.price,
+        status: 'active',
+        eventId: item.eventId,
+        eventName: item.eventName,
+      }))
+    })
+
     await db.collection('orders').doc(orderId).set({
       orderId,
       stripePaymentIntentId: paymentIntent.id,
@@ -184,10 +208,23 @@ export async function POST(request: NextRequest) {
       customerName,
       tenantId: tenantId || null,
       promoterSlug: promoterSlug || null,
+      // Event info for admin display
+      eventId,
+      eventName,
+      // Original items
       items,
+      // Tickets array for admin display
+      tickets,
+      quantity,
+      // Pricing
       subtotal,
       serviceFee,
       total,
+      pricing: {
+        subtotal,
+        fees: { service: serviceFee },
+        total,
+      },
       currency: 'usd',
       createdAt: new Date(),
       updatedAt: new Date(),
