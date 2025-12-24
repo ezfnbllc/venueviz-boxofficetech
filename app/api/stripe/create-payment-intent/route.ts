@@ -204,14 +204,15 @@ export async function POST(request: NextRequest) {
     const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
 
     // Map items to tickets array format for admin display
+    // Note: Firestore doesn't accept undefined values, so we use null for optional fields
     const tickets = items.flatMap(item => {
       const ticketCount = item.quantity || 1
       return Array.from({ length: ticketCount }, (_, i) => ({
         id: `${orderId}-${item.id}-${i}`,
         tierName: item.ticketType || 'General Admission',
-        section: item.section,
-        row: item.row,
-        seat: item.seat,
+        section: item.section || null,
+        row: item.row ?? null,
+        seat: item.seat ?? null,
         price: item.price,
         status: 'active',
         eventId: item.eventId,
