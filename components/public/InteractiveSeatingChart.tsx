@@ -9,9 +9,11 @@ interface Seat {
   number: string | number
   x: number
   y: number
-  status: 'available' | 'sold' | 'reserved' | 'blocked'
-  priceCategoryId?: string
+  status: 'available' | 'sold' | 'reserved' | 'blocked' | 'disabled' | 'accessible'
+  category?: string // Price category ID
+  price?: number // Direct price on seat
   isAccessible?: boolean
+  angle?: number
 }
 
 interface Section {
@@ -20,9 +22,14 @@ interface Section {
   x: number
   y: number
   seats: Seat[]
-  rows?: any[]
+  rows?: number
+  seatsPerRow?: number
   capacity?: number
-  priceCategoryId?: string
+  pricing?: string // Price category ID for section
+  sectionType?: 'standard' | 'curved'
+  curveRadius?: number
+  curveAngle?: number
+  rotation?: number
 }
 
 interface PriceCategory {
@@ -68,53 +75,53 @@ interface InteractiveSeatingChartProps {
   className?: string
 }
 
-// Generate seats for a section if they don't exist
-function generateSeatsForSection(section: Section, priceCategories: PriceCategory[]): Seat[] {
+// Get price for a seat based on category lookup
+function getSeatPrice(seat: Seat, section: Section, priceCategories: PriceCategory[]): number {
+  // Use direct price on seat if available
+  if (seat.price && seat.price > 0) return seat.price
+
+  // Look up price from category
+  const categoryId = seat.category || section.pricing
+  const priceCategory = priceCategories.find(pc => pc.id === categoryId)
+  return priceCategory?.price || 0
+}
+
+// Process seats for a section, ensuring price categories are properly set
+function processSeatsForSection(section: Section, priceCategories: PriceCategory[]): Seat[] {
+  // Get the section's price category (section.pricing holds the category ID)
+  const sectionCategoryId = section.pricing || priceCategories[0]?.id
+  const sectionCategory = priceCategories.find(pc => pc.id === sectionCategoryId)
+  const sectionPrice = sectionCategory?.price || 0
+
+  // If seats already exist, ensure they have category and price
   if (section.seats && section.seats.length > 0) {
-    return section.seats
+    return section.seats.map(seat => ({
+      ...seat,
+      // Use seat's own category, or fall back to section's pricing
+      category: seat.category || sectionCategoryId,
+      // Use seat's own price, or look up from category, or use section price
+      price: seat.price || priceCategories.find(pc => pc.id === (seat.category || sectionCategoryId))?.price || sectionPrice,
+    }))
   }
 
-  // Generate from rows data if available
+  // Generate seats based on section configuration
   const seats: Seat[] = []
-  const rows = section.rows || []
+  const rowCount = section.rows || 5
+  const seatsPerRow = section.seatsPerRow || 10
 
-  if (rows.length > 0) {
-    let yOffset = 0
-    rows.forEach((row: any, rowIndex: number) => {
-      const seatCount = row.seatCount || row.seats?.length || 10
-      const rowLabel = row.label || `Row ${rowIndex + 1}`
-
-      for (let i = 0; i < seatCount; i++) {
-        seats.push({
-          id: `${section.id}-${rowLabel}-${i + 1}`,
-          row: rowLabel,
-          number: i + 1,
-          x: section.x + 30 + i * 25,
-          y: section.y + 30 + yOffset,
-          status: 'available',
-          priceCategoryId: section.priceCategoryId || priceCategories[0]?.id,
-        })
-      }
-      yOffset += 28
-    })
-  } else {
-    // Generate default grid
-    const rowCount = 5
-    const seatsPerRow = Math.ceil((section.capacity || 50) / rowCount)
-
-    for (let r = 0; r < rowCount; r++) {
-      const rowLabel = String.fromCharCode(65 + r)
-      for (let s = 0; s < seatsPerRow; s++) {
-        seats.push({
-          id: `${section.id}-${rowLabel}-${s + 1}`,
-          row: rowLabel,
-          number: s + 1,
-          x: section.x + 30 + s * 25,
-          y: section.y + 30 + r * 28,
-          status: 'available',
-          priceCategoryId: section.priceCategoryId || priceCategories[0]?.id,
-        })
-      }
+  for (let r = 0; r < rowCount; r++) {
+    const rowLabel = String.fromCharCode(65 + r)
+    for (let s = 0; s < seatsPerRow; s++) {
+      seats.push({
+        id: `${section.id}-${rowLabel}-${s + 1}`,
+        row: rowLabel,
+        number: s + 1,
+        x: section.x + 30 + s * 25,
+        y: section.y + 30 + r * 28,
+        status: 'available',
+        category: sectionCategoryId,
+        price: sectionPrice,
+      })
     }
   }
 
@@ -148,11 +155,11 @@ export default function InteractiveSeatingChart({
   // Touch handling for pinch zoom
   const [lastTouchDistance, setLastTouchDistance] = useState<number | null>(null)
 
-  // Process sections with generated seats
+  // Process sections with seats (ensuring price categories are properly assigned)
   const processedSections = useMemo(() => {
     return layout.sections.map(section => ({
       ...section,
-      seats: generateSeatsForSection(section, layout.priceCategories),
+      seats: processSeatsForSection(section, layout.priceCategories),
     }))
   }, [layout])
 
@@ -189,9 +196,17 @@ export default function InteractiveSeatingChart({
     })
   }, [processedSections, layout.stage])
 
-  // Get price category for a seat
-  const getPriceCategory = useCallback((priceCategoryId?: string): PriceCategory | undefined => {
-    return layout.priceCategories.find(cat => cat.id === priceCategoryId)
+  // Get price category by ID
+  const getPriceCategory = useCallback((categoryId?: string): PriceCategory | undefined => {
+    return layout.priceCategories.find(cat => cat.id === categoryId)
+  }, [layout.priceCategories])
+
+  // Get price for a seat (uses seat.price directly or looks up from category)
+  const getSeatPriceValue = useCallback((seat: Seat, section: Section): number => {
+    if (seat.price && seat.price > 0) return seat.price
+    const categoryId = seat.category || section.pricing
+    const priceCategory = layout.priceCategories.find(pc => pc.id === categoryId)
+    return priceCategory?.price || 0
   }, [layout.priceCategories])
 
   // Check if seat is sold
@@ -206,9 +221,12 @@ export default function InteractiveSeatingChart({
 
   // Handle seat click
   const handleSeatClick = useCallback((seat: Seat, section: Section) => {
-    if (isSeatSold(seat.id) || seat.status === 'sold' || seat.status === 'blocked') return
+    if (isSeatSold(seat.id) || seat.status === 'sold' || seat.status === 'blocked' || seat.status === 'disabled') return
 
-    const priceCategory = getPriceCategory(seat.priceCategoryId)
+    // Get price from seat or look up from category
+    const categoryId = seat.category || section.pricing
+    const priceCategory = getPriceCategory(categoryId)
+    const seatPrice = seat.price || priceCategory?.price || 0
 
     setSelectedSeats(prev => {
       const isAlreadySelected = prev.some(s => s.id === seat.id)
@@ -228,7 +246,7 @@ export default function InteractiveSeatingChart({
             sectionName: section.name,
             row: seat.row,
             number: seat.number,
-            price: priceCategory?.price || 0,
+            price: seatPrice,
             priceCategoryName: priceCategory?.name || 'Standard',
           }]
           onSeatSelection(newSelection)
@@ -241,7 +259,7 @@ export default function InteractiveSeatingChart({
           sectionName: section.name,
           row: seat.row,
           number: seat.number,
-          price: priceCategory?.price || 0,
+          price: seatPrice,
           priceCategoryName: priceCategory?.name || 'Standard',
         }]
         onSeatSelection(newSelection)
@@ -342,14 +360,16 @@ export default function InteractiveSeatingChart({
       processedSections.forEach(section => {
         const seat = section.seats.find(s => s.id === seatId)
         if (seat) {
-          const priceCategory = getPriceCategory(seat.priceCategoryId)
+          const categoryId = seat.category || section.pricing
+          const priceCategory = getPriceCategory(categoryId)
+          const seatPrice = seat.price || priceCategory?.price || 0
           newSelection.push({
             id: seat.id,
             sectionId: section.id,
             sectionName: section.name,
             row: seat.row,
             number: seat.number,
-            price: priceCategory?.price || 0,
+            price: seatPrice,
             priceCategoryName: priceCategory?.name || 'Standard',
           })
         }
@@ -478,15 +498,17 @@ export default function InteractiveSeatingChart({
     handleZoom(e.deltaY > 0 ? -0.1 : 0.1)
   }, [handleZoom])
 
-  // Get seat color based on state
-  const getSeatColor = useCallback((seat: Seat): string => {
+  // Get seat color based on state and price category
+  const getSeatColor = useCallback((seat: Seat, section: Section): string => {
     if (isSeatSold(seat.id) || seat.status === 'sold') return '#374151' // gray-700
-    if (seat.status === 'blocked') return '#4b5563' // gray-600
+    if (seat.status === 'blocked' || seat.status === 'disabled') return '#4b5563' // gray-600
     if (isSeatSelected(seat.id)) return '#22c55e' // green-500
     if (showAIRecommendation && aiRecommendedSeats.includes(seat.id)) return '#f59e0b' // amber-500
     if (hoveredSeat === seat.id) return '#60a5fa' // blue-400
 
-    const priceCategory = getPriceCategory(seat.priceCategoryId)
+    // Get color from seat's category or section's pricing
+    const categoryId = seat.category || section.pricing
+    const priceCategory = getPriceCategory(categoryId)
     return priceCategory?.color || '#8b5cf6' // purple-500 default
   }, [isSeatSold, isSeatSelected, showAIRecommendation, aiRecommendedSeats, hoveredSeat, getPriceCategory])
 
@@ -638,7 +660,7 @@ export default function InteractiveSeatingChart({
                       cx={seat.x}
                       cy={seat.y}
                       r={10}
-                      fill={getSeatColor(seat)}
+                      fill={getSeatColor(seat, section)}
                       stroke={isSeatSelected(seat.id) ? '#ffffff' : 'transparent'}
                       strokeWidth={2}
                       className="transition-all duration-150"
@@ -677,19 +699,21 @@ export default function InteractiveSeatingChart({
           ))}
         </svg>
 
-        {/* Selected seat tooltip */}
+        {/* Hovered seat tooltip */}
         {hoveredSeat && (
           <div className="absolute bottom-4 left-4 bg-white rounded-lg shadow-lg p-3 text-sm">
             {(() => {
               for (const section of processedSections) {
                 const seat = section.seats.find(s => s.id === hoveredSeat)
                 if (seat) {
-                  const priceCategory = getPriceCategory(seat.priceCategoryId)
+                  const categoryId = seat.category || section.pricing
+                  const priceCategory = getPriceCategory(categoryId)
+                  const seatPrice = seat.price || priceCategory?.price || 0
                   return (
                     <>
                       <div className="font-semibold text-gray-900">{section.name}</div>
                       <div className="text-gray-600">Row {seat.row}, Seat {seat.number}</div>
-                      <div className="text-green-600 font-medium">${priceCategory?.price || 0}</div>
+                      <div className="text-green-600 font-medium">${seatPrice.toFixed(2)}</div>
                     </>
                   )
                 }
