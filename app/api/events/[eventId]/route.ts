@@ -110,8 +110,8 @@ export async function GET(
           id: tier.id || `tier-${index}`,
           name: tier.name || tier.tierName || 'General Admission',
           description: tier.description,
-          price: tier.price || 0,
-          available: tier.available ?? tier.quantity ?? 100,
+          price: tier.basePrice || tier.price || 0,
+          available: tier.available ?? tier.quantity ?? tier.capacity ?? 100,
           maxPerOrder: tier.maxPerOrder ?? 10,
         }))
       } else if (data.pricing.minPrice !== undefined) {
