@@ -516,6 +516,11 @@ export default function CheckoutPage() {
     // Debounce the API call to prevent requests on every keystroke
     debounceTimerRef.current = setTimeout(async () => {
       try {
+        // Get session ID for seat hold verification
+        const sessionId = typeof window !== 'undefined'
+          ? sessionStorage.getItem('seat_session_id')
+          : null
+
         const response = await fetch('/api/stripe/create-payment-intent', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -533,10 +538,12 @@ export default function CheckoutPage() {
               seat: item.seat,
               price: item.price,
               quantity: item.quantity,
+              seatInfo: (item as any).seatInfo, // Include seat info for reserved seating
             })),
             customerEmail: formData.email,
             customerName: `${formData.firstName} ${formData.lastName}`,
             promoterSlug: slug,
+            sessionId, // For seat hold verification
             metadata: {
               billingAddress: formData.address,
               billingCity: formData.city,
@@ -550,6 +557,10 @@ export default function CheckoutPage() {
         const data = await response.json()
 
         if (!response.ok) {
+          // Handle seat conflicts
+          if (response.status === 409 && data.conflicts) {
+            throw new Error('Some seats are no longer available. Please go back and select different seats.')
+          }
           throw new Error(data.error || 'Failed to create payment')
         }
 

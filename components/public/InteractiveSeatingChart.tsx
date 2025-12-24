@@ -2,6 +2,18 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 
+// Generate a unique session ID for this browser session
+function getSessionId(): string {
+  if (typeof window === 'undefined') return ''
+
+  let sessionId = sessionStorage.getItem('seat_session_id')
+  if (!sessionId) {
+    sessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
+    sessionStorage.setItem('seat_session_id', sessionId)
+  }
+  return sessionId
+}
+
 // Types
 interface Seat {
   id: string
@@ -67,11 +79,23 @@ interface SelectedSeat {
   priceCategoryName: string
 }
 
+interface SeatHoldInfo {
+  seatId: string
+  heldUntil: Date
+  sectionId: string
+  sectionName: string
+  row: string
+  number: string | number
+  price: number
+}
+
 interface InteractiveSeatingChartProps {
   layout: LayoutData
-  soldSeats?: string[] // Array of sold seat IDs
+  eventId: string // Required for fetching seat availability
+  soldSeats?: string[] // Array of sold seat IDs (optional, will be fetched if not provided)
   maxSeats?: number
   onSeatSelection: (seats: SelectedSeat[]) => void
+  onHoldCreated?: (heldUntil: Date) => void // Called when seats are held with expiry time
   className?: string
 }
 
@@ -130,9 +154,11 @@ function processSeatsForSection(section: Section, priceCategories: PriceCategory
 
 export default function InteractiveSeatingChart({
   layout,
-  soldSeats = [],
+  eventId,
+  soldSeats: propSoldSeats,
   maxSeats = 10,
   onSeatSelection,
+  onHoldCreated,
   className = '',
 }: InteractiveSeatingChartProps) {
   const svgRef = useRef<SVGSVGElement>(null)
@@ -148,12 +174,129 @@ export default function InteractiveSeatingChart({
   const [selectedSeats, setSelectedSeats] = useState<SelectedSeat[]>([])
   const [hoveredSeat, setHoveredSeat] = useState<string | null>(null)
 
+  // Seat availability state
+  const [soldSeats, setSoldSeats] = useState<string[]>(propSoldSeats || [])
+  const [heldSeats, setHeldSeats] = useState<string[]>([])
+  const [myHolds, setMyHolds] = useState<SeatHoldInfo[]>([])
+  const [isLoadingAvailability, setIsLoadingAvailability] = useState(true)
+  const [holdError, setHoldError] = useState<string | null>(null)
+  const sessionId = useMemo(() => getSessionId(), [])
+
   // AI recommendations
   const [showAIRecommendation, setShowAIRecommendation] = useState(false)
   const [aiRecommendedSeats, setAIRecommendedSeats] = useState<string[]>([])
 
   // Touch handling for pinch zoom
   const [lastTouchDistance, setLastTouchDistance] = useState<number | null>(null)
+
+  // Fetch seat availability on mount and periodically
+  useEffect(() => {
+    if (!eventId) return
+
+    const fetchAvailability = async () => {
+      try {
+        const response = await fetch(`/api/events/${eventId}/seats?sessionId=${sessionId}`)
+        if (!response.ok) throw new Error('Failed to fetch availability')
+
+        const data = await response.json()
+        setSoldSeats(data.soldSeats || [])
+        setHeldSeats(data.heldSeats || [])
+        setMyHolds(data.myHolds || [])
+        setIsLoadingAvailability(false)
+
+        // If we have existing holds, notify parent of expiry time
+        if (data.myHolds?.length > 0 && onHoldCreated) {
+          const earliestExpiry = new Date(Math.min(...data.myHolds.map((h: any) =>
+            new Date(h.heldUntil).getTime()
+          )))
+          onHoldCreated(earliestExpiry)
+        }
+      } catch (error) {
+        console.error('Error fetching seat availability:', error)
+        setIsLoadingAvailability(false)
+      }
+    }
+
+    // Initial fetch
+    fetchAvailability()
+
+    // Refresh every 10 seconds to catch updates from other users
+    const intervalId = setInterval(fetchAvailability, 10000)
+
+    return () => clearInterval(intervalId)
+  }, [eventId, sessionId, onHoldCreated])
+
+  // Create holds for selected seats
+  const createSeatHolds = useCallback(async (seats: SelectedSeat[]) => {
+    if (!eventId || seats.length === 0) return
+
+    try {
+      setHoldError(null)
+      const response = await fetch(`/api/events/${eventId}/seats`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          seats: seats.map(s => ({
+            id: s.id,
+            sectionId: s.sectionId,
+            sectionName: s.sectionName,
+            row: s.row,
+            number: s.number,
+            price: s.price,
+          })),
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        // Seats are no longer available
+        setHoldError(data.error || 'Some seats are no longer available')
+
+        // Remove conflicting seats from selection
+        if (data.conflicts && Array.isArray(data.conflicts)) {
+          setSelectedSeats(prev => prev.filter(s => !data.conflicts.includes(s.id)))
+          onSeatSelection(selectedSeats.filter(s => !data.conflicts.includes(s.id)))
+        }
+        return false
+      }
+
+      // Notify parent of hold expiry
+      if (data.heldUntil && onHoldCreated) {
+        onHoldCreated(new Date(data.heldUntil))
+      }
+
+      return true
+    } catch (error) {
+      console.error('Error creating seat holds:', error)
+      setHoldError('Failed to reserve seats. Please try again.')
+      return false
+    }
+  }, [eventId, sessionId, onHoldCreated, onSeatSelection, selectedSeats])
+
+  // Release held seats
+  const releaseSeatHolds = useCallback(async () => {
+    if (!eventId) return
+
+    try {
+      await fetch(`/api/events/${eventId}/seats?sessionId=${sessionId}`, {
+        method: 'DELETE',
+      })
+    } catch (error) {
+      console.error('Error releasing seat holds:', error)
+    }
+  }, [eventId, sessionId])
+
+  // Release seats on unmount
+  useEffect(() => {
+    return () => {
+      // Only release if navigating away (not on selection changes)
+      if (selectedSeats.length > 0) {
+        releaseSeatHolds()
+      }
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Process sections with seats (ensuring price categories are properly assigned)
   const processedSections = useMemo(() => {
@@ -214,46 +357,51 @@ export default function InteractiveSeatingChart({
     return soldSeats.includes(seatId)
   }, [soldSeats])
 
+  // Check if seat is held by someone else
+  const isSeatHeldByOther = useCallback((seatId: string): boolean => {
+    // Check if seat is in heldSeats but not in myHolds
+    if (!heldSeats.includes(seatId)) return false
+    return !myHolds.some(h => h.seatId === seatId)
+  }, [heldSeats, myHolds])
+
+  // Check if seat is unavailable (sold or held by others)
+  const isSeatUnavailable = useCallback((seatId: string): boolean => {
+    return isSeatSold(seatId) || isSeatHeldByOther(seatId)
+  }, [isSeatSold, isSeatHeldByOther])
+
   // Check if seat is selected
   const isSeatSelected = useCallback((seatId: string): boolean => {
     return selectedSeats.some(s => s.id === seatId)
   }, [selectedSeats])
 
   // Handle seat click
-  const handleSeatClick = useCallback((seat: Seat, section: Section) => {
-    if (isSeatSold(seat.id) || seat.status === 'sold' || seat.status === 'blocked' || seat.status === 'disabled') return
+  const handleSeatClick = useCallback(async (seat: Seat, section: Section) => {
+    if (isSeatUnavailable(seat.id) || seat.status === 'sold' || seat.status === 'blocked' || seat.status === 'disabled') return
 
     // Get price from seat or look up from category
     const categoryId = seat.category || section.pricing
     const priceCategory = getPriceCategory(categoryId)
     const seatPrice = seat.price || priceCategory?.price || 0
 
-    setSelectedSeats(prev => {
-      const isAlreadySelected = prev.some(s => s.id === seat.id)
+    const isAlreadySelected = selectedSeats.some(s => s.id === seat.id)
 
-      if (isAlreadySelected) {
-        // Deselect
-        const newSelection = prev.filter(s => s.id !== seat.id)
-        onSeatSelection(newSelection)
-        return newSelection
-      } else {
-        // Select (if under max)
-        if (prev.length >= maxSeats) {
-          // Replace oldest selection
-          const newSelection = [...prev.slice(1), {
-            id: seat.id,
-            sectionId: section.id,
-            sectionName: section.name,
-            row: seat.row,
-            number: seat.number,
-            price: seatPrice,
-            priceCategoryName: priceCategory?.name || 'Standard',
-          }]
-          onSeatSelection(newSelection)
-          return newSelection
-        }
+    if (isAlreadySelected) {
+      // Deselect
+      const newSelection = selectedSeats.filter(s => s.id !== seat.id)
+      setSelectedSeats(newSelection)
+      onSeatSelection(newSelection)
 
-        const newSelection = [...prev, {
+      // If all seats are deselected, release holds
+      if (newSelection.length === 0) {
+        releaseSeatHolds()
+      }
+    } else {
+      // Select (if under max)
+      let newSelection: SelectedSeat[]
+
+      if (selectedSeats.length >= maxSeats) {
+        // Replace oldest selection
+        newSelection = [...selectedSeats.slice(1), {
           id: seat.id,
           sectionId: section.id,
           sectionName: section.name,
@@ -262,11 +410,27 @@ export default function InteractiveSeatingChart({
           price: seatPrice,
           priceCategoryName: priceCategory?.name || 'Standard',
         }]
-        onSeatSelection(newSelection)
-        return newSelection
+      } else {
+        newSelection = [...selectedSeats, {
+          id: seat.id,
+          sectionId: section.id,
+          sectionName: section.name,
+          row: seat.row,
+          number: seat.number,
+          price: seatPrice,
+          priceCategoryName: priceCategory?.name || 'Standard',
+        }]
       }
-    })
-  }, [getPriceCategory, isSeatSold, maxSeats, onSeatSelection])
+
+      // Try to create holds for the new selection
+      setSelectedSeats(newSelection)
+      const holdSuccess = await createSeatHolds(newSelection)
+
+      if (holdSuccess) {
+        onSeatSelection(newSelection)
+      }
+    }
+  }, [getPriceCategory, isSeatUnavailable, maxSeats, onSeatSelection, selectedSeats, createSeatHolds, releaseSeatHolds])
 
   // AI Seat Recommendation Algorithm
   const getAIRecommendedSeats = useCallback((count: number) => {
@@ -275,7 +439,7 @@ export default function InteractiveSeatingChart({
 
     processedSections.forEach(section => {
       section.seats.forEach(seat => {
-        if (!isSeatSold(seat.id) && seat.status === 'available') {
+        if (!isSeatUnavailable(seat.id) && seat.status === 'available') {
           // Calculate seat score based on multiple factors
           let score = 0
 
@@ -305,7 +469,7 @@ export default function InteractiveSeatingChart({
           // Prefer seats with neighbors available (better for groups)
           const neighbors = allSeatsInRow.filter(s =>
             Math.abs(allSeatsInRow.indexOf(s) - seatIndex) === 1 &&
-            !isSeatSold(s.id) && s.status === 'available'
+            !isSeatUnavailable(s.id) && s.status === 'available'
           )
           score += neighbors.length * 2
 
@@ -332,13 +496,13 @@ export default function InteractiveSeatingChart({
         const rightNeighbor = allSeatsInRow[seatIndex + 1]
 
         if (recommendations.length < count && rightNeighbor &&
-            !isSeatSold(rightNeighbor.id) && rightNeighbor.status === 'available' &&
+            !isSeatUnavailable(rightNeighbor.id) && rightNeighbor.status === 'available' &&
             !recommendations.includes(rightNeighbor.id)) {
           recommendations.push(rightNeighbor.id)
         }
 
         if (recommendations.length < count && leftNeighbor &&
-            !isSeatSold(leftNeighbor.id) && leftNeighbor.status === 'available' &&
+            !isSeatUnavailable(leftNeighbor.id) && leftNeighbor.status === 'available' &&
             !recommendations.includes(leftNeighbor.id)) {
           recommendations.push(leftNeighbor.id)
         }
@@ -346,7 +510,7 @@ export default function InteractiveSeatingChart({
     }
 
     return recommendations.slice(0, count)
-  }, [processedSections, isSeatSold])
+  }, [processedSections, isSeatUnavailable])
 
   // Apply AI recommendations
   const applyAIRecommendation = useCallback((count: number = 2) => {
@@ -500,17 +664,18 @@ export default function InteractiveSeatingChart({
 
   // Get seat color based on state and price category
   const getSeatColor = useCallback((seat: Seat, section: Section): string => {
-    if (isSeatSold(seat.id) || seat.status === 'sold') return '#374151' // gray-700
+    if (isSeatSold(seat.id) || seat.status === 'sold') return '#374151' // gray-700 - sold
+    if (isSeatHeldByOther(seat.id)) return '#6b7280' // gray-500 - held by others
     if (seat.status === 'blocked' || seat.status === 'disabled') return '#4b5563' // gray-600
-    if (isSeatSelected(seat.id)) return '#22c55e' // green-500
-    if (showAIRecommendation && aiRecommendedSeats.includes(seat.id)) return '#f59e0b' // amber-500
-    if (hoveredSeat === seat.id) return '#60a5fa' // blue-400
+    if (isSeatSelected(seat.id)) return '#22c55e' // green-500 - selected
+    if (showAIRecommendation && aiRecommendedSeats.includes(seat.id)) return '#f59e0b' // amber-500 - AI pick
+    if (hoveredSeat === seat.id) return '#60a5fa' // blue-400 - hovered
 
     // Get color from seat's category or section's pricing
     const categoryId = seat.category || section.pricing
     const priceCategory = getPriceCategory(categoryId)
     return priceCategory?.color || '#8b5cf6' // purple-500 default
-  }, [isSeatSold, isSeatSelected, showAIRecommendation, aiRecommendedSeats, hoveredSeat, getPriceCategory])
+  }, [isSeatSold, isSeatHeldByOther, isSeatSelected, showAIRecommendation, aiRecommendedSeats, hoveredSeat, getPriceCategory])
 
   return (
     <div className={`flex flex-col ${className}`}>
@@ -558,6 +723,24 @@ export default function InteractiveSeatingChart({
         </button>
       </div>
 
+      {/* Error message */}
+      {holdError && (
+        <div className="p-3 bg-red-50 border-b border-red-200 text-red-700 text-sm flex items-center gap-2">
+          <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>{holdError}</span>
+          <button
+            onClick={() => setHoldError(null)}
+            className="ml-auto text-red-500 hover:text-red-700"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+
       {/* Legend */}
       <div className="flex flex-wrap items-center gap-4 p-3 bg-gray-50 border-b border-gray-200 text-xs">
         <div className="flex items-center gap-4">
@@ -578,6 +761,10 @@ export default function InteractiveSeatingChart({
             <span className="text-gray-700">Sold</span>
           </div>
           <div className="flex items-center gap-1.5">
+            <div className="w-4 h-4 rounded bg-gray-500" />
+            <span className="text-gray-700">Reserved</span>
+          </div>
+          <div className="flex items-center gap-1.5">
             <div className="w-4 h-4 rounded bg-amber-500" />
             <span className="text-gray-700">AI Pick</span>
           </div>
@@ -590,6 +777,15 @@ export default function InteractiveSeatingChart({
         className="relative flex-1 bg-gray-900 overflow-hidden cursor-grab active:cursor-grabbing touch-none"
         style={{ minHeight: '400px' }}
       >
+        {/* Loading overlay */}
+        {isLoadingAvailability && (
+          <div className="absolute inset-0 bg-gray-900/80 flex items-center justify-center z-10">
+            <div className="flex flex-col items-center gap-3">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+              <span className="text-white text-sm">Loading seat availability...</span>
+            </div>
+          </div>
+        )}
         <svg
           ref={svgRef}
           className="w-full h-full"
@@ -645,7 +841,7 @@ export default function InteractiveSeatingChart({
 
               {/* Seats */}
               {section.seats.map(seat => {
-                const isClickable = !isSeatSold(seat.id) && seat.status !== 'sold' && seat.status !== 'blocked'
+                const isClickable = !isSeatUnavailable(seat.id) && seat.status !== 'sold' && seat.status !== 'blocked'
 
                 return (
                   <g

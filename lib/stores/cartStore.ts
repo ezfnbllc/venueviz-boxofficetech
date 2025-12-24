@@ -2,6 +2,13 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { useEffect, useState } from 'react'
 
+interface SeatInfo {
+  sectionId: string
+  sectionName: string
+  row: string
+  seat: string | number
+}
+
 interface CartItem {
   id: string
   type: 'ticket' | 'seat'
@@ -12,10 +19,11 @@ interface CartItem {
   venueName?: string
   ticketType?: string
   section?: string
-  row?: number
-  seat?: number
+  row?: number | string
+  seat?: number | string
   price: number
   quantity: number
+  seatInfo?: SeatInfo // For reserved seating
 }
 
 interface CartEvent {

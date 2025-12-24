@@ -12,6 +12,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { getAdminFirestore } from '@/lib/firebase-admin'
 
+interface SeatInfo {
+  sectionId: string
+  sectionName: string
+  row: string
+  seat: string | number
+}
+
 interface CartItem {
   id: string
   type: 'ticket' | 'seat'
@@ -21,10 +28,11 @@ interface CartItem {
   venueName?: string
   ticketType?: string
   section?: string
-  row?: number
-  seat?: number
+  row?: number | string
+  seat?: number | string
   price: number
   quantity: number
+  seatInfo?: SeatInfo // For reserved seating
 }
 
 interface CreatePaymentIntentRequest {
@@ -33,6 +41,7 @@ interface CreatePaymentIntentRequest {
   customerName: string
   tenantId?: string
   promoterSlug?: string
+  sessionId?: string // For seat hold verification
   metadata?: Record<string, string>
 }
 
@@ -87,7 +96,7 @@ async function getStripeForPromoter(promoterSlug: string): Promise<Stripe | null
 export async function POST(request: NextRequest) {
   try {
     const body: CreatePaymentIntentRequest = await request.json()
-    const { items, customerEmail, customerName, tenantId, promoterSlug, metadata } = body
+    const { items, customerEmail, customerName, tenantId, promoterSlug, sessionId, metadata } = body
 
     // Validate items
     if (!items || items.length === 0) {
@@ -111,6 +120,103 @@ export async function POST(request: NextRequest) {
         { error: 'Payment is not configured for this promoter' },
         { status: 400 }
       )
+    }
+
+    const db = getAdminFirestore()
+
+    // For reserved seating, verify seat holds are still valid
+    const reservedSeatItems = items.filter(item => item.seatInfo)
+    if (reservedSeatItems.length > 0 && sessionId) {
+      const eventId = reservedSeatItems[0].eventId
+
+      // Verify all seat holds in a transaction
+      const now = new Date()
+      const conflicts: string[] = []
+
+      for (const item of reservedSeatItems) {
+        if (!item.seatInfo) continue
+
+        const seatId = `${item.seatInfo.sectionId}-${item.seatInfo.row}-${item.seatInfo.seat}`
+        const holdRef = db.collection('seat_holds').doc(`${eventId}_${seatId}`)
+        const holdDoc = await holdRef.get()
+
+        if (!holdDoc.exists) {
+          // Hold doesn't exist - might have expired
+          conflicts.push(seatId)
+          continue
+        }
+
+        const hold = holdDoc.data()!
+        const heldUntil = hold.heldUntil?.toDate?.() || new Date(hold.heldUntil)
+
+        // Check if hold is valid and belongs to this session
+        if (heldUntil < now || hold.sessionId !== sessionId) {
+          conflicts.push(seatId)
+        }
+      }
+
+      if (conflicts.length > 0) {
+        return NextResponse.json({
+          error: 'Some seats are no longer available. Please go back and select your seats again.',
+          conflicts,
+        }, { status: 409 })
+      }
+    }
+
+    // For GA tickets, verify availability
+    const gaTicketItems = items.filter(item => !item.seatInfo && item.quantity > 0)
+    if (gaTicketItems.length > 0) {
+      const eventId = gaTicketItems[0].eventId
+      const now = new Date()
+
+      // Get event capacity
+      const eventDoc = await db.collection('events').doc(eventId).get()
+      if (eventDoc.exists) {
+        const eventData = eventDoc.data()!
+        const totalEventCapacity = eventData.totalCapacity || eventData.ticketsAvailable || 999999
+
+        // Count sold tickets
+        const ordersSnapshot = await db.collection('orders')
+          .where('eventId', '==', eventId)
+          .where('status', 'in', ['completed', 'confirmed'])
+          .get()
+
+        let totalSold = 0
+        ordersSnapshot.docs.forEach(doc => {
+          const order = doc.data()
+          if (order.items && Array.isArray(order.items)) {
+            order.items.forEach((orderItem: any) => {
+              if (!orderItem.seatInfo) {
+                totalSold += orderItem.quantity || 1
+              }
+            })
+          }
+        })
+
+        // Count held tickets (excluding this session)
+        const holdsSnapshot = await db.collection('ticket_holds')
+          .where('eventId', '==', eventId)
+          .where('heldUntil', '>', now)
+          .get()
+
+        let totalHeld = 0
+        holdsSnapshot.docs.forEach(doc => {
+          const hold = doc.data()
+          if (hold.sessionId !== sessionId) {
+            totalHeld += hold.quantity || 1
+          }
+        })
+
+        const requestedTotal = gaTicketItems.reduce((sum, item) => sum + item.quantity, 0)
+        const available = totalEventCapacity - totalSold - totalHeld
+
+        if (requestedTotal > available) {
+          return NextResponse.json({
+            error: `Only ${available} tickets remaining. Please reduce your order quantity.`,
+            available,
+          }, { status: 409 })
+        }
+      }
     }
 
     // Calculate total
@@ -208,7 +314,6 @@ export async function POST(request: NextRequest) {
     })
 
     // Store pending order in Firestore
-    const db = getAdminFirestore()
     const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
 
     // Map items to tickets array format for admin display
@@ -218,13 +323,15 @@ export async function POST(request: NextRequest) {
       return Array.from({ length: ticketCount }, (_, i) => ({
         id: `${orderId}-${item.id}-${i}`,
         tierName: item.ticketType || 'General Admission',
-        section: item.section || null,
-        row: item.row ?? null,
-        seat: item.seat ?? null,
+        section: item.seatInfo?.sectionName || item.section || null,
+        row: item.seatInfo?.row || item.row ?? null,
+        seat: item.seatInfo?.seat || item.seat ?? null,
         price: item.price,
         status: 'active',
         eventId: item.eventId,
         eventName: item.eventName,
+        // Include seat info for reserved seating
+        seatInfo: item.seatInfo || null,
       }))
     })
 

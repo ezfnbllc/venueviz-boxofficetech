@@ -86,6 +86,10 @@ export default function TicketSelectionPage() {
   const [isClient, setIsClient] = useState(false)
   const [selectedSeats, setSelectedSeats] = useState<SelectedSeat[]>([])
 
+  // Seat hold timer state
+  const [holdExpiresAt, setHoldExpiresAt] = useState<Date | null>(null)
+  const [timeRemaining, setTimeRemaining] = useState<string | null>(null)
+
   // Check if event uses reserved seating
   const isReservedSeating = event?.seatingType === 'reserved' || event?.layoutType === 'seating_chart'
 
@@ -93,6 +97,43 @@ export default function TicketSelectionPage() {
   useEffect(() => {
     setIsClient(true)
   }, [])
+
+  // Countdown timer for seat holds
+  useEffect(() => {
+    if (!holdExpiresAt) {
+      setTimeRemaining(null)
+      return
+    }
+
+    const updateTimer = () => {
+      const now = new Date()
+      const diff = holdExpiresAt.getTime() - now.getTime()
+
+      if (diff <= 0) {
+        setTimeRemaining(null)
+        setHoldExpiresAt(null)
+        setSelectedSeats([])
+        // Show alert that seats have been released
+        alert('Your seat hold has expired. Please select your seats again.')
+        return
+      }
+
+      const minutes = Math.floor(diff / 60000)
+      const seconds = Math.floor((diff % 60000) / 1000)
+      setTimeRemaining(`${minutes}:${seconds.toString().padStart(2, '0')}`)
+    }
+
+    // Update immediately and then every second
+    updateTimer()
+    const intervalId = setInterval(updateTimer, 1000)
+
+    return () => clearInterval(intervalId)
+  }, [holdExpiresAt])
+
+  // Handle hold created callback from seating chart
+  const handleHoldCreated = (expiresAt: Date) => {
+    setHoldExpiresAt(expiresAt)
+  }
 
   // Fetch event data
   useEffect(() => {
@@ -361,11 +402,24 @@ export default function TicketSelectionPage() {
               ) : isReservedSeating && event.layout ? (
                 /* Interactive Seating Chart for Reserved Seating */
                 <div className="main-card overflow-hidden">
+                  {/* Timer banner */}
+                  {timeRemaining && (
+                    <div className="p-3 bg-amber-50 border-b border-amber-200 flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-amber-800">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="font-medium">Your seats are reserved for</span>
+                      </div>
+                      <span className="text-xl font-bold text-amber-900">{timeRemaining}</span>
+                    </div>
+                  )}
                   <InteractiveSeatingChart
                     layout={event.layout}
-                    soldSeats={[]} // TODO: Fetch sold seats from backend
+                    eventId={event.id}
                     maxSeats={10}
                     onSeatSelection={handleSeatSelection}
+                    onHoldCreated={handleHoldCreated}
                     className="h-[500px] md:h-[600px]"
                   />
 
