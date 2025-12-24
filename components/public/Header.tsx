@@ -7,7 +7,7 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
@@ -36,7 +36,7 @@ export interface HeaderProps {
 }
 
 export function Header({
-  logo = '/images/logo.svg',
+  logo: propLogo,
   logoAlt = 'Logo',
   darkLogo,
   siteName = 'BoxOfficeTech',
@@ -52,6 +52,28 @@ export function Header({
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
+  const [promoterData, setPromoterData] = useState<{ logo?: string; name?: string } | null>(null)
+
+  // Fetch promoter data if we have a slug but no logo prop
+  useEffect(() => {
+    if (promoterSlug && !propLogo) {
+      fetch(`/api/promoters?slug=${promoterSlug}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.data) {
+            setPromoterData({
+              logo: data.data.logo,
+              name: data.data.name,
+            })
+          }
+        })
+        .catch(err => console.error('Failed to fetch promoter:', err))
+    }
+  }, [promoterSlug, propLogo])
+
+  // Use prop logo first, then fetched promoter logo, then default
+  const logo = propLogo || promoterData?.logo || '/images/logo.svg'
+  const displayName = siteName !== 'BoxOfficeTech' ? siteName : (promoterData?.name || siteName)
 
   const baseUrl = promoterSlug ? `/p/${promoterSlug}` : ''
 
@@ -94,7 +116,7 @@ export function Header({
                 priority
               />
             ) : (
-              <span className="text-xl font-bold text-[#000]">{siteName}</span>
+              <span className="text-xl font-bold text-[#000]">{displayName}</span>
             )}
           </Link>
 
