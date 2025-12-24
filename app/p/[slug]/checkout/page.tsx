@@ -366,6 +366,7 @@ export default function CheckoutPage() {
     country: 'US',
   })
   const [emailError, setEmailError] = useState<string | null>(null)
+  const [isRedirecting, setIsRedirecting] = useState(false)
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Fetch promoter's payment configuration on mount
@@ -503,8 +504,12 @@ export default function CheckoutPage() {
   }
 
   const handlePaymentSuccess = (orderId: string) => {
-    clearCart()
+    // Set redirecting state BEFORE clearing cart to prevent empty cart UI flash
+    setIsRedirecting(true)
+    // Navigate to confirmation page
     router.push(`/p/${slug}/confirmation/${orderId}`)
+    // Clear cart after initiating navigation
+    clearCart()
   }
 
   // Show loading during hydration
@@ -513,6 +518,26 @@ export default function CheckoutPage() {
       <Layout promoterSlug={slug}>
         <div className="min-h-screen flex items-center justify-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#6ac045]"></div>
+        </div>
+      </Layout>
+    )
+  }
+
+  // Show redirecting state after successful payment
+  if (isRedirecting) {
+    return (
+      <Layout promoterSlug={slug}>
+        <div className="min-h-screen flex flex-col items-center justify-center">
+          <div className="w-20 h-20 bg-[#6ac045] rounded-full flex items-center justify-center mb-6">
+            <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Payment Successful!</h2>
+          <p className="text-gray-600">Redirecting to your confirmation...</p>
+          <div className="mt-4">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#6ac045]"></div>
+          </div>
         </div>
       </Layout>
     )

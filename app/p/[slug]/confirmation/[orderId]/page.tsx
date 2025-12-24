@@ -10,6 +10,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getAdminFirestore } from '@/lib/firebase-admin'
 import Layout from '@/components/public/Layout'
+import TicketCard from '@/components/shared/TicketCard'
 
 interface PageProps {
   params: Promise<{ slug: string; orderId: string }>
@@ -37,13 +38,16 @@ interface OrderData {
   paidAt?: any
   qrCode?: string
   tickets?: Array<{
-    ticketId: string
-    eventName: string
-    ticketType: string
-    section?: string
-    row?: number
-    seat?: number
-    qrCode: string
+    id: string
+    ticketId?: string
+    tierName?: string
+    ticketType?: string
+    eventName?: string
+    section?: string | null
+    row?: number | null
+    seat?: number | null
+    status?: string
+    qrCode?: string
   }>
 }
 
@@ -265,16 +269,26 @@ export default async function ConfirmationPage({ params, searchParams }: PagePro
                   </div>
                 </div>
 
-                {/* QR Code */}
-                {order.qrCode && (
-                  <div className="mt-6 pt-6 border-t border-gray-100 text-center">
-                    <span className="text-sm text-gray-500 block mb-3">Your Ticket QR Code</span>
-                    <div className="inline-block p-4 bg-white border border-gray-200 rounded-lg">
-                      <div className="w-32 h-32 bg-gray-100 flex items-center justify-center">
-                        <span className="text-xs text-gray-400 text-center px-2">
-                          QR Code will be available in your ticket
-                        </span>
-                      </div>
+                {/* Tickets with QR Codes */}
+                {order.tickets && order.tickets.length > 0 && (
+                  <div className="mt-6 pt-6 border-t border-gray-100">
+                    <h3 className="text-sm font-medium text-gray-700 mb-4">Your Tickets</h3>
+                    <div className="space-y-3">
+                      {order.tickets.map((ticket, index) => (
+                        <TicketCard
+                          key={ticket.id || ticket.ticketId || index}
+                          ticket={{
+                            id: ticket.id || ticket.ticketId || `ticket-${index}`,
+                            tierName: ticket.tierName || ticket.ticketType,
+                            section: ticket.section,
+                            row: ticket.row,
+                            seat: ticket.seat,
+                            eventName: ticket.eventName,
+                            status: ticket.status,
+                          }}
+                          index={index}
+                        />
+                      ))}
                     </div>
                   </div>
                 )}
