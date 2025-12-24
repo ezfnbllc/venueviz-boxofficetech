@@ -30,6 +30,18 @@ export async function GET(
       }
     }
 
+    // Also check communications.seo.urlSlug (some events store slug there)
+    if (!eventDoc.exists) {
+      const urlSlugQuery = await db.collection('events')
+        .where('communications.seo.urlSlug', '==', eventId)
+        .limit(1)
+        .get()
+
+      if (!urlSlugQuery.empty) {
+        eventDoc = urlSlugQuery.docs[0]
+      }
+    }
+
     if (!eventDoc.exists) {
       return NextResponse.json(
         { error: 'Event not found' },
@@ -39,9 +51,53 @@ export async function GET(
 
     const data = eventDoc.data()!
 
-    // Parse dates
-    const startDate = data.startDate?.toDate?.() || new Date(data.startDate)
-    const endDate = data.endDate?.toDate?.() || (data.endDate ? new Date(data.endDate) : null)
+    // Get schedule info from first performance (primary source for dates/times)
+    const firstPerformance = data.schedule?.performances?.[0]
+
+    // Parse start date - check schedule.performances first, then fallback to startDate field
+    let startDate: Date
+    if (firstPerformance?.date) {
+      const rawDate = firstPerformance.date
+      if (typeof rawDate?.toDate === 'function') {
+        startDate = rawDate.toDate()
+      } else if (rawDate?._seconds) {
+        startDate = new Date(rawDate._seconds * 1000)
+      } else {
+        startDate = new Date(rawDate)
+      }
+    } else if (data.startDate) {
+      const rawDate = data.startDate
+      if (typeof rawDate?.toDate === 'function') {
+        startDate = rawDate.toDate()
+      } else if (rawDate?._seconds) {
+        startDate = new Date(rawDate._seconds * 1000)
+      } else {
+        startDate = new Date(rawDate)
+      }
+    } else {
+      startDate = new Date() // Fallback to now if no date found
+    }
+
+    // Parse end date
+    let endDate: Date | null = null
+    if (data.endDate) {
+      const rawEndDate = data.endDate
+      if (typeof rawEndDate?.toDate === 'function') {
+        endDate = rawEndDate.toDate()
+      } else if (rawEndDate?._seconds) {
+        endDate = new Date(rawEndDate._seconds * 1000)
+      } else {
+        endDate = new Date(rawEndDate)
+      }
+    }
+
+    // Get times from performance or fallback fields
+    const startTime = firstPerformance?.startTime || data.startTime
+    const endTime = firstPerformance?.endTime || data.endTime
+
+    // Get image from multiple possible sources
+    const thumbnail = data.images?.cover || data.thumbnail || data.image || data.bannerImage
+    const bannerImage = data.bannerImage || data.images?.cover || data.coverImage
 
     // Build ticket types from pricing data or create defaults
     let ticketTypes = data.ticketTypes || []
@@ -83,27 +139,31 @@ export async function GET(
       }
     }
 
+    // Build venue object with fallbacks
+    const venueData = data.venue || {}
+    const venue = venueData.name || data.venueName ? {
+      id: venueData.venueId || venueData.id,
+      name: venueData.name || data.venueName || '',
+      city: venueData.city || data.venueCity,
+      state: venueData.state || data.venueState,
+      address: venueData.address,
+      type: venueData.type,
+    } : null
+
     // Return event data
     const event = {
       id: eventDoc.id,
-      name: data.name || data.title,
-      slug: data.slug,
-      description: data.description,
-      shortDescription: data.shortDescription,
-      thumbnail: data.thumbnail,
-      bannerImage: data.bannerImage || data.coverImage,
+      name: data.name || data.basics?.name || data.title || '',
+      slug: data.slug || data.communications?.seo?.urlSlug,
+      description: data.description || data.basics?.description,
+      shortDescription: data.shortDescription || data.basics?.shortDescription,
+      thumbnail,
+      bannerImage,
       startDate: startDate.toISOString(),
       endDate: endDate?.toISOString(),
-      startTime: data.startTime,
-      endTime: data.endTime,
-      venue: data.venue ? {
-        id: data.venue.id,
-        name: data.venue.name,
-        city: data.venue.city,
-        state: data.venue.state,
-        address: data.venue.address,
-        type: data.venue.type,
-      } : null,
+      startTime,
+      endTime,
+      venue,
       pricing: data.pricing ? {
         currency: data.pricing.currency || 'USD',
         minPrice: data.pricing.minPrice,
