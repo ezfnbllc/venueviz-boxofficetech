@@ -19,6 +19,9 @@ const getCompleteInitialData = () => ({
   },
   venue: {
     venueId: '',
+    venueName: '',
+    venueCity: '',
+    venueState: '',
     layoutId: '',
     layoutType: '',
     seatingType: 'general',
@@ -172,6 +175,9 @@ export const useEventWizardStore = create<EventWizardStore>()(
           venue: {
             ...completeData.venue,
             venueId: eventData.venueId || '',
+            venueName: eventData.venueName || '',
+            venueCity: eventData.venueCity || '',
+            venueState: eventData.venueState || '',
             layoutId: eventData.layoutId || '',
             layoutType: eventData.layoutType || '',
             seatingType: eventData.seatingType || 'general',

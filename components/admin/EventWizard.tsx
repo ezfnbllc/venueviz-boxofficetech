@@ -126,21 +126,13 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
   
   const prepareEventData = () => {
     const safeArray = (arr: any) => Array.isArray(arr) ? arr : []
-    
-    // Get venue name from venues list if available
-    let venueName = formData.venue?.venueName || ''
-    if (!venueName && formData.venue?.venueId) {
-      const venueMap: Record<string, string> = {
-        'FyQXq48Dy5PwbNgt4qBs': 'Grand Theater Plano',
-        'xKLtGGAbwrwBZXoJNGjK': 'Euless Convention Center',
-      }
-      venueName = venueMap[formData.venue.venueId] || ''
-    }
-    
+
     return {
       ...formData.basics,
       venueId: formData.venue?.venueId || '',
-      venueName: venueName,
+      venueName: formData.venue?.venueName || '',
+      venueCity: formData.venue?.venueCity || '',
+      venueState: formData.venue?.venueState || '',
       layoutId: formData.venue?.layoutId || '',
       layoutType: formData.venue?.layoutType || '',
       seatingType: formData.venue?.seatingType || 'general',

@@ -223,6 +223,9 @@ export default function Step2Venue() {
     }
     updateFormData('venue', {
       venueId,
+      venueName: venue?.name || '',
+      venueCity: venue?.city || '',
+      venueState: venue?.state || '',
       layoutId: '',
       availableSections: []
     })

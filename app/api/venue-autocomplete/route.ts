@@ -40,13 +40,8 @@ export async function GET(request: NextRequest) {
 
   // Check if Google Places API key is configured
   if (!GOOGLE_PLACES_API_KEY) {
-    console.warn('[Venue Autocomplete] GOOGLE_PLACES_API_KEY not configured, using fallback')
     return fallbackAutocomplete(query)
   }
-
-  // Log API key info (masked for security)
-  const keyPreview = GOOGLE_PLACES_API_KEY.substring(0, 8) + '...' + GOOGLE_PLACES_API_KEY.substring(GOOGLE_PLACES_API_KEY.length - 4)
-  console.log(`[Venue Autocomplete] Using API key: ${keyPreview} (length: ${GOOGLE_PLACES_API_KEY.length})`)
 
   try {
     // Use Google Places Autocomplete API
@@ -54,17 +49,10 @@ export async function GET(request: NextRequest) {
     const types = 'establishment'
     const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&types=${types}&key=${GOOGLE_PLACES_API_KEY}`
 
-    console.log(`[Venue Autocomplete] Calling Google API for query: "${query}"`)
     const response = await fetch(url)
     const data = await response.json() as AutocompleteResponse & { error_message?: string }
 
-    console.log(`[Venue Autocomplete] Google API response status: ${data.status}`)
-    if (data.error_message) {
-      console.error(`[Venue Autocomplete] Google API error_message: ${data.error_message}`)
-    }
-
     if (data.status === 'OK' || data.status === 'ZERO_RESULTS') {
-      console.log(`[Venue Autocomplete] Found ${data.predictions?.length || 0} predictions`)
       const suggestions = data.predictions.map(prediction => ({
         placeId: prediction.place_id,
         name: prediction.structured_formatting.main_text,
@@ -81,7 +69,6 @@ export async function GET(request: NextRequest) {
     }
 
     // If Google API fails, fall back to local search
-    console.warn(`[Venue Autocomplete] Google API status: ${data.status}, error: ${data.error_message || 'none'}`)
     return fallbackAutocomplete(query)
 
   } catch (error) {
