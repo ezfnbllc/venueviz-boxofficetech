@@ -34,6 +34,7 @@ export default function PaymentGatewaySetup({
   const [credentials, setCredentials] = useState({
     apiKey: '',
     secretKey: '',
+    publishableKey: '',
     webhookSecret: '',
     merchantId: '',
     clientId: ''
@@ -54,6 +55,7 @@ export default function PaymentGatewaySetup({
       setCredentials({
         apiKey: currentGateway.credentials.apiKey || '',
         secretKey: currentGateway.credentials.secretKey || '',
+        publishableKey: currentGateway.credentials.publishableKey || '',
         webhookSecret: currentGateway.credentials.webhookSecret || '',
         merchantId: currentGateway.credentials.merchantId || '',
         clientId: currentGateway.credentials.clientId || ''
@@ -383,6 +385,21 @@ export default function PaymentGatewaySetup({
                   <>
                     <div>
                       <label className="block text-sm font-medium mb-2 text-primary-contrast">
+                        Publishable Key {formData.environment === 'live' && <span className="text-red-600 dark:text-red-400">*</span>}
+                      </label>
+                      <input
+                        type="text"
+                        value={credentials.publishableKey}
+                        onChange={(e) => {
+                          setCredentials({...credentials, publishableKey: e.target.value})
+                        }}
+                        className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 focus:border-blue-500 dark:focus:border-accent-500 focus:outline-none"
+                        placeholder={formData.environment === 'live' ? 'pk_live_...' : 'pk_test_...'}
+                      />
+                      <p className="text-xs text-secondary-contrast mt-1">Used for client-side checkout</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2 text-primary-contrast">
                         Secret Key {formData.environment === 'live' && <span className="text-red-600 dark:text-red-400">*</span>}
                       </label>
                       <input
@@ -395,6 +412,7 @@ export default function PaymentGatewaySetup({
                         className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 focus:border-blue-500 dark:focus:border-accent-500 focus:outline-none"
                         placeholder={formData.environment === 'live' ? 'sk_live_...' : 'sk_test_...'}
                       />
+                      <p className="text-xs text-secondary-contrast mt-1">Used for server-side API calls</p>
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-2 text-primary-contrast">Webhook Secret (Optional)</label>
@@ -480,7 +498,7 @@ export default function PaymentGatewaySetup({
                 <button
                   onClick={testConnection}
                   disabled={testing ||
-                    (formData.provider === 'stripe' && !credentials.secretKey) ||
+                    (formData.provider === 'stripe' && (!credentials.secretKey || !credentials.publishableKey)) ||
                     (formData.provider === 'square' && !credentials.apiKey) ||
                     (formData.provider === 'paypal' && (!credentials.clientId || !credentials.secretKey))
                   }

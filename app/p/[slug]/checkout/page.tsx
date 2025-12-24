@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { loadStripe } from '@stripe/stripe-js'
+import { loadStripe, Stripe } from '@stripe/stripe-js'
 import {
   Elements,
   PaymentElement,
@@ -13,9 +13,8 @@ import { useCart } from '@/lib/stores/cartStore'
 import Layout from '@/components/public/Layout'
 import Link from 'next/link'
 
-// Initialize Stripe - must check for key existence to avoid runtime errors
-const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-const stripePromise = stripePublishableKey ? loadStripe(stripePublishableKey) : null
+// Cache for Stripe instances by publishable key
+const stripeCache = new Map<string, Promise<Stripe | null>>()
 
 // Email validation helper
 function isValidEmail(email: string): boolean {
@@ -351,6 +350,11 @@ export default function CheckoutPage() {
   const [error, setError] = useState<string | null>(null)
   const [couponCode, setCouponCode] = useState('')
 
+  // Stripe configuration state
+  const [stripePublishableKey, setStripePublishableKey] = useState<string | null>(null)
+  const [paymentConfigLoading, setPaymentConfigLoading] = useState(true)
+  const [paymentConfigError, setPaymentConfigError] = useState<string | null>(null)
+
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -363,6 +367,47 @@ export default function CheckoutPage() {
   })
   const [emailError, setEmailError] = useState<string | null>(null)
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Fetch promoter's payment configuration on mount
+  useEffect(() => {
+    async function fetchPaymentConfig() {
+      try {
+        const response = await fetch(`/api/promoters/${slug}/payment-config?bySlug=true`)
+        const data = await response.json()
+
+        if (data.success && data.data?.publishableKey) {
+          setStripePublishableKey(data.data.publishableKey)
+          setPaymentConfigError(null)
+        } else {
+          setPaymentConfigError(data.error || 'Payment not configured for this promoter')
+        }
+      } catch (err) {
+        console.error('Error fetching payment config:', err)
+        setPaymentConfigError('Failed to load payment configuration')
+      } finally {
+        setPaymentConfigLoading(false)
+      }
+    }
+
+    if (slug) {
+      fetchPaymentConfig()
+    }
+  }, [slug])
+
+  // Memoize the Stripe promise to avoid recreating it on every render
+  const stripePromise = useMemo(() => {
+    if (!stripePublishableKey) return null
+
+    // Check cache first
+    if (stripeCache.has(stripePublishableKey)) {
+      return stripeCache.get(stripePublishableKey)!
+    }
+
+    // Create new Stripe instance and cache it
+    const promise = loadStripe(stripePublishableKey)
+    stripeCache.set(stripePublishableKey, promise)
+    return promise
+  }, [stripePublishableKey])
 
   // Create payment intent when form is complete (with debouncing)
   useEffect(() => {
@@ -616,14 +661,26 @@ export default function CheckoutPage() {
               <BillingForm formData={formData} setFormData={setFormData} emailError={emailError || undefined} />
 
               {/* Payment Section */}
-              {!stripePromise ? (
+              {paymentConfigLoading ? (
+                <div className="main-card">
+                  <div className="bp-title">
+                    <h4>Payment Information</h4>
+                  </div>
+                  <div className="p-6">
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#6ac045]"></div>
+                      <span className="ml-3 text-gray-600">Loading payment configuration...</span>
+                    </div>
+                  </div>
+                </div>
+              ) : paymentConfigError || !stripePromise ? (
                 <div className="main-card">
                   <div className="bp-title">
                     <h4>Payment Information</h4>
                   </div>
                   <div className="p-6">
                     <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-700 text-sm">
-                      Payment system is not configured. Please contact support.
+                      {paymentConfigError || 'Payment system is not configured. Please contact support.'}
                     </div>
                   </div>
                 </div>

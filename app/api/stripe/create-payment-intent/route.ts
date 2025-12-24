@@ -4,16 +4,13 @@
  * POST /api/stripe/create-payment-intent
  *
  * Creates a payment intent for the checkout process.
+ * Uses the promoter's Stripe secret key from the database.
  * Returns the client secret for Stripe Elements to complete payment.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { getAdminFirestore } from '@/lib/firebase-admin'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2023-10-16',
-})
 
 interface CartItem {
   id: string
@@ -37,6 +34,54 @@ interface CreatePaymentIntentRequest {
   metadata?: Record<string, string>
 }
 
+/**
+ * Get Stripe instance for a promoter using their stored credentials
+ */
+async function getStripeForPromoter(promoterSlug: string): Promise<Stripe | null> {
+  const db = getAdminFirestore()
+
+  // First, get the promoter ID from the slug
+  const promoterSnapshot = await db.collection('promoters')
+    .where('slug', '==', promoterSlug)
+    .limit(1)
+    .get()
+
+  if (promoterSnapshot.empty) {
+    console.error(`[Stripe] No promoter found with slug: ${promoterSlug}`)
+    return null
+  }
+
+  const promoterId = promoterSnapshot.docs[0].id
+
+  // Get the payment gateway for this promoter
+  const gatewaySnapshot = await db.collection('payment_gateways')
+    .where('promoterId', '==', promoterId)
+    .limit(1)
+    .get()
+
+  if (gatewaySnapshot.empty) {
+    console.error(`[Stripe] No payment gateway found for promoter: ${promoterId}`)
+    return null
+  }
+
+  const gateway = gatewaySnapshot.docs[0].data()
+
+  if (gateway.provider !== 'stripe') {
+    console.error(`[Stripe] Promoter ${promoterId} uses ${gateway.provider}, not Stripe`)
+    return null
+  }
+
+  const secretKey = gateway.credentials?.secretKey
+  if (!secretKey) {
+    console.error(`[Stripe] No Stripe secret key found for promoter: ${promoterId}`)
+    return null
+  }
+
+  return new Stripe(secretKey, {
+    apiVersion: '2023-10-16',
+  })
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body: CreatePaymentIntentRequest = await request.json()
@@ -46,6 +91,22 @@ export async function POST(request: NextRequest) {
     if (!items || items.length === 0) {
       return NextResponse.json(
         { error: 'No items in cart' },
+        { status: 400 }
+      )
+    }
+
+    // Get Stripe instance for this promoter
+    if (!promoterSlug) {
+      return NextResponse.json(
+        { error: 'Promoter slug is required' },
+        { status: 400 }
+      )
+    }
+
+    const stripe = await getStripeForPromoter(promoterSlug)
+    if (!stripe) {
+      return NextResponse.json(
+        { error: 'Payment is not configured for this promoter' },
         { status: 400 }
       )
     }
