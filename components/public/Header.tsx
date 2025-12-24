@@ -53,6 +53,12 @@ export function Header({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
   const [promoterData, setPromoterData] = useState<{ logo?: string; name?: string } | null>(null)
+  const [isMounted, setIsMounted] = useState(false)
+
+  // Track when component is mounted to prevent hydration mismatch
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   // Fetch promoter data if we have a slug but no logo prop
   useEffect(() => {
@@ -71,9 +77,9 @@ export function Header({
     }
   }, [promoterSlug, propLogo])
 
-  // Use prop logo first, then fetched promoter logo, then default
-  const logo = propLogo || promoterData?.logo || '/images/logo.svg'
-  const displayName = siteName !== 'BoxOfficeTech' ? siteName : (promoterData?.name || siteName)
+  // Use prop logo first, then fetched promoter logo (only after mount to prevent hydration issues)
+  const logo = propLogo || (isMounted && promoterData?.logo) || '/images/logo.svg'
+  const displayName = siteName !== 'BoxOfficeTech' ? siteName : (isMounted && promoterData?.name) || siteName
 
   const baseUrl = promoterSlug ? `/p/${promoterSlug}` : ''
 

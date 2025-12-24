@@ -81,6 +81,12 @@ export function Footer({
   const baseUrl = promoterSlug ? `/p/${promoterSlug}` : ''
   const currentYear = new Date().getFullYear()
   const [promoterData, setPromoterData] = useState<{ logo?: string; name?: string; description?: string } | null>(null)
+  const [isMounted, setIsMounted] = useState(false)
+
+  // Track when component is mounted to prevent hydration mismatch
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   // Fetch promoter data if we have a slug but no logo prop
   useEffect(() => {
@@ -100,10 +106,10 @@ export function Footer({
     }
   }, [promoterSlug, propLogo])
 
-  // Use prop values first, then fetched promoter data, then defaults
-  const logo = propLogo || promoterData?.logo
-  const displayName = siteName !== 'BoxOfficeTech' ? siteName : (promoterData?.name || siteName)
-  const description = propDescription || promoterData?.description || 'Your trusted platform for event ticketing and management.'
+  // Use prop values first, then fetched promoter data (only after mount), then defaults
+  const logo = propLogo || (isMounted && promoterData?.logo)
+  const displayName = siteName !== 'BoxOfficeTech' ? siteName : (isMounted && promoterData?.name) || siteName
+  const description = propDescription || (isMounted && promoterData?.description) || 'Your trusted platform for event ticketing and management.'
 
   const defaultSections: FooterSection[] = [
     {
