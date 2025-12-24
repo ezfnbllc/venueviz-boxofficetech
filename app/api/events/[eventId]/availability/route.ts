@@ -86,9 +86,10 @@ export async function GET(
     })
 
     // Count held tickets (from ticket_holds collection)
+    // Note: We query only by eventId and filter heldUntil in memory
+    // to avoid requiring a composite Firestore index
     const holdsSnapshot = await db.collection('ticket_holds')
       .where('eventId', '==', eventId)
-      .where('heldUntil', '>', now)
       .get()
 
     const heldCounts: Record<string, number> = {}
@@ -96,6 +97,13 @@ export async function GET(
 
     holdsSnapshot.docs.forEach(doc => {
       const hold = doc.data()
+      const heldUntil = (hold.heldUntil as any)?.toDate?.() || new Date(hold.heldUntil)
+
+      // Filter out expired holds in memory
+      if (heldUntil <= now) {
+        return
+      }
+
       const ticketTypeId = hold.ticketTypeId || 'general'
       heldCounts[ticketTypeId] = (heldCounts[ticketTypeId] || 0) + (hold.quantity || 1)
       totalHeld += hold.quantity || 1
@@ -215,15 +223,23 @@ export async function POST(
       })
 
       // Get current held counts (excluding this session's holds)
+      // Note: We query only by eventId and filter heldUntil in memory
+      // to avoid requiring a composite Firestore index
       const holdsQuery = await db.collection('ticket_holds')
         .where('eventId', '==', eventId)
-        .where('heldUntil', '>', now)
         .get()
 
       const heldCounts: Record<string, number> = {}
       let totalHeld = 0
       holdsQuery.docs.forEach(doc => {
         const hold = doc.data()
+        const heldUntil = (hold.heldUntil as any)?.toDate?.() || new Date(hold.heldUntil)
+
+        // Filter out expired holds in memory
+        if (heldUntil <= now) {
+          return
+        }
+
         if (hold.sessionId !== sessionId) {
           const ticketTypeId = hold.ticketTypeId || 'general'
           heldCounts[ticketTypeId] = (heldCounts[ticketTypeId] || 0) + (hold.quantity || 1)
@@ -317,19 +333,27 @@ export async function POST(
 
 /**
  * Clean up expired ticket holds
+ * Note: We query only by eventId and filter heldUntil in memory
+ * to avoid requiring a composite Firestore index
  */
 async function cleanupExpiredHolds(db: FirebaseFirestore.Firestore, eventId: string) {
   const now = new Date()
-  const expiredHolds = await db.collection('ticket_holds')
+  const holdsSnapshot = await db.collection('ticket_holds')
     .where('eventId', '==', eventId)
-    .where('heldUntil', '<=', now)
     .get()
 
-  if (expiredHolds.empty) return
+  // Filter expired holds in memory
+  const expiredDocs = holdsSnapshot.docs.filter(doc => {
+    const hold = doc.data()
+    const heldUntil = (hold.heldUntil as any)?.toDate?.() || new Date(hold.heldUntil)
+    return heldUntil <= now
+  })
+
+  if (expiredDocs.length === 0) return
 
   const batch = db.batch()
-  expiredHolds.docs.forEach(doc => batch.delete(doc.ref))
+  expiredDocs.forEach(doc => batch.delete(doc.ref))
   await batch.commit()
 
-  console.log(`[TicketHolds] Cleaned up ${expiredHolds.size} expired holds for event ${eventId}`)
+  console.log(`[TicketHolds] Cleaned up ${expiredDocs.length} expired holds for event ${eventId}`)
 }

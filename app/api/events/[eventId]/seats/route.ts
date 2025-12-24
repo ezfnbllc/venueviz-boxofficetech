@@ -75,9 +75,10 @@ export async function GET(
     })
 
     // Get held seats (excluding expired holds)
+    // Note: We query only by eventId and filter heldUntil in memory
+    // to avoid requiring a composite Firestore index
     const holdsSnapshot = await db.collection('seat_holds')
       .where('eventId', '==', eventId)
-      .where('heldUntil', '>', now)
       .get()
 
     const heldSeats: string[] = []
@@ -85,14 +86,21 @@ export async function GET(
 
     holdsSnapshot.docs.forEach(doc => {
       const hold = doc.data() as SeatHold
+      const heldUntil = (hold.heldUntil as any)?.toDate?.() || new Date(hold.heldUntil as any)
+
+      // Filter out expired holds in memory (to avoid composite index requirement)
+      if (heldUntil <= now) {
+        return // Skip expired holds
+      }
+
       heldSeats.push(hold.seatId)
 
       // Track seats held by the current session
       if (sessionId && hold.sessionId === sessionId) {
         myHolds.push({
           ...hold,
-          heldUntil: (hold.heldUntil as any).toDate?.() || hold.heldUntil,
-          createdAt: (hold.createdAt as any).toDate?.() || hold.createdAt,
+          heldUntil,
+          createdAt: (hold.createdAt as any)?.toDate?.() || hold.createdAt,
         })
       }
     })
@@ -311,21 +319,29 @@ export async function DELETE(
 
 /**
  * Clean up expired holds for an event
+ * Note: We query only by eventId and filter heldUntil in memory
+ * to avoid requiring a composite Firestore index
  */
 async function cleanupExpiredHolds(db: FirebaseFirestore.Firestore, eventId: string) {
   const now = new Date()
-  const expiredHoldsSnapshot = await db.collection('seat_holds')
+  const holdsSnapshot = await db.collection('seat_holds')
     .where('eventId', '==', eventId)
-    .where('heldUntil', '<=', now)
     .get()
 
-  if (expiredHoldsSnapshot.empty) return
+  // Filter expired holds in memory
+  const expiredDocs = holdsSnapshot.docs.filter(doc => {
+    const hold = doc.data()
+    const heldUntil = (hold.heldUntil as any)?.toDate?.() || new Date(hold.heldUntil)
+    return heldUntil <= now
+  })
+
+  if (expiredDocs.length === 0) return
 
   const batch = db.batch()
-  expiredHoldsSnapshot.docs.forEach(doc => {
+  expiredDocs.forEach(doc => {
     batch.delete(doc.ref)
   })
   await batch.commit()
 
-  console.log(`[SeatHolds] Cleaned up ${expiredHoldsSnapshot.size} expired holds for event ${eventId}`)
+  console.log(`[SeatHolds] Cleaned up ${expiredDocs.length} expired holds for event ${eventId}`)
 }

@@ -194,14 +194,22 @@ export async function POST(request: NextRequest) {
         })
 
         // Count held tickets (excluding this session)
+        // Note: We query only by eventId and filter heldUntil in memory
+        // to avoid requiring a composite Firestore index
         const holdsSnapshot = await db.collection('ticket_holds')
           .where('eventId', '==', eventId)
-          .where('heldUntil', '>', now)
           .get()
 
         let totalHeld = 0
         holdsSnapshot.docs.forEach(doc => {
           const hold = doc.data()
+          const heldUntil = (hold.heldUntil as any)?.toDate?.() || new Date(hold.heldUntil)
+
+          // Filter out expired holds in memory
+          if (heldUntil <= now) {
+            return
+          }
+
           if (hold.sessionId !== sessionId) {
             totalHeld += hold.quantity || 1
           }
