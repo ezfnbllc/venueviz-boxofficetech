@@ -502,7 +502,8 @@ function parseEventDoc(id: string, data: any): PublicEvent {
       aiSearchDescription: data.communications.seo.aiSearchDescription,
       keywords: data.communications.seo.keywords,
       socialMediaImage: data.communications.seo.socialMediaImage,
-      faqStructuredData: data.communications.seo.faqStructuredData,
+      // FAQ structured data can be stored in either field
+      faqStructuredData: data.communications.seo.faqStructuredData || data.communications.seo.structuredDataFAQ,
       localSeo: data.communications.seo.localSeo,
       targetSearchQueries: data.communications.seo.targetSearchQueries,
       semanticKeywords: data.communications.seo.semanticKeywords,
