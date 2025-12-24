@@ -506,8 +506,8 @@ export default function CheckoutPage() {
   const handlePaymentSuccess = (orderId: string) => {
     // Set redirecting state BEFORE clearing cart to prevent empty cart UI flash
     setIsRedirecting(true)
-    // Navigate to confirmation page
-    router.push(`/p/${slug}/confirmation/${orderId}`)
+    // Navigate to confirmation page with success status so order gets marked as completed
+    router.push(`/p/${slug}/confirmation/${orderId}?redirect_status=succeeded`)
     // Clear cart after initiating navigation
     clearCart()
   }
