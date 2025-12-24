@@ -57,13 +57,49 @@ export async function POST(request: NextRequest) {
         if (!ordersSnapshot.empty) {
           const orderDoc = ordersSnapshot.docs[0]
 
+          // Get charge details for fraud assessment
+          const chargeId = paymentIntent.latest_charge as string
+          let riskLevel = 'normal'
+          let riskScore: number | null = null
+          let fraudDetails: Record<string, any> = {}
+
+          if (chargeId) {
+            try {
+              const charge = await stripe.charges.retrieve(chargeId)
+              // Extract Radar outcome for fraud assessment
+              if (charge.outcome) {
+                riskLevel = charge.outcome.risk_level || 'normal'
+                riskScore = charge.outcome.risk_score || null
+                fraudDetails = {
+                  riskLevel: charge.outcome.risk_level,
+                  riskScore: charge.outcome.risk_score,
+                  sellerMessage: charge.outcome.seller_message,
+                  type: charge.outcome.type,
+                  reason: charge.outcome.reason,
+                  networkStatus: charge.outcome.network_status,
+                  // Card verification checks
+                  cvcCheck: charge.payment_method_details?.card?.checks?.cvc_check,
+                  addressLine1Check: charge.payment_method_details?.card?.checks?.address_line1_check,
+                  addressPostalCodeCheck: charge.payment_method_details?.card?.checks?.address_postal_code_check,
+                }
+              }
+            } catch (err) {
+              console.error('Error fetching charge details:', err)
+            }
+          }
+
           await orderDoc.ref.update({
             status: 'confirmed',
             paymentStatus: 'paid',
             paidAt: new Date(),
-            stripeReceiptUrl: paymentIntent.latest_charge
-              ? await getReceiptUrl(paymentIntent.latest_charge as string)
-              : null,
+            stripeReceiptUrl: chargeId ? await getReceiptUrl(chargeId) : null,
+            // Fraud prevention: Store risk assessment
+            fraudAssessment: {
+              riskLevel,
+              riskScore,
+              ...fraudDetails,
+              assessedAt: new Date(),
+            },
             updatedAt: new Date(),
           })
 
@@ -75,7 +111,7 @@ export async function POST(request: NextRequest) {
             tickets: await generateTickets(orderDoc.data(), orderDoc.id),
           })
 
-          console.log(`Order ${orderDoc.id} confirmed`)
+          console.log(`Order ${orderDoc.id} confirmed (Risk: ${riskLevel}, Score: ${riskScore})`)
         }
         break
       }
@@ -91,14 +127,25 @@ export async function POST(request: NextRequest) {
         if (!ordersSnapshot.empty) {
           const orderDoc = ordersSnapshot.docs[0]
 
+          // Determine if this is a fraud-related failure
+          const error = paymentIntent.last_payment_error
+          const isFraudRelated = error?.code === 'card_declined' &&
+            (error?.decline_code === 'fraudulent' ||
+             error?.decline_code === 'stolen_card' ||
+             error?.decline_code === 'lost_card' ||
+             error?.decline_code === 'pickup_card')
+
           await orderDoc.ref.update({
             status: 'failed',
             paymentStatus: 'failed',
-            failureReason: paymentIntent.last_payment_error?.message || 'Payment failed',
+            failureReason: error?.message || 'Payment failed',
+            failureCode: error?.code || null,
+            declineCode: error?.decline_code || null,
+            isFraudulent: isFraudRelated,
             updatedAt: new Date(),
           })
 
-          console.log(`Order ${orderDoc.id} payment failed`)
+          console.log(`Order ${orderDoc.id} payment failed: ${error?.code} - ${error?.decline_code}`)
         }
         break
       }
@@ -124,6 +171,150 @@ export async function POST(request: NextRequest) {
           })
 
           console.log(`Order ${orderDoc.id} refunded: $${refundAmount}`)
+        }
+        break
+      }
+
+      // Fraud prevention: Handle early fraud warnings from Radar
+      case 'radar.early_fraud_warning.created': {
+        const warning = event.data.object as Stripe.Radar.EarlyFraudWarning
+
+        // Find the order associated with this charge
+        const chargeId = warning.charge
+        if (chargeId) {
+          try {
+            const charge = await stripe.charges.retrieve(chargeId as string)
+            const paymentIntentId = charge.payment_intent
+
+            if (paymentIntentId) {
+              const ordersSnapshot = await db.collection('orders')
+                .where('stripePaymentIntentId', '==', paymentIntentId)
+                .limit(1)
+                .get()
+
+              if (!ordersSnapshot.empty) {
+                const orderDoc = ordersSnapshot.docs[0]
+
+                await orderDoc.ref.update({
+                  fraudWarning: {
+                    id: warning.id,
+                    fraudType: warning.fraud_type,
+                    actionable: warning.actionable,
+                    createdAt: new Date(),
+                  },
+                  requiresReview: true,
+                  updatedAt: new Date(),
+                })
+
+                console.log(`Order ${orderDoc.id} flagged with fraud warning: ${warning.fraud_type}`)
+              }
+            }
+          } catch (err) {
+            console.error('Error processing fraud warning:', err)
+          }
+        }
+        break
+      }
+
+      // Fraud prevention: Handle disputes (chargebacks)
+      case 'charge.dispute.created': {
+        const dispute = event.data.object as Stripe.Dispute
+
+        const chargeId = dispute.charge
+        if (chargeId) {
+          try {
+            const charge = await stripe.charges.retrieve(chargeId as string)
+            const paymentIntentId = charge.payment_intent
+
+            if (paymentIntentId) {
+              const ordersSnapshot = await db.collection('orders')
+                .where('stripePaymentIntentId', '==', paymentIntentId)
+                .limit(1)
+                .get()
+
+              if (!ordersSnapshot.empty) {
+                const orderDoc = ordersSnapshot.docs[0]
+
+                await orderDoc.ref.update({
+                  status: 'disputed',
+                  dispute: {
+                    id: dispute.id,
+                    reason: dispute.reason,
+                    status: dispute.status,
+                    amount: dispute.amount / 100,
+                    currency: dispute.currency,
+                    createdAt: new Date(),
+                  },
+                  updatedAt: new Date(),
+                })
+
+                // Cancel tickets for disputed orders
+                const orderData = orderDoc.data()
+                if (orderData.tickets) {
+                  const cancelledTickets = orderData.tickets.map((ticket: any) => ({
+                    ...ticket,
+                    status: 'cancelled',
+                    cancelReason: 'Payment disputed',
+                  }))
+                  await orderDoc.ref.update({ tickets: cancelledTickets })
+                }
+
+                console.log(`Order ${orderDoc.id} disputed: ${dispute.reason}`)
+              }
+            }
+          } catch (err) {
+            console.error('Error processing dispute:', err)
+          }
+        }
+        break
+      }
+
+      // Fraud prevention: Handle dispute updates
+      case 'charge.dispute.closed': {
+        const dispute = event.data.object as Stripe.Dispute
+
+        const chargeId = dispute.charge
+        if (chargeId) {
+          try {
+            const charge = await stripe.charges.retrieve(chargeId as string)
+            const paymentIntentId = charge.payment_intent
+
+            if (paymentIntentId) {
+              const ordersSnapshot = await db.collection('orders')
+                .where('stripePaymentIntentId', '==', paymentIntentId)
+                .limit(1)
+                .get()
+
+              if (!ordersSnapshot.empty) {
+                const orderDoc = ordersSnapshot.docs[0]
+                const orderData = orderDoc.data()
+
+                // Update dispute status
+                const disputeWon = dispute.status === 'won'
+
+                await orderDoc.ref.update({
+                  status: disputeWon ? 'confirmed' : 'refunded',
+                  'dispute.status': dispute.status,
+                  'dispute.closedAt': new Date(),
+                  updatedAt: new Date(),
+                })
+
+                // If dispute was won, restore tickets
+                if (disputeWon && orderData.tickets) {
+                  const restoredTickets = orderData.tickets.map((ticket: any) => ({
+                    ...ticket,
+                    status: 'active',
+                    cancelReason: null,
+                  }))
+                  await orderDoc.ref.update({ tickets: restoredTickets })
+                }
+
+                console.log(`Order ${orderDoc.id} dispute closed: ${dispute.status}`)
+              }
+            }
+          } catch (err) {
+            console.error('Error processing dispute closure:', err)
+          }
         }
         break
       }

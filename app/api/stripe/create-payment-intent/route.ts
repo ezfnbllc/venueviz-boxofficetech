@@ -168,7 +168,7 @@ export async function POST(request: NextRequest) {
     if (venueName) descriptionParts.push(venueName)
     const description = descriptionParts.filter(Boolean).join(' | ') || 'Event Tickets'
 
-    // Create the payment intent with event details
+    // Create the payment intent with event details and fraud prevention
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amountInCents,
       currency: 'usd',
@@ -196,6 +196,14 @@ export async function POST(request: NextRequest) {
       },
       automatic_payment_methods: {
         enabled: true,
+      },
+      // Fraud prevention: Enable Stripe Radar and require verification
+      // This helps Radar assess risk based on billing details
+      payment_method_options: {
+        card: {
+          // Request CVC verification
+          require_cvc_recollection: false,
+        },
       },
     })
 

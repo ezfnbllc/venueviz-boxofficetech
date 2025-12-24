@@ -22,6 +22,78 @@ function isValidEmail(email: string): boolean {
   return emailRegex.test(email)
 }
 
+// Fraud prevention: Convert Stripe error codes to user-friendly messages
+function getFriendlyErrorMessage(error: { code?: string; decline_code?: string; message?: string }): string {
+  // Handle specific decline codes (fraud-related)
+  if (error.decline_code) {
+    switch (error.decline_code) {
+      case 'fraudulent':
+        return 'Your payment was declined. Please contact your bank or try a different payment method.'
+      case 'stolen_card':
+      case 'lost_card':
+      case 'pickup_card':
+        return 'This card cannot be used. Please try a different payment method.'
+      case 'insufficient_funds':
+        return 'Insufficient funds. Please try a different card or payment method.'
+      case 'card_velocity_exceeded':
+        return 'You have exceeded the number of allowed transactions. Please try again later.'
+      case 'do_not_honor':
+        return 'Your bank declined the payment. Please contact your bank or try a different card.'
+      case 'generic_decline':
+        return 'Your card was declined. Please try a different payment method.'
+      case 'invalid_account':
+        return 'The card account is invalid. Please try a different card.'
+      case 'card_not_supported':
+        return 'This card is not supported. Please try a different payment method.'
+      case 'currency_not_supported':
+        return 'This card does not support USD payments. Please try a different card.'
+      case 'duplicate_transaction':
+        return 'A duplicate transaction was detected. Please refresh the page and try again.'
+      case 'expired_card':
+        return 'Your card has expired. Please use a different card.'
+      case 'incorrect_cvc':
+        return 'The security code (CVC) is incorrect. Please check and try again.'
+      case 'incorrect_zip':
+        return 'The ZIP/postal code does not match. Please check and try again.'
+      case 'incorrect_number':
+        return 'The card number is incorrect. Please check and try again.'
+      default:
+        break
+    }
+  }
+
+  // Handle error codes
+  if (error.code) {
+    switch (error.code) {
+      case 'card_declined':
+        return 'Your card was declined. Please try a different payment method.'
+      case 'expired_card':
+        return 'Your card has expired. Please use a different card.'
+      case 'incorrect_cvc':
+        return 'The security code (CVC) is incorrect. Please check and try again.'
+      case 'incorrect_number':
+        return 'The card number is incorrect. Please check and try again.'
+      case 'invalid_cvc':
+        return 'The security code (CVC) is invalid. Please check and try again.'
+      case 'invalid_expiry_month':
+        return 'The expiration month is invalid. Please check and try again.'
+      case 'invalid_expiry_year':
+        return 'The expiration year is invalid. Please check and try again.'
+      case 'invalid_number':
+        return 'The card number is invalid. Please check and try again.'
+      case 'processing_error':
+        return 'An error occurred while processing your payment. Please try again.'
+      case 'rate_limit':
+        return 'Too many requests. Please wait a moment and try again.'
+      default:
+        break
+    }
+  }
+
+  // Return the original message or a generic one
+  return error.message || 'An error occurred while processing your payment. Please try again.'
+}
+
 interface CheckoutFormProps {
   clientSecret: string
   orderId: string
@@ -48,7 +120,7 @@ function CheckoutForm({ clientSecret, orderId, promoterSlug, onSuccess }: Checko
 
     const { error: submitError } = await elements.submit()
     if (submitError) {
-      setError(submitError.message || 'An error occurred')
+      setError(getFriendlyErrorMessage(submitError))
       setProcessing(false)
       return
     }
@@ -56,13 +128,14 @@ function CheckoutForm({ clientSecret, orderId, promoterSlug, onSuccess }: Checko
     const { error: paymentError, paymentIntent } = await stripe.confirmPayment({
       elements,
       confirmParams: {
-        return_url: `${window.location.origin}/p/${promoterSlug}/confirmation/${orderId}`,
+        return_url: `${window.location.origin}/p/${promoterSlug}/confirmation/${orderId}?redirect_status=succeeded`,
       },
       redirect: 'if_required',
     })
 
     if (paymentError) {
-      setError(paymentError.message || 'Payment failed')
+      // Use friendly error message for fraud-related and other declines
+      setError(getFriendlyErrorMessage(paymentError))
       setProcessing(false)
     } else if (paymentIntent && paymentIntent.status === 'succeeded') {
       onSuccess(orderId)
