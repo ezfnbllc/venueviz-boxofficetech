@@ -13,8 +13,9 @@ import { useCart } from '@/lib/stores/cartStore'
 import Layout from '@/components/public/Layout'
 import Link from 'next/link'
 
-// Initialize Stripe
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
+// Initialize Stripe - must check for key existence to avoid runtime errors
+const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+const stripePromise = stripePublishableKey ? loadStripe(stripePublishableKey) : null
 
 // Email validation helper
 function isValidEmail(email: string): boolean {
@@ -615,7 +616,18 @@ export default function CheckoutPage() {
               <BillingForm formData={formData} setFormData={setFormData} emailError={emailError || undefined} />
 
               {/* Payment Section */}
-              {clientSecret ? (
+              {!stripePromise ? (
+                <div className="main-card">
+                  <div className="bp-title">
+                    <h4>Payment Information</h4>
+                  </div>
+                  <div className="p-6">
+                    <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-700 text-sm">
+                      Payment system is not configured. Please contact support.
+                    </div>
+                  </div>
+                </div>
+              ) : clientSecret ? (
                 <Elements
                   stripe={stripePromise}
                   options={{
