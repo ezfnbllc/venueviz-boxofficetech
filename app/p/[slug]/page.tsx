@@ -30,13 +30,24 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     }
   }
 
+  const description = promoter.description || `Discover amazing events and buy tickets from ${promoter.name}`
+
   return {
     title: `${promoter.name} | Events & Tickets`,
-    description: promoter.description || `Discover events from ${promoter.name}`,
+    description,
     openGraph: {
-      title: promoter.name,
-      description: promoter.description,
-      images: promoter.banner ? [promoter.banner] : [],
+      title: `${promoter.name} | Events & Tickets`,
+      description,
+      images: promoter.banner ? [promoter.banner] : promoter.logo ? [promoter.logo] : [],
+      type: 'website',
+      locale: 'en_US',
+      siteName: promoter.name,
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `${promoter.name} | Events & Tickets`,
+      description,
+      images: promoter.banner ? [promoter.banner] : promoter.logo ? [promoter.logo] : [],
     },
   }
 }
@@ -50,18 +61,19 @@ export default async function PromoterHomePage({ params }: PageProps) {
   }
 
   const [featuredEvents, upcomingEvents] = await Promise.all([
-    getPromoterEvents(promoter.id, { featured: true, limit: 4 }),
-    getPromoterEvents(promoter.id, { limit: 8 }),
+    getPromoterEvents(promoter.id, { featured: true, upcoming: true, limit: 4 }),
+    getPromoterEvents(promoter.id, { upcoming: true, limit: 8 }),
   ])
 
   // Transform events to EventCardProps with full schedule/venue/pricing data
+  // Serialize dates to ISO strings for safe SSR transfer to client components
   const transformEvent = (event: any): EventCardProps => ({
     id: event.id,
     title: event.name,
     slug: event.slug,
     imageUrl: event.thumbnail,
-    // Schedule
-    startDate: event.startDate,
+    // Schedule - serialize Date to ISO string for SSR compatibility
+    startDate: event.startDate instanceof Date ? event.startDate.toISOString() : event.startDate,
     startTime: event.startTime,
     endTime: event.endTime,
     // Venue
@@ -77,8 +89,65 @@ export default async function PromoterHomePage({ params }: PageProps) {
   const featuredCards = featuredEvents.map(transformEvent)
   const upcomingCards = upcomingEvents.map(transformEvent)
 
+  // Build Organization structured data for SEO
+  const organizationStructuredData = {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    'name': promoter.name,
+    'description': promoter.description,
+    'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}/p/${slug}`,
+    'logo': promoter.logo,
+    'image': promoter.banner || promoter.logo,
+    ...(promoter.contactEmail && { 'email': promoter.contactEmail }),
+    ...(promoter.website && { 'sameAs': [promoter.website] }),
+    ...(promoter.socialLinks && {
+      'sameAs': [
+        promoter.socialLinks.facebook,
+        promoter.socialLinks.twitter,
+        promoter.socialLinks.instagram,
+        promoter.socialLinks.youtube,
+      ].filter(Boolean),
+    }),
+  }
+
+  // Build ItemList structured data for events
+  const eventsListStructuredData = upcomingEvents.length > 0 ? {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    'itemListElement': upcomingEvents.slice(0, 10).map((event, index) => ({
+      '@type': 'ListItem',
+      'position': index + 1,
+      'item': {
+        '@type': 'Event',
+        'name': event.name,
+        'startDate': event.startDate.toISOString(),
+        'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}/p/${slug}/events/${event.slug || event.id}`,
+        'image': event.thumbnail || event.bannerImage,
+        'location': event.venue?.name ? {
+          '@type': 'Place',
+          'name': event.venue.name,
+        } : {
+          '@type': 'VirtualLocation',
+          'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}/p/${slug}/events/${event.slug || event.id}`,
+        },
+      },
+    })),
+  } : null
+
   return (
-    <Layout
+    <>
+      {/* Structured Data for SEO */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationStructuredData) }}
+      />
+      {eventsListStructuredData && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(eventsListStructuredData) }}
+        />
+      )}
+      <Layout
       promoterSlug={slug}
       header={{
         logo: promoter.logo,
@@ -219,5 +288,6 @@ export default async function PromoterHomePage({ params }: PageProps) {
         </div>
       </section>
     </Layout>
+    </>
   )
 }

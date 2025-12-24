@@ -70,6 +70,25 @@ export interface PublicEvent {
   // Additional info
   performers?: string[]
   tags?: string[]
+  // SEO info
+  seo?: {
+    metaTitle?: string
+    metaDescription?: string
+    aiSearchDescription?: string
+    keywords?: string[]
+    socialMediaImage?: string
+    faqStructuredData?: Array<{
+      question: string
+      answer: string
+    }>
+    localSeo?: {
+      city?: string
+      state?: string
+      neighborhood?: string
+    }
+    targetSearchQueries?: string[]
+    semanticKeywords?: string[]
+  }
 }
 
 export interface PublicPromoter {
@@ -381,8 +400,30 @@ function parseEventDoc(id: string, data: any): PublicEvent {
 
   // Build venue object with all available data
   const venueData = data.venue || {}
+
+  // Extract coordinates from multiple possible locations
+  let coordinates = venueData.coordinates
+  if (!coordinates && venueData.address?.coordinates) {
+    coordinates = {
+      lat: venueData.address.coordinates.lat,
+      lng: venueData.address.coordinates.lng,
+    }
+  }
+  if (!coordinates && venueData.latitude && venueData.longitude) {
+    coordinates = {
+      lat: venueData.latitude,
+      lng: venueData.longitude,
+    }
+  }
+  if (!coordinates && data.venueLatitude && data.venueLongitude) {
+    coordinates = {
+      lat: data.venueLatitude,
+      lng: data.venueLongitude,
+    }
+  }
+
   const venue = {
-    id: venueData.venueId,
+    id: venueData.venueId || venueData.id,
     name: venueData.name || data.venueName || '',
     address: venueData.address,
     streetAddress1: venueData.streetAddress1,
@@ -391,10 +432,7 @@ function parseEventDoc(id: string, data: any): PublicEvent {
     state: venueData.state || data.venueState,
     zipCode: venueData.zipCode,
     country: venueData.country || 'USA',
-    coordinates: venueData.coordinates || (venueData.address?.coordinates ? {
-      lat: venueData.address.coordinates.lat,
-      lng: venueData.address.coordinates.lng,
-    } : undefined),
+    coordinates,
     type: venueData.type,
     amenities: venueData.amenities,
   }
@@ -457,6 +495,18 @@ function parseEventDoc(id: string, data: any): PublicEvent {
     // Additional
     performers: data.basics?.performers || data.performers,
     tags: data.basics?.tags || data.tags,
+    // SEO
+    seo: data.communications?.seo ? {
+      metaTitle: data.communications.seo.metaTitle,
+      metaDescription: data.communications.seo.metaDescription,
+      aiSearchDescription: data.communications.seo.aiSearchDescription,
+      keywords: data.communications.seo.keywords,
+      socialMediaImage: data.communications.seo.socialMediaImage,
+      faqStructuredData: data.communications.seo.faqStructuredData,
+      localSeo: data.communications.seo.localSeo,
+      targetSearchQueries: data.communications.seo.targetSearchQueries,
+      semanticKeywords: data.communications.seo.semanticKeywords,
+    } : undefined,
   }
 }
 

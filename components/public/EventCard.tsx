@@ -16,8 +16,8 @@ export interface EventCardProps {
   title: string
   slug?: string
   imageUrl?: string
-  // Schedule
-  startDate?: Date
+  // Schedule - accepts Date, ISO string, or timestamp for SSR compatibility
+  startDate?: Date | string | number
   startTime?: string  // HH:mm format
   endTime?: string    // HH:mm format
   // Legacy string date (for backwards compatibility)
@@ -71,13 +71,35 @@ function calculateDuration(startTime?: string, endTime?: string): string {
 }
 
 /**
- * Format date as "15 Apr Fri"
+ * Parse date from various formats (Date object, ISO string, or timestamp)
  */
-function formatDateShort(date?: Date): string {
-  if (!date || isNaN(date.getTime())) return 'TBA'
-  const day = date.getDate()
-  const month = date.toLocaleDateString('en-US', { month: 'short' })
-  const weekday = date.toLocaleDateString('en-US', { weekday: 'short' })
+function parseDate(date?: Date | string | number): Date | null {
+  if (!date) return null
+  if (date instanceof Date) {
+    return isNaN(date.getTime()) ? null : date
+  }
+  if (typeof date === 'string' || typeof date === 'number') {
+    const parsed = new Date(date)
+    return isNaN(parsed.getTime()) ? null : parsed
+  }
+  return null
+}
+
+/**
+ * Format date as "15 Apr Fri" using UTC to avoid hydration mismatches
+ */
+function formatDateShort(dateInput?: Date | string | number): string {
+  const date = parseDate(dateInput)
+  if (!date) return 'TBA'
+
+  // Use UTC methods to ensure consistency between server and client
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+  const day = date.getUTCDate()
+  const month = months[date.getUTCMonth()]
+  const weekday = weekdays[date.getUTCDay()]
+
   return `${day} ${month} ${weekday}`
 }
 

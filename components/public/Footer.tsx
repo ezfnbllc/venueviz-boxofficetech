@@ -5,6 +5,9 @@
  * Public site footer with links, social, newsletter
  */
 
+'use client'
+
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { cn } from '@/lib/utils'
@@ -65,9 +68,9 @@ const socialIcons = {
 }
 
 export function Footer({
-  logo,
+  logo: propLogo,
   siteName = 'BoxOfficeTech',
-  description = 'Your trusted platform for event ticketing and management.',
+  description: propDescription,
   sections,
   socialLinks,
   promoterSlug,
@@ -77,6 +80,36 @@ export function Footer({
 }: FooterProps) {
   const baseUrl = promoterSlug ? `/p/${promoterSlug}` : ''
   const currentYear = new Date().getFullYear()
+  const [promoterData, setPromoterData] = useState<{ logo?: string; name?: string; description?: string } | null>(null)
+  const [isMounted, setIsMounted] = useState(false)
+
+  // Track when component is mounted to prevent hydration mismatch
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
+  // Fetch promoter data if we have a slug but no logo prop
+  useEffect(() => {
+    if (promoterSlug && !propLogo) {
+      fetch(`/api/promoters?slug=${promoterSlug}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.data) {
+            setPromoterData({
+              logo: data.data.logo,
+              name: data.data.name,
+              description: data.data.description,
+            })
+          }
+        })
+        .catch(err => console.error('Failed to fetch promoter:', err))
+    }
+  }, [promoterSlug, propLogo])
+
+  // Use prop values first, then fetched promoter data (only after mount), then defaults
+  const logo = propLogo || (isMounted && promoterData?.logo)
+  const displayName = siteName !== 'BoxOfficeTech' ? siteName : (isMounted && promoterData?.name) || siteName
+  const description = propDescription || (isMounted && promoterData?.description) || 'Your trusted platform for event ticketing and management.'
 
   const defaultSections: FooterSection[] = [
     {
@@ -112,15 +145,14 @@ export function Footer({
           <div className="lg:col-span-2">
             <Link href={`${baseUrl}/`} className="inline-block mb-4">
               {logo ? (
-                <Image
+                // Use regular img for external URLs to avoid Next.js Image optimization issues
+                <img
                   src={logo}
-                  alt={siteName}
-                  width={150}
-                  height={40}
-                  className="h-10 w-auto brightness-0 invert"
+                  alt={displayName}
+                  className="h-10 w-auto brightness-0 invert object-contain"
                 />
               ) : (
-                <span className="text-xl font-bold">{siteName}</span>
+                <span className="text-xl font-bold">{displayName}</span>
               )}
             </Link>
             <p className="text-[#a0a0a0] text-sm leading-relaxed mb-6 max-w-sm">
@@ -197,7 +229,7 @@ export function Footer({
         {/* Copyright */}
         <div className="mt-12 pt-8 border-t border-[#2d2d2d] text-center">
           <p className="text-[#a0a0a0] text-sm">
-            {copyright || `© ${currentYear} ${siteName}. All rights reserved.`}
+            {copyright || `© ${currentYear} ${displayName}. All rights reserved.`}
           </p>
         </div>
       </div>

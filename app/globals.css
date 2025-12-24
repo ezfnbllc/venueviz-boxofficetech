@@ -2,6 +2,55 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Barren Theme Styles for Public Pages */
+@layer components {
+  .main-card {
+    @apply bg-white rounded-lg shadow-sm border border-gray-100;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  }
+
+  .bp-title {
+    @apply px-6 py-5 border-b border-gray-100;
+  }
+
+  .bp-title h4 {
+    @apply text-lg font-semibold text-black m-0;
+  }
+
+  .form-label {
+    @apply block text-sm font-medium text-black mb-2;
+  }
+
+  .form-control {
+    @apply w-full px-4 py-3 text-sm border border-gray-100 rounded-lg bg-white transition-colors;
+  }
+
+  .form-control:focus {
+    @apply outline-none border-[#6ac045];
+  }
+
+  .form-group {
+    @apply mb-0;
+  }
+
+  .main-btn {
+    @apply inline-flex items-center justify-center px-6 py-3 text-base font-semibold text-white bg-[#6ac045] border-none rounded-lg cursor-pointer transition-all;
+  }
+
+  .main-btn:hover {
+    @apply bg-[#5aa038];
+  }
+
+  .btn-hover {
+    @apply relative overflow-hidden;
+  }
+
+  .order-summary {
+    @apply sticky;
+    top: 90px;
+  }
+}
+
 @layer base {
   :root {
     /* Light mode colors */

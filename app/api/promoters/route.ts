@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { collection, getDocs, addDoc, query, where, orderBy, Timestamp } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { getAdminFirestore } from '@/lib/firebase-admin'
+import { FieldValue } from 'firebase-admin/firestore'
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,13 +8,14 @@ export async function GET(request: NextRequest) {
     const slug = searchParams.get('slug')
     const includeInactive = searchParams.get('includeInactive') === 'true'
 
-    const promotersRef = collection(db, 'promoters')
-    let q
+    const db = getAdminFirestore()
 
     if (slug) {
       // Get specific promoter by slug
-      q = query(promotersRef, where('slug', '==', slug))
-      const snapshot = await getDocs(q)
+      const snapshot = await db.collection('promoters')
+        .where('slug', '==', slug)
+        .limit(1)
+        .get()
 
       if (snapshot.empty) {
         return NextResponse.json({
@@ -35,13 +36,13 @@ export async function GET(request: NextRequest) {
     }
 
     // Get all promoters
-    if (includeInactive) {
-      q = query(promotersRef, orderBy('name'))
-    } else {
-      q = query(promotersRef, where('active', '==', true), orderBy('name'))
+    let query = db.collection('promoters')
+
+    if (!includeInactive) {
+      query = query.where('active', '==', true)
     }
 
-    const snapshot = await getDocs(q)
+    const snapshot = await query.orderBy('name').get()
 
     const promoters = snapshot.docs.map(doc => ({
       id: doc.id,
@@ -74,11 +75,14 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
+    const db = getAdminFirestore()
+
     // Check if slug is unique
     if (body.slug) {
-      const promotersRef = collection(db, 'promoters')
-      const slugQuery = query(promotersRef, where('slug', '==', body.slug))
-      const existingSlug = await getDocs(slugQuery)
+      const existingSlug = await db.collection('promoters')
+        .where('slug', '==', body.slug)
+        .limit(1)
+        .get()
 
       if (!existingSlug.empty) {
         return NextResponse.json({
@@ -110,12 +114,11 @@ export async function POST(request: NextRequest) {
       users: body.users || [],
       website: body.website || '',
       description: body.description || '',
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now()
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
     }
 
-    const promotersRef = collection(db, 'promoters')
-    const docRef = await addDoc(promotersRef, promoterData)
+    const docRef = await db.collection('promoters').add(promoterData)
 
     return NextResponse.json({
       success: true,

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { AdminService } from '@/lib/admin/adminService'
+import TicketQRCode from '@/components/shared/TicketQRCode'
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<any[]>([])
@@ -309,18 +310,17 @@ export default function OrdersPage() {
                             </span>
                           </div>
 
-                          {ticket.qrCode && (
-                            <div className="mt-4 p-4 bg-white rounded-lg">
-                              <img
-                                src={ticket.qrCode}
-                                alt="QR Code"
-                                className="w-32 h-32 mx-auto"
-                              />
+                          <div className="mt-4 flex justify-center">
+                            <div className="text-center">
+                              <TicketQRCode ticketId={ticket.id} size={100} />
                               <p className="text-xs text-gray-600 text-center mt-2">
-                                Ticket #{ticket.ticketNumber || ticket.id?.slice(0, 8) || index + 1}
+                                Ticket #{index + 1}
+                              </p>
+                              <p className="text-xs text-gray-400 truncate max-w-[120px]">
+                                {ticket.id}
                               </p>
                             </div>
-                          )}
+                          </div>
 
                           <div className="mt-3 flex gap-2">
                             <button

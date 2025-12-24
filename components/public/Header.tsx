@@ -7,7 +7,7 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
@@ -36,7 +36,7 @@ export interface HeaderProps {
 }
 
 export function Header({
-  logo = '/images/logo.svg',
+  logo: propLogo,
   logoAlt = 'Logo',
   darkLogo,
   siteName = 'BoxOfficeTech',
@@ -52,6 +52,34 @@ export function Header({
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
+  const [promoterData, setPromoterData] = useState<{ logo?: string; name?: string } | null>(null)
+  const [isMounted, setIsMounted] = useState(false)
+
+  // Track when component is mounted to prevent hydration mismatch
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
+  // Fetch promoter data if we have a slug but no logo prop
+  useEffect(() => {
+    if (promoterSlug && !propLogo) {
+      fetch(`/api/promoters?slug=${promoterSlug}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.data) {
+            setPromoterData({
+              logo: data.data.logo,
+              name: data.data.name,
+            })
+          }
+        })
+        .catch(err => console.error('Failed to fetch promoter:', err))
+    }
+  }, [promoterSlug, propLogo])
+
+  // Use prop logo first, then fetched promoter logo (only after mount to prevent hydration issues)
+  const logo = propLogo || (isMounted && promoterData?.logo) || '/images/logo.svg'
+  const displayName = siteName !== 'BoxOfficeTech' ? siteName : (isMounted && promoterData?.name) || siteName
 
   const baseUrl = promoterSlug ? `/p/${promoterSlug}` : ''
 
@@ -84,7 +112,14 @@ export function Header({
         <nav className="flex items-center justify-between h-[70px]">
           {/* Logo */}
           <Link href={`${baseUrl}/`} className="flex items-center">
-            {logo ? (
+            {logo && logo !== '/images/logo.svg' ? (
+              // Use regular img for external URLs to avoid Next.js Image optimization issues
+              <img
+                src={logo}
+                alt={logoAlt}
+                className="h-10 w-auto object-contain"
+              />
+            ) : logo === '/images/logo.svg' ? (
               <Image
                 src={logo}
                 alt={logoAlt}
@@ -94,7 +129,7 @@ export function Header({
                 priority
               />
             ) : (
-              <span className="text-xl font-bold text-[#000]">{siteName}</span>
+              <span className="text-xl font-bold text-[#000]">{displayName}</span>
             )}
           </Link>
 
