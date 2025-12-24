@@ -372,46 +372,6 @@ export default function TicketSelectionPage() {
         </div>
       </div>
 
-      {/* Inline Styles */}
-      <style jsx global>{`
-        .main-card {
-          background: #fff;
-          border-radius: 8px;
-          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-          border: 1px solid #efefef;
-        }
-
-        .main-btn {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          padding: 12px 24px;
-          font-size: 16px;
-          font-weight: 600;
-          color: #fff;
-          background: #6ac045;
-          border: none;
-          border-radius: 8px;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-
-        .main-btn:hover:not(:disabled) {
-          background: #5aa038;
-        }
-
-        .btn-hover {
-          position: relative;
-          overflow: hidden;
-        }
-
-        .line-clamp-2 {
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-        }
-      `}</style>
     </Layout>
   )
 }
