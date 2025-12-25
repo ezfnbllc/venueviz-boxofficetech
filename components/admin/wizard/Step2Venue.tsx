@@ -970,17 +970,36 @@ export default function Step2Venue() {
 
       {/* Venue Creation Sub-Wizard Modal */}
       {showVenueWizard && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 rounded-xl p-6 w-full max-w-2xl my-8">
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[60] overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-xl p-6 w-full max-w-4xl my-8 max-h-[90vh] overflow-y-auto">
             {/* Header */}
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold">Create New Venue</h2>
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">Create New Venue</h2>
               <button
                 onClick={() => {
                   setShowVenueWizard(false)
                   setVenueWizardStep(1)
+                  // Reset form data
+                  setVenueNameQuery('')
+                  setVenueFormData({
+                    name: '',
+                    streetAddress1: '',
+                    streetAddress2: '',
+                    city: 'Dallas',
+                    state: 'TX',
+                    zipCode: '',
+                    capacity: 1000,
+                    type: 'theater',
+                    amenities: [],
+                    contactEmail: '',
+                    contactPhone: '',
+                    website: '',
+                    description: '',
+                    images: []
+                  })
                 }}
-                className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white text-2xl leading-none"
+                title="Close"
               >
                 ✕
               </button>
@@ -1110,7 +1129,17 @@ export default function Step2Venue() {
                   </div>
                 </div>
 
-                <div className="flex justify-end">
+                <div className="flex justify-between">
+                  <button
+                    onClick={() => {
+                      setShowVenueWizard(false)
+                      setVenueWizardStep(1)
+                      setVenueNameQuery('')
+                    }}
+                    className="px-6 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white"
+                  >
+                    Cancel
+                  </button>
                   <button
                     onClick={() => setVenueWizardStep(2)}
                     disabled={!venueFormData.name.trim()}
