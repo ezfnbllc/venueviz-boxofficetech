@@ -35,6 +35,15 @@ function fuzzyMatch(text: string, query: string): number {
   return queryIndex / queryLower.length * 0.4
 }
 
+// Venue suggestion type from autocomplete API
+interface VenueSuggestion {
+  placeId: string
+  name: string
+  address: string
+  fullDescription: string
+  types: string[]
+}
+
 interface VenueWizardFormData {
   name: string
   streetAddress1: string
@@ -113,6 +122,14 @@ export default function Step2Venue() {
   const [savingVenue, setSavingVenue] = useState(false)
   const [lookingUpVenue, setLookingUpVenue] = useState(false)
   const [lookupMessage, setLookupMessage] = useState('')
+
+  // Venue autocomplete state
+  const [venueNameQuery, setVenueNameQuery] = useState('')
+  const [venueSuggestions, setVenueSuggestions] = useState<VenueSuggestion[]>([])
+  const [showVenueSuggestions, setShowVenueSuggestions] = useState(false)
+  const [loadingVenueSuggestions, setLoadingVenueSuggestions] = useState(false)
+  const venueAutocompleteRef = useRef<HTMLDivElement>(null)
+  const venueDebounceTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Create layout sub-wizard state
   const [showLayoutWizard, setShowLayoutWizard] = useState(false)
@@ -406,6 +423,103 @@ export default function Step2Venue() {
     } catch (error) {
       console.error('Venue lookup error:', error)
       setLookupMessage('Error looking up venue. Please enter details manually.')
+      setTimeout(() => setLookupMessage(''), 5000)
+    }
+
+    setLookingUpVenue(false)
+  }
+
+  // Close venue autocomplete when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (venueAutocompleteRef.current && !venueAutocompleteRef.current.contains(event.target as Node)) {
+        setShowVenueSuggestions(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Fetch venue autocomplete suggestions
+  const fetchVenueSuggestions = async (query: string) => {
+    if (query.length < 3) {
+      setVenueSuggestions([])
+      setShowVenueSuggestions(false)
+      return
+    }
+
+    setLoadingVenueSuggestions(true)
+    try {
+      const response = await fetch(`/api/venue-autocomplete?query=${encodeURIComponent(query)}`)
+      const data = await response.json()
+
+      if (data.success && data.suggestions) {
+        setVenueSuggestions(data.suggestions)
+        setShowVenueSuggestions(data.suggestions.length > 0)
+      }
+    } catch (error) {
+      console.error('Venue autocomplete error:', error)
+    }
+    setLoadingVenueSuggestions(false)
+  }
+
+  // Handle venue name input change with debounce
+  const handleVenueNameQueryChange = (value: string) => {
+    setVenueNameQuery(value)
+    setVenueFormData({ ...venueFormData, name: value })
+
+    // Clear previous timer
+    if (venueDebounceTimerRef.current) {
+      clearTimeout(venueDebounceTimerRef.current)
+    }
+
+    // Debounce API call
+    venueDebounceTimerRef.current = setTimeout(() => {
+      fetchVenueSuggestions(value)
+    }, 300)
+  }
+
+  // Handle selecting a venue from suggestions
+  const handleSelectVenueSuggestion = async (suggestion: VenueSuggestion) => {
+    setShowVenueSuggestions(false)
+    setVenueNameQuery(suggestion.name)
+    setVenueFormData({ ...venueFormData, name: suggestion.name })
+    setLookingUpVenue(true)
+    setLookupMessage('Fetching venue details...')
+
+    try {
+      const response = await fetch(`/api/venue-details?placeId=${encodeURIComponent(suggestion.placeId)}`)
+      const data = await response.json()
+
+      if (data.success && data.venue) {
+        const venue = data.venue
+
+        // Update form with all venue details
+        setVenueFormData(prev => ({
+          ...prev,
+          name: venue.name || prev.name,
+          streetAddress1: venue.streetAddress1 || prev.streetAddress1,
+          city: venue.city || prev.city,
+          state: venue.state || prev.state,
+          zipCode: venue.zipCode || prev.zipCode,
+          capacity: venue.capacity || prev.capacity,
+          type: venue.type || prev.type,
+          contactPhone: venue.contactPhone || prev.contactPhone,
+          website: venue.website || prev.website,
+          description: venue.description || prev.description,
+          amenities: venue.amenities || prev.amenities,
+          images: venue.images?.length ? venue.images : prev.images
+        }))
+
+        setLookupMessage(`✓ Found "${venue.name}" - All details loaded!`)
+        setTimeout(() => setLookupMessage(''), 5000)
+      } else {
+        setLookupMessage('Could not fetch venue details. You can enter them manually.')
+        setTimeout(() => setLookupMessage(''), 5000)
+      }
+    } catch (error) {
+      console.error('Venue details error:', error)
+      setLookupMessage('Error fetching venue details.')
       setTimeout(() => setLookupMessage(''), 5000)
     }
 
@@ -881,16 +995,45 @@ export default function Step2Venue() {
             {/* Step 1: Basic Info */}
             {venueWizardStep === 1 && (
               <div className="space-y-4">
-                <div>
+                <div ref={venueAutocompleteRef} className="relative">
                   <label className="block text-sm mb-2">Venue Name *</label>
                   <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={venueFormData.name}
-                      onChange={(e) => setVenueFormData({ ...venueFormData, name: e.target.value })}
-                      className="flex-1 px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
-                      placeholder="Enter venue name"
-                    />
+                    <div className="flex-1 relative">
+                      <input
+                        type="text"
+                        value={venueNameQuery || venueFormData.name}
+                        onChange={(e) => handleVenueNameQueryChange(e.target.value)}
+                        onFocus={() => {
+                          if (venueNameQuery.length >= 3 && venueSuggestions.length > 0) {
+                            setShowVenueSuggestions(true)
+                          }
+                        }}
+                        className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
+                        placeholder="Start typing venue name..."
+                      />
+                      {loadingVenueSuggestions && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                        </div>
+                      )}
+
+                      {/* Autocomplete Dropdown */}
+                      {showVenueSuggestions && venueSuggestions.length > 0 && (
+                        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                          {venueSuggestions.map((suggestion, index) => (
+                            <button
+                              key={suggestion.placeId || index}
+                              type="button"
+                              onClick={() => handleSelectVenueSuggestion(suggestion)}
+                              className="w-full px-4 py-3 text-left hover:bg-slate-100 dark:hover:bg-slate-700 border-b border-slate-100 dark:border-slate-700 last:border-0 transition-colors"
+                            >
+                              <div className="font-medium text-slate-900 dark:text-white">{suggestion.name}</div>
+                              <div className="text-sm text-slate-500 dark:text-slate-400">{suggestion.address}</div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <button
                       type="button"
                       onClick={handleLookupVenue}
@@ -903,19 +1046,17 @@ export default function Step2Venue() {
                           Looking up...
                         </>
                       ) : (
-                        <>
-                          🔍 Lookup Details
-                        </>
+                        <>🔍 Lookup</>
                       )}
                     </button>
                   </div>
                   {lookupMessage && (
-                    <p className={`text-xs mt-2 ${lookupMessage.includes('Found') ? 'text-green-400' : lookupMessage.includes('Error') || lookupMessage.includes('not find') ? 'text-yellow-400' : 'text-blue-400'}`}>
+                    <p className={`text-xs mt-2 ${lookupMessage.includes('✓') || lookupMessage.includes('Found') ? 'text-green-400' : lookupMessage.includes('Error') || lookupMessage.includes('not find') || lookupMessage.includes('Could not') ? 'text-yellow-400' : 'text-blue-400'}`}>
                       {lookupMessage}
                     </p>
                   )}
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    Enter the venue name and click "Lookup Details" to auto-fill address and other information
+                    Type 3+ characters to see suggestions. Select a venue to auto-fill all details including address, phone, website, and photos.
                   </p>
                 </div>
 
@@ -1192,16 +1333,17 @@ export default function Step2Venue() {
       {/* Layout Creation Sub-Wizard Modal */}
       {showLayoutWizard && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 rounded-xl p-6 w-full max-w-2xl my-8">
+          <div className="bg-white dark:bg-slate-900 rounded-xl p-6 w-full max-w-4xl my-8 max-h-[90vh] overflow-y-auto">
             {/* Header */}
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold">Create New Layout</h2>
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">Create New Layout</h2>
               <button
                 onClick={() => {
                   setShowLayoutWizard(false)
                   setLayoutWizardStep(1)
                 }}
-                className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white text-2xl leading-none"
+                title="Close"
               >
                 ✕
               </button>
@@ -1275,7 +1417,16 @@ export default function Step2Venue() {
                   </div>
                 </div>
 
-                <div className="flex justify-end">
+                <div className="flex justify-between">
+                  <button
+                    onClick={() => {
+                      setShowLayoutWizard(false)
+                      setLayoutWizardStep(1)
+                    }}
+                    className="px-6 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white"
+                  >
+                    Cancel
+                  </button>
                   <button
                     onClick={() => setLayoutWizardStep(2)}
                     disabled={!layoutFormData.name.trim()}
