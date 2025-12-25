@@ -156,11 +156,22 @@ export default function Step2Venue() {
     loadVenues()
   }, [])
 
-  // Auto-populate from scraped venue data
+  // Auto-populate search query from existing venue (when editing) or scraped venue data
   useEffect(() => {
     if (initializedRef.current) return
     if (venues.length === 0) return
 
+    // First check if we're editing an existing event with a venue already selected
+    if (formData.venue.venueId) {
+      const existingVenue = venues.find(v => v.id === formData.venue.venueId)
+      if (existingVenue) {
+        initializedRef.current = true
+        setSearchQuery(existingVenue.name)
+        return
+      }
+    }
+
+    // Otherwise check for scraped venue data (new event from URL scraping)
     const scrapedVenue = (formData.basics as any)?.scrapedVenue
     if (scrapedVenue?.name) {
       initializedRef.current = true
@@ -172,7 +183,7 @@ export default function Step2Venue() {
         handleVenueChange(matchedVenue.id)
       }
     }
-  }, [venues, formData.basics])
+  }, [venues, formData.basics, formData.venue.venueId])
 
   useEffect(() => {
     if (formData.venue.venueId) {
