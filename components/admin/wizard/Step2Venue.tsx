@@ -970,8 +970,8 @@ export default function Step2Venue() {
 
       {/* Venue Creation Sub-Wizard Modal */}
       {showVenueWizard && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[60] overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 rounded-xl p-6 w-full max-w-4xl my-8 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/80 flex items-start justify-center p-4 pt-8 z-[70] overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-xl p-6 w-full max-w-4xl my-4 shadow-2xl">
             {/* Header */}
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-slate-900 dark:text-white">Create New Venue</h2>
@@ -1372,8 +1372,8 @@ export default function Step2Venue() {
 
       {/* Layout Creation Sub-Wizard Modal */}
       {showLayoutWizard && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 rounded-xl p-6 w-full max-w-4xl my-8 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/80 flex items-start justify-center p-4 pt-8 z-[70] overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-xl p-6 w-full max-w-4xl my-4 shadow-2xl">
             {/* Header */}
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-slate-900 dark:text-white">Create New Layout</h2>
