@@ -309,13 +309,18 @@ function OrderSummary({
   couponCode,
   setCouponCode,
   onApplyCoupon,
+  couponError,
+  couponLoading,
 }: {
   promoterSlug: string
   couponCode: string
   setCouponCode: (code: string) => void
   onApplyCoupon: () => void
+  couponError?: string | null
+  couponLoading?: boolean
 }) {
-  const { items, currentEvent, calculateSubtotal, calculateServiceFee, calculateTotal, getItemCount } = useCart()
+  const { items, currentEvent, appliedCoupon, removeCoupon, calculateSubtotal, calculateAllFees, calculateTotal, getItemCount } = useCart()
+  const fees = calculateAllFees()
 
   return (
     <div className="main-card order-summary">
@@ -369,10 +374,55 @@ function OrderSummary({
             <span className="text-gray-600">Subtotal ({getItemCount()} tickets)</span>
             <span>${calculateSubtotal().toFixed(2)}</span>
           </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-600">Service Fee</span>
-            <span>${calculateServiceFee().toFixed(2)}</span>
-          </div>
+
+          {/* Convenience/Service Fee */}
+          {fees.convenienceFee > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Convenience Fee</span>
+              <span>${fees.convenienceFee.toFixed(2)}</span>
+            </div>
+          )}
+
+          {/* Parking Fee */}
+          {fees.parkingFee > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Parking Fee</span>
+              <span>${fees.parkingFee.toFixed(2)}</span>
+            </div>
+          )}
+
+          {/* Venue Fee */}
+          {fees.venueFee > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Venue Fee</span>
+              <span>${fees.venueFee.toFixed(2)}</span>
+            </div>
+          )}
+
+          {/* Custom Fees */}
+          {fees.customFees.map((cf, idx) => (
+            <div key={idx} className="flex justify-between text-sm">
+              <span className="text-gray-600">{cf.name}</span>
+              <span>${cf.amount.toFixed(2)}</span>
+            </div>
+          ))}
+
+          {/* Discount */}
+          {fees.discount > 0 && (
+            <div className="flex justify-between text-sm text-green-600">
+              <span>Discount ({appliedCoupon?.code})</span>
+              <span>-${fees.discount.toFixed(2)}</span>
+            </div>
+          )}
+
+          {/* Sales Tax */}
+          {fees.salesTax > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Sales Tax</span>
+              <span>${fees.salesTax.toFixed(2)}</span>
+            </div>
+          )}
+
           <div className="border-t border-gray-200 pt-2 mt-2">
             <div className="flex justify-between font-semibold text-lg">
               <span>Total</span>
@@ -384,26 +434,50 @@ function OrderSummary({
         {/* Coupon Code */}
         <div className="mt-6">
           <label className="form-label">Coupon Code</label>
-          <div className="flex gap-2">
-            <input
-              className="form-control h-12 flex-1"
-              type="text"
-              placeholder="Enter code"
-              value={couponCode}
-              onChange={(e) => setCouponCode(e.target.value)}
-            />
-            <button
-              type="button"
-              onClick={onApplyCoupon}
-              className="px-4 h-12 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors"
-            >
-              Apply
-            </button>
-          </div>
+          {appliedCoupon ? (
+            <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
+              <div>
+                <span className="font-medium text-green-700">{appliedCoupon.code}</span>
+                <span className="text-sm text-green-600 ml-2">
+                  ({appliedCoupon.type === 'percentage' ? `${appliedCoupon.value}% off` : `$${appliedCoupon.value} off`})
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={removeCoupon}
+                className="text-red-500 hover:text-red-700 text-sm font-medium"
+              >
+                Remove
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="flex gap-2">
+                <input
+                  className={`form-control h-12 flex-1 ${couponError ? 'border-red-500' : ''}`}
+                  type="text"
+                  placeholder="Enter code"
+                  value={couponCode}
+                  onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                />
+                <button
+                  type="button"
+                  onClick={onApplyCoupon}
+                  disabled={couponLoading || !couponCode}
+                  className="px-4 h-12 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {couponLoading ? '...' : 'Apply'}
+                </button>
+              </div>
+              {couponError && (
+                <p className="text-red-500 text-sm mt-1">{couponError}</p>
+              )}
+            </>
+          )}
         </div>
 
         <p className="text-xs text-gray-500 mt-6 text-center">
-          Price is inclusive of all applicable taxes
+          {fees.salesTax > 0 ? 'Prices include applicable taxes and fees' : 'Price is inclusive of all applicable fees'}
         </p>
       </div>
     </div>
@@ -416,12 +490,14 @@ export default function CheckoutPage() {
   const slug = params.slug as string
 
   const cart = useCart()
-  const { items, currentEvent, calculateTotal, clearCart, _hasHydrated } = cart
+  const { items, currentEvent, calculateTotal, clearCart, applyCoupon, _hasHydrated } = cart
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [orderId, setOrderId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [couponCode, setCouponCode] = useState('')
+  const [couponLoading, setCouponLoading] = useState(false)
+  const [couponError, setCouponError] = useState<string | null>(null)
 
   // Stripe configuration state
   const [stripePublishableKey, setStripePublishableKey] = useState<string | null>(null)
@@ -582,9 +658,43 @@ export default function CheckoutPage() {
     }
   }, [_hasHydrated, items, formData.email, formData.firstName, formData.lastName, slug])
 
-  const handleApplyCoupon = () => {
-    // TODO: Implement coupon validation
-    console.log('Applying coupon:', couponCode)
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) return
+
+    setCouponLoading(true)
+    setCouponError(null)
+
+    try {
+      const response = await fetch('/api/promotions/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: couponCode.toUpperCase(),
+          eventId: currentEvent?.eventId,
+          promoterSlug: slug,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        setCouponError(data.error || 'Invalid coupon code')
+        return
+      }
+
+      // Apply the coupon to the cart
+      applyCoupon({
+        code: data.code,
+        type: data.type,
+        value: data.value,
+        description: data.description,
+      })
+      setCouponCode('')
+    } catch (err) {
+      setCouponError('Failed to validate coupon')
+    } finally {
+      setCouponLoading(false)
+    }
   }
 
   const handlePaymentSuccess = (orderId: string) => {
@@ -844,6 +954,8 @@ export default function CheckoutPage() {
                   couponCode={couponCode}
                   setCouponCode={setCouponCode}
                   onApplyCoupon={handleApplyCoupon}
+                  couponError={couponError}
+                  couponLoading={couponLoading}
                 />
               </div>
             </div>

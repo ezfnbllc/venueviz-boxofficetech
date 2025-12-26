@@ -192,7 +192,7 @@ export default function TicketSelectionPage() {
     // Clear existing cart first
     clearCart()
 
-    // Set current event context
+    // Set current event context including fee configuration
     setCurrentEvent({
       eventId: event.id,
       eventName: event.name,
@@ -200,6 +200,19 @@ export default function TicketSelectionPage() {
       eventDate: formatDate(event.startDate, event.startTime),
       venueName: event.venue?.name,
       promoterSlug: slug,
+      fees: event.pricing?.fees ? {
+        serviceFee: event.pricing.fees.serviceFee,
+        serviceFeeType: event.pricing.fees.serviceFeeType,
+        serviceFeeScope: event.pricing.fees.serviceFeeScope,
+        parkingFee: event.pricing.fees.parkingFee,
+        parkingFeeType: event.pricing.fees.parkingFeeType,
+        parkingFeeScope: event.pricing.fees.parkingFeeScope,
+        venueFee: event.pricing.fees.venueFee,
+        venueFeeType: event.pricing.fees.venueFeeType,
+        venueFeeScope: event.pricing.fees.venueFeeScope,
+        salesTax: event.pricing.fees.salesTax,
+        customFees: event.pricing.fees.customFees,
+      } : undefined,
     })
 
     if (isReservedSeating && selectedSeats.length > 0) {

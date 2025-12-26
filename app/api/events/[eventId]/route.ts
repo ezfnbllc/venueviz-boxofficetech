@@ -196,6 +196,7 @@ export async function GET(
         currency: data.pricing.currency || 'USD',
         minPrice: data.pricing.minPrice,
         maxPrice: data.pricing.maxPrice,
+        fees: data.pricing.fees || null,
       } : null,
       ticketTypes,
       isSoldOut: data.isSoldOut || false,
