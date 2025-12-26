@@ -194,35 +194,50 @@ export async function getPromoterEvents(
     }
 
     const now = new Date()
+    // Set to start of today for date comparisons (include events happening today)
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     const validStatuses = ['active', 'published']
 
-    // Debug: Log first event's data structure
+    // Debug: Log all events and their statuses
     if (snapshot.docs.length > 0) {
-      const firstData = snapshot.docs[0].data()
-      console.log('[PublicService] Sample event data structure:', {
-        name: firstData.name,
-        hasImages: !!firstData.images,
-        imagesCover: firstData.images?.cover,
-        hasSchedule: !!firstData.schedule,
-        schedulePerformances: firstData.schedule?.performances?.length,
-        firstPerfStartTime: firstData.schedule?.performances?.[0]?.startTime,
-        venueName: firstData.venueName,
-        venueObj: firstData.venue,
-        pricingTiers: firstData.pricing?.tiers?.length,
-        pricingCurrency: firstData.pricing?.currency,
+      snapshot.docs.forEach((doc, idx) => {
+        const data = doc.data()
+        console.log(`[PublicService] Event ${idx + 1}:`, {
+          id: doc.id,
+          name: data.name,
+          status: data.status,
+          hasPromoter: !!data.promoter?.promoterId,
+          promoterId: data.promoter?.promoterId,
+          hasSchedule: !!data.schedule?.performances?.length,
+          firstPerfDate: data.schedule?.performances?.[0]?.date,
+        })
       })
     }
 
     let events = snapshot.docs
       .filter(doc => {
-        const status = doc.data().status
-        return validStatuses.includes(status)
+        const data = doc.data()
+        const status = (data.status || '').toLowerCase()
+        const isValidStatus = validStatuses.includes(status)
+        if (!isValidStatus) {
+          console.log(`[PublicService] Event ${doc.id} filtered out - status '${data.status}' not in valid statuses`)
+        }
+        return isValidStatus
       })
       .map(doc => parseEventDoc(doc.id, doc.data()))
 
-    // Filter upcoming if needed
+    // Filter upcoming if needed (include events from today onwards)
     if (options?.upcoming) {
-      events = events.filter(e => e.startDate > now)
+      const eventsBeforeFilter = events.length
+      events = events.filter(e => {
+        const eventDate = new Date(e.startDate)
+        const isUpcoming = eventDate >= today || isNaN(eventDate.getTime())  // Include events with invalid dates for now
+        if (!isUpcoming) {
+          console.log(`[PublicService] Event ${e.id} (${e.name}) filtered out - date ${e.startDate} is in the past`)
+        }
+        return isUpcoming
+      })
+      console.log(`[PublicService] Upcoming filter: ${eventsBeforeFilter} -> ${events.length} events`)
     }
 
     // Sort by date
