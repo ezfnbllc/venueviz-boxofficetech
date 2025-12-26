@@ -5,6 +5,28 @@ import { useEventWizardStore } from '@/lib/store/eventWizardStore'
 import { AdminService } from '@/lib/admin/adminService'
 import { StorageService } from '@/lib/storage/storageService'
 
+// Generate acronym from event name (e.g., "Kamal Haasan Meet and Greet" -> "KHMG")
+function generateEventAcronym(eventName: string): string {
+  if (!eventName) return 'EVT'
+
+  // Common words to skip
+  const skipWords = new Set(['and', 'the', 'of', 'in', 'at', 'to', 'for', 'with', 'a', 'an', 'by', 'on'])
+
+  // Split into words and filter
+  const words = eventName.split(/\s+/).filter(word => {
+    const lower = word.toLowerCase()
+    return word.length > 0 && !skipWords.has(lower)
+  })
+
+  // Take first letter of each significant word (up to 5)
+  const acronym = words
+    .slice(0, 5)
+    .map(word => word[0].toUpperCase())
+    .join('')
+
+  return acronym || 'EVT'
+}
+
 // Fuzzy search function - returns match score 0-1
 function fuzzyMatch(text: string, query: string): number {
   if (!text || !query) return 0
@@ -152,7 +174,7 @@ export default function Step2Venue() {
 
   // Confirmation dialogs for auto-create
   const [pendingVenueCreate, setPendingVenueCreate] = useState<any>(null)
-  const [pendingLayoutCreate, setPendingLayoutCreate] = useState<{ venueId: string; ticketLevels: any[] } | null>(null)
+  const [pendingLayoutCreate, setPendingLayoutCreate] = useState<{ venueId: string; ticketLevels: any[]; layoutName: string } | null>(null)
 
   const searchInputRef = useRef<HTMLInputElement>(null)
   const initializedRef = useRef(false)
@@ -210,9 +232,14 @@ export default function Step2Venue() {
         // Also check for scraped ticket levels to offer layout creation
         const scrapedTicketLevels = (formData.basics as any)?.scrapedTicketLevels
         if (scrapedTicketLevels && scrapedTicketLevels.length > 0) {
+          // Generate layout name from event name
+          const eventName = formData.basics?.title || ''
+          const acronym = generateEventAcronym(eventName)
+          const layoutName = `GA-${acronym}`
+
           // Show layout creation confirmation after a brief delay for venue to load
           setTimeout(() => {
-            setPendingLayoutCreate({ venueId: matchedVenue.id, ticketLevels: scrapedTicketLevels })
+            setPendingLayoutCreate({ venueId: matchedVenue.id, ticketLevels: scrapedTicketLevels, layoutName })
           }, 800)
         }
       } else if (scrapedVenue.name) {
@@ -267,9 +294,14 @@ export default function Step2Venue() {
       // Check if we have scraped ticket levels - show layout confirmation
       const scrapedTicketLevels = (formData.basics as any)?.scrapedTicketLevels
       if (scrapedTicketLevels && scrapedTicketLevels.length > 0) {
+        // Generate layout name from event name
+        const eventName = formData.basics?.title || ''
+        const acronym = generateEventAcronym(eventName)
+        const layoutName = `GA-${acronym}`
+
         // Show layout creation confirmation after a brief delay
         setTimeout(() => {
-          setPendingLayoutCreate({ venueId: newVenueId, ticketLevels: scrapedTicketLevels })
+          setPendingLayoutCreate({ venueId: newVenueId, ticketLevels: scrapedTicketLevels, layoutName })
         }, 500)
       }
 
@@ -290,8 +322,8 @@ export default function Step2Venue() {
     if (!pendingLayoutCreate) return
 
     try {
-      const { venueId, ticketLevels } = pendingLayoutCreate
-      console.log('Creating layout from ticket levels:', ticketLevels)
+      const { venueId, ticketLevels, layoutName } = pendingLayoutCreate
+      console.log('Creating layout from ticket levels:', ticketLevels, 'with name:', layoutName)
 
       let totalCapacity = 0
       const gaLevels = ticketLevels.map((ticket, idx) => {
@@ -316,7 +348,7 @@ export default function Step2Venue() {
 
       const layoutData = {
         venueId,
-        name: 'General Admission',
+        name: layoutName || 'General Admission',
         type: 'general_admission',
         gaLevels,
         priceCategories,
@@ -1209,6 +1241,21 @@ export default function Step2Venue() {
               >
                 ✕
               </button>
+            </div>
+
+            {/* Layout Name Field */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Layout Name</label>
+              <input
+                type="text"
+                value={pendingLayoutCreate.layoutName}
+                onChange={(e) => {
+                  setPendingLayoutCreate({ ...pendingLayoutCreate, layoutName: e.target.value })
+                }}
+                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500"
+                placeholder="GA-EVT"
+              />
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Auto-generated from event name. Format: GA-{'{'}Acronym{'}'}</p>
             </div>
 
             <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg mb-4">
