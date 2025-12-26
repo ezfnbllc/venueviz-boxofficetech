@@ -100,10 +100,11 @@ export default function Step7Sales() {
               type="datetime-local"
               value={formData.sales?.salesStartDate || ''}
               onChange={(e) => updateSalesField('salesStartDate', e.target.value)}
+              min={new Date().toISOString().slice(0, 16)}
               className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg focus:bg-white/20 outline-none"
             />
           </div>
-          
+
           <div>
             <div className="flex justify-between items-center mb-2">
               <label className="block text-sm font-medium">
@@ -121,8 +122,18 @@ export default function Step7Sales() {
               type="datetime-local"
               value={formData.sales?.salesEndDate || ''}
               onChange={(e) => updateSalesField('salesEndDate', e.target.value)}
-              className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg focus:bg-white/20 outline-none"
+              min={formData.sales?.salesStartDate || new Date().toISOString().slice(0, 16)}
+              className={`w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border rounded-lg focus:bg-white/20 outline-none text-slate-900 dark:text-white ${
+                formData.sales?.salesEndDate && formData.sales?.salesStartDate &&
+                new Date(formData.sales.salesEndDate) <= new Date(formData.sales.salesStartDate)
+                  ? 'border-red-400 dark:border-red-500'
+                  : 'border-slate-200 dark:border-slate-600'
+              }`}
             />
+            {formData.sales?.salesEndDate && formData.sales?.salesStartDate &&
+             new Date(formData.sales.salesEndDate) <= new Date(formData.sales.salesStartDate) && (
+              <p className="text-xs text-red-500 mt-1">Sales end must be after sales start</p>
+            )}
           </div>
         </div>
       </div>
