@@ -180,13 +180,30 @@ export async function getPromoterEvents(
       query = query.where('isFeatured', '==', true)
     }
 
-    const snapshot = await query.get()
-    console.log(`[PublicService] Query returned ${snapshot.size} events for promoterId: ${promoterId}`)
+    let snapshot = await query.get()
+    console.log(`[PublicService] Query (promoter.promoterId) returned ${snapshot.size} events for promoterId: ${promoterId}`)
 
-    // Debug: If no events found, let's check what promoterIds exist in events
+    // Fallback: Also try top-level promoterId field if no results
+    if (snapshot.empty) {
+      console.log(`[PublicService] Trying fallback query with top-level promoterId...`)
+      let fallbackQuery = db.collection('events')
+        .where('promoterId', '==', promoterId)
+
+      if (options?.category) {
+        fallbackQuery = fallbackQuery.where('category', '==', options.category)
+      }
+      if (options?.featured) {
+        fallbackQuery = fallbackQuery.where('isFeatured', '==', true)
+      }
+
+      snapshot = await fallbackQuery.get()
+      console.log(`[PublicService] Fallback query returned ${snapshot.size} events`)
+    }
+
+    // Debug: If still no events found, check what promoterIds exist in events
     if (snapshot.empty) {
       console.log(`[PublicService] No events found. Checking sample events...`)
-      const sampleEvents = await db.collection('events').limit(3).get()
+      const sampleEvents = await db.collection('events').limit(5).get()
       sampleEvents.docs.forEach(doc => {
         const data = doc.data()
         console.log(`[PublicService] Sample event: id=${doc.id}, promoter.promoterId=${data.promoter?.promoterId}, promoterId=${data.promoterId}, status=${data.status}`)
