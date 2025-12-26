@@ -150,6 +150,10 @@ export default function Step2Venue() {
   })
   const [savingLayout, setSavingLayout] = useState(false)
 
+  // Confirmation dialogs for auto-create
+  const [pendingVenueCreate, setPendingVenueCreate] = useState<any>(null)
+  const [pendingLayoutCreate, setPendingLayoutCreate] = useState<{ venueId: string; ticketLevels: any[] } | null>(null)
+
   const searchInputRef = useRef<HTMLInputElement>(null)
   const initializedRef = useRef(false)
 
@@ -203,23 +207,25 @@ export default function Step2Venue() {
         // Found a match - select it
         handleVenueChange(matchedVenue.id)
       } else if (scrapedVenue.name) {
-        // No match found - auto-create the venue behind the scenes
-        autoCreateVenueFromScraped(scrapedVenue)
+        // No match found - show confirmation dialog before creating
+        setPendingVenueCreate(scrapedVenue)
       }
     }
   }, [venues, formData.basics, formData.venue.venueId])
 
-  // Auto-create venue from scraped data (runs behind the scenes)
-  const autoCreateVenueFromScraped = async (scrapedVenue: any) => {
+  // Confirm and create venue from scraped data
+  const confirmCreateVenue = async () => {
+    if (!pendingVenueCreate) return
+
     try {
-      console.log('Auto-creating venue from scraped data:', scrapedVenue)
+      console.log('Creating venue from scraped data:', pendingVenueCreate)
 
       const venueData = {
-        name: scrapedVenue.name || `${scrapedVenue.city || 'Event'} Venue`,
-        streetAddress1: scrapedVenue.address || '',
+        name: pendingVenueCreate.name || `${pendingVenueCreate.city || 'Event'} Venue`,
+        streetAddress1: pendingVenueCreate.address || '',
         streetAddress2: '',
-        city: scrapedVenue.city || 'Dallas',
-        state: scrapedVenue.state || 'TX',
+        city: pendingVenueCreate.city || 'Dallas',
+        state: pendingVenueCreate.state || 'TX',
         zipCode: '',
         capacity: 5000,
         type: 'convention_center',
@@ -228,45 +234,55 @@ export default function Step2Venue() {
         contactEmail: '',
         contactPhone: '',
         website: '',
-        description: `Venue for events in ${scrapedVenue.city || 'the area'}`,
+        description: `Venue for events in ${pendingVenueCreate.city || 'the area'}`,
         images: [],
         address: {
-          street: scrapedVenue.address || '',
-          city: scrapedVenue.city || 'Dallas',
-          state: scrapedVenue.state || 'TX',
+          street: pendingVenueCreate.address || '',
+          city: pendingVenueCreate.city || 'Dallas',
+          state: pendingVenueCreate.state || 'TX',
           zip: '',
           country: 'USA'
         }
       }
 
       const newVenueId = await AdminService.createVenue(venueData)
-      console.log('Auto-created venue with ID:', newVenueId)
+      console.log('Created venue with ID:', newVenueId)
 
       // Reload venues and select the new one
       const updatedVenues = await AdminService.getVenues()
       setVenues(updatedVenues)
 
-      // Select the new venue and auto-create layout if we have ticket levels
+      // Select the new venue
       handleVenueChange(newVenueId)
 
-      // Check if we have scraped ticket levels to auto-create a layout
+      // Check if we have scraped ticket levels - show layout confirmation
       const scrapedTicketLevels = (formData.basics as any)?.scrapedTicketLevels
       if (scrapedTicketLevels && scrapedTicketLevels.length > 0) {
-        // Give it a moment for the venue to be fully set
+        // Show layout creation confirmation after a brief delay
         setTimeout(() => {
-          autoCreateLayoutFromTickets(newVenueId, scrapedTicketLevels)
+          setPendingLayoutCreate({ venueId: newVenueId, ticketLevels: scrapedTicketLevels })
         }, 500)
       }
+
+      setPendingVenueCreate(null)
     } catch (error) {
-      console.error('Error auto-creating venue:', error)
-      // Don't alert - just log, user can create manually
+      console.error('Error creating venue:', error)
+      alert('Failed to create venue. Please try again.')
     }
   }
 
-  // Auto-create GA layout from scraped ticket levels
-  const autoCreateLayoutFromTickets = async (venueId: string, ticketLevels: any[]) => {
+  // Decline venue creation - user will create manually
+  const declineCreateVenue = () => {
+    setPendingVenueCreate(null)
+  }
+
+  // Confirm and create GA layout from scraped ticket levels
+  const confirmCreateLayout = async () => {
+    if (!pendingLayoutCreate) return
+
     try {
-      console.log('Auto-creating layout from ticket levels:', ticketLevels)
+      const { venueId, ticketLevels } = pendingLayoutCreate
+      console.log('Creating layout from ticket levels:', ticketLevels)
 
       let totalCapacity = 0
       const gaLevels = ticketLevels.map((ticket, idx) => {
@@ -299,15 +315,22 @@ export default function Step2Venue() {
       }
 
       const newLayoutId = await AdminService.createLayout(layoutData)
-      console.log('Auto-created layout with ID:', newLayoutId)
+      console.log('Created layout with ID:', newLayoutId)
 
       // Reload layouts and select the new one
       await loadLayouts(venueId)
       handleLayoutChange(newLayoutId)
+
+      setPendingLayoutCreate(null)
     } catch (error) {
-      console.error('Error auto-creating layout:', error)
-      // Don't alert - just log, user can create manually
+      console.error('Error creating layout:', error)
+      alert('Failed to create layout. Please try again.')
     }
+  }
+
+  // Decline layout creation - user will create manually
+  const declineCreateLayout = () => {
+    setPendingLayoutCreate(null)
   }
 
   useEffect(() => {
@@ -1091,6 +1114,119 @@ export default function Step2Venue() {
             </div>
           </div>
         </>
+      )}
+
+      {/* Venue Creation Confirmation Dialog */}
+      {mounted && pendingVenueCreate && createPortal(
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-6 w-full max-w-lg shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                <span className="text-2xl">🏢</span>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Create New Venue?</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400">We found venue info from your import</p>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg mb-4 space-y-2">
+              <div>
+                <span className="text-xs text-slate-500 dark:text-slate-400">Venue Name</span>
+                <p className="font-medium text-slate-900 dark:text-white">{pendingVenueCreate.name || 'Not specified'}</p>
+              </div>
+              {pendingVenueCreate.address && (
+                <div>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">Address</span>
+                  <p className="text-slate-700 dark:text-slate-300">{pendingVenueCreate.address}</p>
+                </div>
+              )}
+              <div className="flex gap-4">
+                {pendingVenueCreate.city && (
+                  <div>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">City</span>
+                    <p className="text-slate-700 dark:text-slate-300">{pendingVenueCreate.city}</p>
+                  </div>
+                )}
+                {pendingVenueCreate.state && (
+                  <div>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">State</span>
+                    <p className="text-slate-700 dark:text-slate-300">{pendingVenueCreate.state}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+              Would you like to create this venue automatically? You can also create it manually using the "+ New Venue" button.
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={declineCreateVenue}
+                className="flex-1 px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg transition-colors"
+              >
+                No, I'll Do It Manually
+              </button>
+              <button
+                onClick={confirmCreateVenue}
+                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+              >
+                Yes, Create Venue
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Layout Creation Confirmation Dialog */}
+      {mounted && pendingLayoutCreate && createPortal(
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-6 w-full max-w-lg shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                <span className="text-2xl">🎫</span>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Create GA Layout?</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400">We found ticket levels from your import</p>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg mb-4">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Ticket Levels Found:</p>
+              <div className="space-y-2">
+                {pendingLayoutCreate.ticketLevels.map((ticket, idx) => (
+                  <div key={idx} className="flex justify-between items-center p-2 bg-white dark:bg-slate-700 rounded">
+                    <span className="font-medium text-slate-900 dark:text-white">{ticket.level || ticket.name}</span>
+                    <span className="text-green-600 dark:text-green-400 font-semibold">${ticket.price}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+              Would you like to create a General Admission layout with these ticket levels? You can also create it manually using the "+ Create Layout" button.
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={declineCreateLayout}
+                className="flex-1 px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg transition-colors"
+              >
+                No, I'll Do It Manually
+              </button>
+              <button
+                onClick={confirmCreateLayout}
+                className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
+              >
+                Yes, Create Layout
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* Venue Creation Sub-Wizard Modal - Using Portal to escape parent CSS constraints */}
