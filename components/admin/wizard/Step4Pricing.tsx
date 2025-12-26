@@ -39,10 +39,14 @@ export default function Step4Pricing() {
       const isSeatingChart = formData.venue?.layoutType === 'seating_chart'
       const priceCategories = formData.venue?.priceCategories || []
       const availableSections = formData.venue.availableSections?.filter((s: any) => s.available) || []
-      
+
       if (availableSections.length > 0) {
-        if (isSeatingChart && priceCategories.length > 0) {
-          console.log('Creating price category based tiers')
+        // Use price categories for both seating charts AND GA layouts with price categories
+        const hasPriceCategories = priceCategories.length > 0
+        const sectionsHavePriceCategories = availableSections.some((s: any) => s.priceCategoryId || s.priceCategory)
+
+        if (hasPriceCategories && (isSeatingChart || sectionsHavePriceCategories)) {
+          console.log('Creating price category based tiers for', isSeatingChart ? 'seating chart' : 'GA layout')
           
           const tiersByCategory = new Map()
           
@@ -86,7 +90,7 @@ export default function Step4Pricing() {
             tiers: newTiers,
             usePriceCategories: true,
             layoutId: formData.venue.layoutId,
-            isSeatingChart: true
+            isSeatingChart: isSeatingChart
           })
         } else {
           // Per-section pricing fallback

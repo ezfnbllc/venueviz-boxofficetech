@@ -328,19 +328,22 @@ export default function Step2Venue() {
       let totalCapacity = 0
       const gaLevels = ticketLevels.map((ticket, idx) => {
         const capacity = ticket.capacity || 500
+        const levelId = `ga-level-${idx + 1}`
         totalCapacity += capacity
         return {
-          id: `ga-auto-${idx + 1}`,
+          id: levelId,
           name: ticket.level || ticket.name || `Level ${idx + 1}`,
           capacity,
           type: 'standing',
           standingCapacity: capacity,
-          seatedCapacity: 0
+          seatedCapacity: 0,
+          priceCategoryId: levelId,  // Link to matching price category
+          price: ticket.price || 50  // Store price directly on level too
         }
       })
 
       const priceCategories = ticketLevels.map((ticket, idx) => ({
-        id: `cat-auto-${idx + 1}`,
+        id: `ga-level-${idx + 1}`,  // Match the gaLevel id
         name: ticket.level || ticket.name || `Level ${idx + 1}`,
         price: ticket.price || 50,
         color: ['#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#3B82F6'][idx % 5]
@@ -505,6 +508,9 @@ export default function Step2Venue() {
         availableSections = layout.gaLevels.map((level: any) => {
           const capacity = calculateGACapacity(level)
           totalCalculatedCapacity += capacity
+          // Find matching price category for this level
+          const priceCategoryId = level.priceCategoryId || level.id || level.name
+          const priceCategory = layout.priceCategories?.find((cat: any) => cat.id === priceCategoryId) || null
           return {
             sectionId: level.id || level.name,
             sectionName: level.name,
@@ -512,7 +518,10 @@ export default function Step2Venue() {
             capacity,
             standingCapacity: level.standingCapacity || 0,
             seatedCapacity: level.seatedCapacity || 0,
-            configurationType: level.type || 'mixed'
+            configurationType: level.type || 'mixed',
+            priceCategoryId,  // Link to price category
+            priceCategory,    // Include full price category data
+            price: priceCategory?.price || level.price || 0  // Include price
           }
         })
       }
