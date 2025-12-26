@@ -471,17 +471,35 @@ async function fetchAndParseSulekhaHTML(url: string): Promise<{
     // Extract ticket information from Sulekha-specific patterns
     const ticketLevels: any[] = []
 
-    // First, look for "Ticket Information" or "Tickets" section
-    const ticketSectionMatch = html.match(/(?:Ticket\s*Information|Tickets|Pricing)[:\s]*([\s\S]*?)(?:<\/div>|<\/section>|<h[1-6]|<hr)/i)
+    // Sulekha-specific pattern: "Available [TICKET NAME] ADD $PRICE"
+    // Example: Available VIP COUPLE ADD $200.00
+    const sulekhaTicketPattern = /Available\s*[\n\r]*([A-Z][A-Z\s\(\)\-0-9]+?)[\n\r\s]*ADD[\n\r\s]*\$\s*(\d+(?:\.\d{2})?)/gi
+    const sulekhaMatches = html.matchAll(sulekhaTicketPattern)
+    for (const match of sulekhaMatches) {
+      const levelName = match[1].trim()
+      const price = parseFloat(match[2])
+      if (levelName.length > 2 && levelName.length < 60 && price > 0) {
+        if (!ticketLevels.some(t => t.level.toLowerCase() === levelName.toLowerCase())) {
+          ticketLevels.push({
+            level: levelName,
+            price,
+            serviceFee: price * 0.1,
+            tax: 8,
+            sections: [],
+            description: ''
+          })
+        }
+      }
+    }
 
-    if (ticketSectionMatch) {
-      const ticketSection = ticketSectionMatch[1]
-      // Extract prices from this section - look for lines with $ amounts
-      const priceLines = ticketSection.matchAll(/([A-Za-z][A-Za-z\s]+?)[\s:-]*\$\s*(\d+(?:\.\d{2})?)/gi)
-      for (const match of priceLines) {
+    // Also try without "Available" prefix - just look for uppercase ticket names followed by ADD and price
+    if (ticketLevels.length === 0) {
+      const uppercaseTicketPattern = />([A-Z][A-Z\s\(\)\-0-9]{3,40})<[\s\S]{0,100}?>ADD<[\s\S]{0,50}?\$\s*(\d+(?:\.\d{2})?)/gi
+      const uppercaseMatches = html.matchAll(uppercaseTicketPattern)
+      for (const match of uppercaseMatches) {
         const levelName = match[1].trim()
         const price = parseFloat(match[2])
-        if (levelName.length > 2 && levelName.length < 50 && price > 0) {
+        if (levelName.length > 3 && price > 0 && !levelName.includes('TICKET') && !levelName.includes('INFORMATION')) {
           if (!ticketLevels.some(t => t.level.toLowerCase() === levelName.toLowerCase())) {
             ticketLevels.push({
               level: levelName,
@@ -491,6 +509,60 @@ async function fetchAndParseSulekhaHTML(url: string): Promise<{
               sections: [],
               description: ''
             })
+          }
+        }
+      }
+    }
+
+    // Pattern: Look for ticket cards/items with name and price in close proximity
+    if (ticketLevels.length === 0) {
+      // Match patterns like: >VIP COUPLE</...>$200.00< or similar structures
+      const cardPattern = />([A-Z][A-Z\s\(\)\-0-9]+?)<\/[^>]+>[\s\S]{0,200}?\$\s*(\d+(?:\.\d{2})?)/gi
+      const cardMatches = html.matchAll(cardPattern)
+      for (const match of cardMatches) {
+        const levelName = match[1].trim()
+        const price = parseFloat(match[2])
+        // Filter out navigation items, headers, etc.
+        if (levelName.length > 3 && levelName.length < 50 && price > 0 &&
+            !levelName.includes('TICKET INFORMATION') &&
+            !levelName.includes('BUY') &&
+            !levelName.includes('CLICK')) {
+          if (!ticketLevels.some(t => t.level.toLowerCase() === levelName.toLowerCase())) {
+            ticketLevels.push({
+              level: levelName,
+              price,
+              serviceFee: price * 0.1,
+              tax: 8,
+              sections: [],
+              description: ''
+            })
+          }
+        }
+      }
+    }
+
+    // First, look for "Ticket Information" or "Tickets" section
+    if (ticketLevels.length === 0) {
+      const ticketSectionMatch = html.match(/(?:Ticket\s*Information|Tickets|Pricing)[:\s]*([\s\S]*?)(?:<\/div>|<\/section>|<h[1-6]|<hr)/i)
+
+      if (ticketSectionMatch) {
+        const ticketSection = ticketSectionMatch[1]
+        // Extract prices from this section - look for lines with $ amounts
+        const priceLines = ticketSection.matchAll(/([A-Za-z][A-Za-z\s\(\)\-0-9]+?)[\s:-]*\$\s*(\d+(?:\.\d{2})?)/gi)
+        for (const match of priceLines) {
+          const levelName = match[1].trim()
+          const price = parseFloat(match[2])
+          if (levelName.length > 2 && levelName.length < 50 && price > 0) {
+            if (!ticketLevels.some(t => t.level.toLowerCase() === levelName.toLowerCase())) {
+              ticketLevels.push({
+                level: levelName,
+                price,
+                serviceFee: price * 0.1,
+                tax: 8,
+                sections: [],
+                description: ''
+              })
+            }
           }
         }
       }

@@ -1189,34 +1189,103 @@ export default function Step2Venue() {
         document.body
       )}
 
-      {/* Layout Creation Confirmation Dialog */}
+      {/* Layout Creation Confirmation Dialog - Editable */}
       {mounted && pendingLayoutCreate && createPortal(
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-6 w-full max-w-lg shadow-2xl">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-                <span className="text-2xl">🎫</span>
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-start justify-center p-4 pt-8 z-[9999] overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto my-4 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                  <span className="text-2xl">🎫</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">Create GA Layout</h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Review and edit ticket levels before creating</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Create GA Layout?</h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400">We found ticket levels from your import</p>
-              </div>
+              <button
+                onClick={declineCreateLayout}
+                className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+              >
+                ✕
+              </button>
             </div>
 
             <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg mb-4">
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Ticket Levels Found:</p>
-              <div className="space-y-2">
+              <div className="flex justify-between items-center mb-3">
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Ticket Levels</p>
+                <button
+                  onClick={() => {
+                    setPendingLayoutCreate({
+                      ...pendingLayoutCreate,
+                      ticketLevels: [
+                        ...pendingLayoutCreate.ticketLevels,
+                        { level: 'New Level', price: 50, capacity: 500 }
+                      ]
+                    })
+                  }}
+                  className="text-xs text-purple-600 dark:text-purple-400 hover:text-purple-700"
+                >
+                  + Add Level
+                </button>
+              </div>
+              <div className="space-y-3 max-h-64 overflow-y-auto">
                 {pendingLayoutCreate.ticketLevels.map((ticket, idx) => (
-                  <div key={idx} className="flex justify-between items-center p-2 bg-white dark:bg-slate-700 rounded">
-                    <span className="font-medium text-slate-900 dark:text-white">{ticket.level || ticket.name}</span>
-                    <span className="text-green-600 dark:text-green-400 font-semibold">${ticket.price}</span>
+                  <div key={idx} className="p-3 bg-white dark:bg-slate-700 rounded-lg">
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="text-xs text-slate-500 dark:text-slate-400">Level {idx + 1}</span>
+                      {pendingLayoutCreate.ticketLevels.length > 1 && (
+                        <button
+                          onClick={() => {
+                            setPendingLayoutCreate({
+                              ...pendingLayoutCreate,
+                              ticketLevels: pendingLayoutCreate.ticketLevels.filter((_, i) => i !== idx)
+                            })
+                          }}
+                          className="text-red-400 hover:text-red-500 text-xs"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="col-span-2">
+                        <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Level Name</label>
+                        <input
+                          type="text"
+                          value={ticket.level || ticket.name || ''}
+                          onChange={(e) => {
+                            const newLevels = [...pendingLayoutCreate.ticketLevels]
+                            newLevels[idx] = { ...newLevels[idx], level: e.target.value }
+                            setPendingLayoutCreate({ ...pendingLayoutCreate, ticketLevels: newLevels })
+                          }}
+                          className="w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-600 border border-slate-200 dark:border-slate-500 rounded text-sm text-slate-900 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Price</label>
+                        <div className="flex items-center">
+                          <span className="px-2 py-1.5 bg-slate-200 dark:bg-slate-500 border border-r-0 border-slate-200 dark:border-slate-500 rounded-l text-sm text-slate-500 dark:text-slate-300">$</span>
+                          <input
+                            type="number"
+                            value={ticket.price || 0}
+                            onChange={(e) => {
+                              const newLevels = [...pendingLayoutCreate.ticketLevels]
+                              newLevels[idx] = { ...newLevels[idx], price: parseFloat(e.target.value) || 0 }
+                              setPendingLayoutCreate({ ...pendingLayoutCreate, ticketLevels: newLevels })
+                            }}
+                            className="w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-600 border border-slate-200 dark:border-slate-500 rounded-r text-sm text-slate-900 dark:text-white"
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
 
             <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-              Would you like to create a General Admission layout with these ticket levels? You can also create it manually using the "+ Create Layout" button.
+              Edit the ticket levels above, then create the layout. Each level will be created as a General Admission area with 500 capacity.
             </p>
 
             <div className="flex gap-3">
@@ -1224,13 +1293,13 @@ export default function Step2Venue() {
                 onClick={declineCreateLayout}
                 className="flex-1 px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg transition-colors"
               >
-                No, I'll Do It Manually
+                Skip / Do Manually
               </button>
               <button
                 onClick={confirmCreateLayout}
                 className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
               >
-                Yes, Create Layout
+                Create Layout
               </button>
             </div>
           </div>
