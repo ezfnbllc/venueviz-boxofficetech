@@ -1229,7 +1229,7 @@ export default function Step2Venue() {
                   + Add Level
                 </button>
               </div>
-              <div className="space-y-3 max-h-64 overflow-y-auto">
+              <div className="space-y-3 max-h-72 overflow-y-auto">
                 {pendingLayoutCreate.ticketLevels.map((ticket, idx) => (
                   <div key={idx} className="p-3 bg-white dark:bg-slate-700 rounded-lg">
                     <div className="flex justify-between items-start mb-2">
@@ -1248,8 +1248,8 @@ export default function Step2Venue() {
                         </button>
                       )}
                     </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="col-span-2">
+                    <div className="grid grid-cols-12 gap-2">
+                      <div className="col-span-5">
                         <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Level Name</label>
                         <input
                           type="text"
@@ -1262,7 +1262,21 @@ export default function Step2Venue() {
                           className="w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-600 border border-slate-200 dark:border-slate-500 rounded text-sm text-slate-900 dark:text-white"
                         />
                       </div>
-                      <div>
+                      <div className="col-span-3">
+                        <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Capacity</label>
+                        <input
+                          type="number"
+                          value={ticket.capacity || 500}
+                          onChange={(e) => {
+                            const newLevels = [...pendingLayoutCreate.ticketLevels]
+                            newLevels[idx] = { ...newLevels[idx], capacity: parseInt(e.target.value) || 0 }
+                            setPendingLayoutCreate({ ...pendingLayoutCreate, ticketLevels: newLevels })
+                          }}
+                          className="w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-600 border border-slate-200 dark:border-slate-500 rounded text-sm text-slate-900 dark:text-white"
+                          placeholder="500"
+                        />
+                      </div>
+                      <div className="col-span-4">
                         <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Price</label>
                         <div className="flex items-center">
                           <span className="px-2 py-1.5 bg-slate-200 dark:bg-slate-500 border border-r-0 border-slate-200 dark:border-slate-500 rounded-l text-sm text-slate-500 dark:text-slate-300">$</span>
@@ -1282,11 +1296,15 @@ export default function Step2Venue() {
                   </div>
                 ))}
               </div>
+              {/* Total capacity summary */}
+              <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-600">
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  Total Capacity: <span className="font-semibold text-slate-900 dark:text-white">
+                    {pendingLayoutCreate.ticketLevels.reduce((sum, t) => sum + (t.capacity || 500), 0)}
+                  </span>
+                </p>
+              </div>
             </div>
-
-            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-              Edit the ticket levels above, then create the layout. Each level will be created as a General Admission area with 500 capacity.
-            </p>
 
             <div className="flex gap-3">
               <button
