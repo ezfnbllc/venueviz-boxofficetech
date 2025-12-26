@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useEventWizardStore } from '@/lib/store/eventWizardStore'
 import { AdminService } from '@/lib/admin/adminService'
 import { StorageService } from '@/lib/storage/storageService'
@@ -151,6 +152,13 @@ export default function Step2Venue() {
 
   const searchInputRef = useRef<HTMLInputElement>(null)
   const initializedRef = useRef(false)
+
+  // For portal mounting (SSR compatibility)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
     loadVenues()
@@ -968,9 +976,9 @@ export default function Step2Venue() {
         </>
       )}
 
-      {/* Venue Creation Sub-Wizard Modal */}
-      {showVenueWizard && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-start justify-center p-4 pt-8 z-[70] overflow-y-auto">
+      {/* Venue Creation Sub-Wizard Modal - Using Portal to escape parent CSS constraints */}
+      {mounted && showVenueWizard && createPortal(
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-start justify-center p-4 pt-8 z-[9999] overflow-y-auto">
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto my-4 shadow-2xl">
             {/* Header */}
             <div className="flex justify-between items-center mb-6">
@@ -1367,12 +1375,13 @@ export default function Step2Venue() {
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* Layout Creation Sub-Wizard Modal */}
-      {showLayoutWizard && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-start justify-center p-4 pt-8 z-[70] overflow-y-auto">
+      {/* Layout Creation Sub-Wizard Modal - Using Portal to escape parent CSS constraints */}
+      {mounted && showLayoutWizard && createPortal(
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-start justify-center p-4 pt-8 z-[9999] overflow-y-auto">
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto my-4 shadow-2xl">
             {/* Header */}
             <div className="flex justify-between items-center mb-6">
@@ -1695,7 +1704,8 @@ export default function Step2Venue() {
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
