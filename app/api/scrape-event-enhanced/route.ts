@@ -361,140 +361,214 @@ async function fetchAndParseSulekhaHTML(url: string): Promise<{
       }
     }
 
-    // Extract venue from common HTML patterns
+    // Extract venue from common HTML patterns - Sulekha specific
     if (!result.venueName) {
-      // Look for venue in typical event page patterns
+      // Sulekha-specific venue patterns
       const venuePatterns = [
+        // Common Sulekha patterns
+        /Venue\s*:?\s*<[^>]*>([^<]+)</i,
+        /Location\s*:?\s*<[^>]*>([^<]+)</i,
         /<[^>]*class="[^"]*venue[^"]*"[^>]*>([^<]+)</i,
-        /Venue[:\s]*<[^>]*>([^<]+)</i,
-        /Location[:\s]*<[^>]*>([^<]+)</i,
+        /<[^>]*class="[^"]*location[^"]*"[^>]*>([^<]+)</i,
         /<[^>]*itemprop="location"[^>]*>([^<]+)</i,
-        /data-venue="([^"]+)"/i
+        /data-venue="([^"]+)"/i,
+        // Look for "at [Venue]" pattern
+        /\bat\s+([A-Z][A-Za-z\s]+(?:Center|Hall|Arena|Theatre|Theater|Auditorium|Convention|Ballroom|Hotel|Resort))/i,
+        // Look for venue names ending with common suffixes
+        />([^<]*(?:Center|Hall|Arena|Theatre|Theater|Auditorium|Convention|Ballroom))\s*</i,
+        // Sulekha event detail patterns
+        /<span[^>]*>([^<]*(?:Center|Hall|Arena|Theatre|Theater|Auditorium|Convention|Ballroom)[^<]*)<\/span>/i
       ]
       for (const pattern of venuePatterns) {
         const match = html.match(pattern)
         if (match && match[1]) {
-          result.venueName = match[1].trim()
-          break
+          const venueName = match[1].trim()
+          // Filter out generic text
+          if (venueName.length > 3 && venueName.length < 100 && !venueName.toLowerCase().includes('ticket')) {
+            result.venueName = venueName
+            break
+          }
+        }
+      }
+    }
+
+    // Also try to extract venue from text content near "Venue" or "Location" labels
+    if (!result.venueName) {
+      // Look for patterns like "Venue: Grand Center" or "Location Grand Center"
+      const venueTextPatterns = [
+        /Venue\s*:?\s*([A-Z][A-Za-z0-9\s,]+?)(?:\s*[,\n<]|$)/i,
+        /Location\s*:?\s*([A-Z][A-Za-z0-9\s,]+?)(?:\s*[,\n<]|$)/i,
+        /held\s+at\s+([A-Z][A-Za-z0-9\s]+?)(?:\s*[,\n<]|$)/i
+      ]
+      for (const pattern of venueTextPatterns) {
+        const match = html.match(pattern)
+        if (match && match[1]) {
+          const venueName = match[1].trim()
+          if (venueName.length > 3 && venueName.length < 80) {
+            result.venueName = venueName
+            break
+          }
         }
       }
     }
 
     // Extract images from og:image and other sources
-    if (!result.imageUrls || result.imageUrls.length === 0) {
-      const images: string[] = []
+    const images: string[] = []
 
-      // og:image tags
-      const ogImageMatches = html.matchAll(/og:image"[^>]*content="([^"]+)"/gi)
-      for (const match of ogImageMatches) {
+    // og:image tags - try both formats
+    const ogImageMatches1 = html.matchAll(/property="og:image"[^>]*content="([^"]+)"/gi)
+    const ogImageMatches2 = html.matchAll(/content="([^"]+)"[^>]*property="og:image"/gi)
+    const ogImageMatches3 = html.matchAll(/og:image"[^>]*content="([^"]+)"/gi)
+
+    for (const matches of [ogImageMatches1, ogImageMatches2, ogImageMatches3]) {
+      for (const match of matches) {
         if (match[1] && !images.includes(match[1]) && match[1].startsWith('http')) {
           images.push(match[1])
         }
       }
+    }
 
-      // Look for event images in img tags with event-related classes
-      const imgPatterns = [
-        /<img[^>]*class="[^"]*event[^"]*"[^>]*src="([^"]+)"/gi,
-        /<img[^>]*class="[^"]*poster[^"]*"[^>]*src="([^"]+)"/gi,
-        /<img[^>]*class="[^"]*banner[^"]*"[^>]*src="([^"]+)"/gi,
-        /<img[^>]*data-src="([^"]+)"[^>]*class="[^"]*lazy[^"]*"/gi
-      ]
+    // Twitter/meta image tags
+    const twitterImageMatches = html.matchAll(/name="twitter:image"[^>]*content="([^"]+)"/gi)
+    for (const match of twitterImageMatches) {
+      if (match[1] && !images.includes(match[1]) && match[1].startsWith('http')) {
+        images.push(match[1])
+      }
+    }
 
-      for (const pattern of imgPatterns) {
-        const matches = html.matchAll(pattern)
-        for (const match of matches) {
-          if (match[1] && !images.includes(match[1]) && match[1].startsWith('http')) {
+    // Look for event images in img tags - more patterns
+    const imgPatterns = [
+      /<img[^>]*src="([^"]+)"[^>]*class="[^"]*(?:event|poster|banner|main|hero|cover|featured)[^"]*"/gi,
+      /<img[^>]*class="[^"]*(?:event|poster|banner|main|hero|cover|featured)[^"]*"[^>]*src="([^"]+)"/gi,
+      /<img[^>]*data-src="([^"]+)"/gi,
+      /<img[^>]*src="(https?:\/\/[^"]*(?:sulekha|cloudinary|amazonaws|imgix)[^"]+)"/gi
+    ]
+
+    for (const pattern of imgPatterns) {
+      const matches = html.matchAll(pattern)
+      for (const match of matches) {
+        if (match[1] && !images.includes(match[1]) && match[1].startsWith('http')) {
+          // Filter out tiny icons and logos
+          if (!match[1].includes('icon') && !match[1].includes('logo') && !match[1].includes('favicon')) {
             images.push(match[1])
           }
         }
       }
+    }
 
-      // Also try srcset for responsive images
-      const srcsetMatches = html.matchAll(/srcset="([^"]+)"/gi)
-      for (const match of srcsetMatches) {
-        const srcset = match[1]
-        // Get the largest image from srcset
-        const urls = srcset.split(',').map(s => s.trim().split(' ')[0])
-        for (const imgUrl of urls) {
-          if (imgUrl && imgUrl.startsWith('http') && !images.includes(imgUrl)) {
-            images.push(imgUrl)
-          }
-        }
+    // Get images from background-image CSS
+    const bgImageMatches = html.matchAll(/background(?:-image)?\s*:\s*url\(['"]?([^'")\s]+)['"]?\)/gi)
+    for (const match of bgImageMatches) {
+      if (match[1] && !images.includes(match[1]) && match[1].startsWith('http')) {
+        images.push(match[1])
       }
+    }
 
-      if (images.length > 0) {
-        result.imageUrls = images.slice(0, 10) // Limit to 10 images
-      }
+    if (images.length > 0) {
+      result.imageUrls = images.slice(0, 10) // Limit to 10 images
     }
 
     // Extract ticket information from Sulekha-specific patterns
     const ticketLevels: any[] = []
 
-    // Look for ticket/pricing sections
-    // Pattern 1: Tables with ticket info
-    const ticketTableMatch = html.match(/<table[^>]*class="[^"]*ticket[^"]*"[^>]*>([\s\S]*?)<\/table>/i)
-    if (ticketTableMatch) {
-      const rows = ticketTableMatch[1].matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)
-      for (const row of rows) {
-        const cells = row[1].match(/<t[dh][^>]*>([^<]*)<\/t[dh]>/gi)
-        if (cells && cells.length >= 2) {
-          const levelName = cells[0].replace(/<[^>]+>/g, '').trim()
-          const priceMatch = cells[1] ? cells[1].match(/\$?\s*(\d+(?:\.\d{2})?)/) : null
-          if (levelName && priceMatch) {
+    // First, look for "Ticket Information" or "Tickets" section
+    const ticketSectionMatch = html.match(/(?:Ticket\s*Information|Tickets|Pricing)[:\s]*([\s\S]*?)(?:<\/div>|<\/section>|<h[1-6]|<hr)/i)
+
+    if (ticketSectionMatch) {
+      const ticketSection = ticketSectionMatch[1]
+      // Extract prices from this section - look for lines with $ amounts
+      const priceLines = ticketSection.matchAll(/([A-Za-z][A-Za-z\s]+?)[\s:-]*\$\s*(\d+(?:\.\d{2})?)/gi)
+      for (const match of priceLines) {
+        const levelName = match[1].trim()
+        const price = parseFloat(match[2])
+        if (levelName.length > 2 && levelName.length < 50 && price > 0) {
+          if (!ticketLevels.some(t => t.level.toLowerCase() === levelName.toLowerCase())) {
             ticketLevels.push({
               level: levelName,
-              price: parseFloat(priceMatch[1]),
-              serviceFee: parseFloat(priceMatch[1]) * 0.1,
+              price,
+              serviceFee: price * 0.1,
               tax: 8,
               sections: [],
-              description: cells[2] ? cells[2].replace(/<[^>]+>/g, '').trim() : ''
+              description: ''
             })
           }
         }
       }
     }
 
-    // Pattern 2: Div-based ticket listings
-    const ticketDivPatterns = [
-      /<div[^>]*class="[^"]*ticket-type[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
-      /<div[^>]*class="[^"]*price-tier[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
-      /<div[^>]*class="[^"]*admission[^"]*"[^>]*>([\s\S]*?)<\/div>/gi
-    ]
-
-    for (const pattern of ticketDivPatterns) {
-      const matches = html.matchAll(pattern)
-      for (const match of matches) {
-        const content = match[1]
-        // Extract name and price
-        const nameMatch = content.match(/<[^>]*class="[^"]*name[^"]*"[^>]*>([^<]+)</i) ||
-                         content.match(/<h[1-6][^>]*>([^<]+)</i) ||
-                         content.match(/<strong>([^<]+)</i)
-        const priceMatch = content.match(/\$\s*(\d+(?:\.\d{2})?)/i)
-        const descMatch = content.match(/<p[^>]*>([^<]+)</i) ||
-                         content.match(/<[^>]*class="[^"]*desc[^"]*"[^>]*>([^<]+)</i)
-
-        if (nameMatch && priceMatch) {
-          ticketLevels.push({
-            level: nameMatch[1].trim(),
-            price: parseFloat(priceMatch[1]),
-            serviceFee: parseFloat(priceMatch[1]) * 0.1,
-            tax: 8,
-            sections: [],
-            description: descMatch ? descMatch[1].trim() : ''
-          })
+    // Pattern 1: Tables with ticket info
+    if (ticketLevels.length === 0) {
+      const ticketTableMatch = html.match(/<table[^>]*>([\s\S]*?)<\/table>/gi)
+      if (ticketTableMatch) {
+        for (const tableHtml of ticketTableMatch) {
+          // Check if this table contains ticket/price info
+          if (tableHtml.toLowerCase().includes('ticket') || tableHtml.includes('$')) {
+            const rows = tableHtml.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)
+            for (const row of rows) {
+              const cells = [...row[1].matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)]
+              if (cells.length >= 2) {
+                const levelName = cells[0][1].replace(/<[^>]+>/g, '').trim()
+                const priceText = cells[1][1].replace(/<[^>]+>/g, '').trim()
+                const priceMatch = priceText.match(/\$?\s*(\d+(?:\.\d{2})?)/)
+                if (levelName && priceMatch && levelName.length < 50) {
+                  ticketLevels.push({
+                    level: levelName,
+                    price: parseFloat(priceMatch[1]),
+                    serviceFee: parseFloat(priceMatch[1]) * 0.1,
+                    tax: 8,
+                    sections: [],
+                    description: cells[2] ? cells[2][1].replace(/<[^>]+>/g, '').trim() : ''
+                  })
+                }
+              }
+            }
+          }
         }
       }
     }
 
-    // Pattern 3: Generic price extraction with context
+    // Pattern 2: Div-based ticket listings
     if (ticketLevels.length === 0) {
-      // Look for patterns like "VIP - $150" or "General Admission: $75"
-      const pricePatterns = html.matchAll(/(VIP|General|Premium|Standard|Early Bird|Gold|Silver|Platinum|Regular)[^$]*\$\s*(\d+(?:\.\d{2})?)/gi)
+      const ticketDivPatterns = [
+        /<div[^>]*class="[^"]*ticket[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
+        /<div[^>]*class="[^"]*price[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
+        /<div[^>]*class="[^"]*admission[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
+        /<li[^>]*class="[^"]*ticket[^"]*"[^>]*>([\s\S]*?)<\/li>/gi
+      ]
+
+      for (const pattern of ticketDivPatterns) {
+        const matches = html.matchAll(pattern)
+        for (const match of matches) {
+          const content = match[1]
+          const nameMatch = content.match(/<[^>]*class="[^"]*name[^"]*"[^>]*>([^<]+)</i) ||
+                           content.match(/<h[1-6][^>]*>([^<]+)</i) ||
+                           content.match(/<strong>([^<]+)</i) ||
+                           content.match(/<b>([^<]+)</i)
+          const priceMatch = content.match(/\$\s*(\d+(?:\.\d{2})?)/i)
+          const descMatch = content.match(/<p[^>]*>([^<]+)</i) ||
+                           content.match(/<[^>]*class="[^"]*desc[^"]*"[^>]*>([^<]+)</i)
+
+          if (nameMatch && priceMatch) {
+            ticketLevels.push({
+              level: nameMatch[1].trim(),
+              price: parseFloat(priceMatch[1]),
+              serviceFee: parseFloat(priceMatch[1]) * 0.1,
+              tax: 8,
+              sections: [],
+              description: descMatch ? descMatch[1].trim() : ''
+            })
+          }
+        }
+      }
+    }
+
+    // Pattern 3: Generic price extraction with context - expanded keywords
+    if (ticketLevels.length === 0) {
+      const pricePatterns = html.matchAll(/(VIP|VVIP|General\s*Admission|General|Premium|Standard|Early\s*Bird|Gold|Silver|Platinum|Regular|Bronze|Diamond|Elite|Basic|Economy|Couple|Single|Family|Group)[^\$<]{0,30}\$\s*(\d+(?:\.\d{2})?)/gi)
       for (const match of pricePatterns) {
-        const levelName = match[1]
+        const levelName = match[1].trim()
         const price = parseFloat(match[2])
-        // Avoid duplicates
-        if (!ticketLevels.some(t => t.level.toLowerCase() === levelName.toLowerCase())) {
+        if (!ticketLevels.some(t => t.level.toLowerCase() === levelName.toLowerCase()) && price > 0) {
           ticketLevels.push({
             level: levelName.charAt(0).toUpperCase() + levelName.slice(1).toLowerCase(),
             price,
@@ -507,24 +581,23 @@ async function fetchAndParseSulekhaHTML(url: string): Promise<{
       }
     }
 
-    // Pattern 4: Look for "Ticket Information" section
-    const ticketInfoMatch = html.match(/Ticket\s*Information[:\s]*([\s\S]*?)(?:<\/div>|<\/section>|<h[1-6])/i)
-    if (ticketInfoMatch && ticketLevels.length === 0) {
-      const ticketSection = ticketInfoMatch[1]
-      // Extract all price mentions in this section
-      const prices = ticketSection.matchAll(/([A-Za-z][A-Za-z\s]+?)[\s:-]*\$\s*(\d+(?:\.\d{2})?)/gi)
-      for (const price of prices) {
-        const levelName = price[1].trim()
-        const priceValue = parseFloat(price[2])
-        if (levelName.length < 50 && !ticketLevels.some(t => t.level.toLowerCase() === levelName.toLowerCase())) {
-          ticketLevels.push({
-            level: levelName,
-            price: priceValue,
-            serviceFee: priceValue * 0.1,
-            tax: 8,
-            sections: [],
-            description: ''
-          })
+    // Pattern 4: Look for standalone prices with nearby text labels
+    if (ticketLevels.length === 0) {
+      const standalonePatterns = html.matchAll(/>([A-Za-z][A-Za-z\s]{2,25})<[^>]*>[^<]*\$\s*(\d+(?:\.\d{2})?)/gi)
+      for (const match of standalonePatterns) {
+        const levelName = match[1].trim()
+        const price = parseFloat(match[2])
+        if (levelName.length > 2 && price > 0 && !levelName.toLowerCase().includes('tax') && !levelName.toLowerCase().includes('fee')) {
+          if (!ticketLevels.some(t => t.level.toLowerCase() === levelName.toLowerCase())) {
+            ticketLevels.push({
+              level: levelName,
+              price,
+              serviceFee: price * 0.1,
+              tax: 8,
+              sections: [],
+              description: ''
+            })
+          }
         }
       }
     }

@@ -206,6 +206,15 @@ export default function Step2Venue() {
       if (matchedVenue) {
         // Found a match - select it
         handleVenueChange(matchedVenue.id)
+
+        // Also check for scraped ticket levels to offer layout creation
+        const scrapedTicketLevels = (formData.basics as any)?.scrapedTicketLevels
+        if (scrapedTicketLevels && scrapedTicketLevels.length > 0) {
+          // Show layout creation confirmation after a brief delay for venue to load
+          setTimeout(() => {
+            setPendingLayoutCreate({ venueId: matchedVenue.id, ticketLevels: scrapedTicketLevels })
+          }, 800)
+        }
       } else if (scrapedVenue.name) {
         // No match found - show confirmation dialog before creating
         setPendingVenueCreate(scrapedVenue)
