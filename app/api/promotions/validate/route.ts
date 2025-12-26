@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/firebase'
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore'
+import { getAdminDb } from '@/lib/firebase-admin'
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,14 +9,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Coupon code is required' }, { status: 400 })
     }
 
+    const db = getAdminDb()
+
     // Get promoter ID from slug if provided
     let promoterId: string | null = null
     if (promoterSlug) {
-      const promotersQuery = query(
-        collection(db, 'promoters'),
-        where('slug', '==', promoterSlug)
-      )
-      const promotersSnapshot = await getDocs(promotersQuery)
+      const promotersSnapshot = await db
+        .collection('promoters')
+        .where('slug', '==', promoterSlug)
+        .get()
       if (!promotersSnapshot.empty) {
         promoterId = promotersSnapshot.docs[0].id
       }
@@ -25,12 +25,11 @@ export async function POST(request: NextRequest) {
 
     // Search for the promotion code
     // First check global promotions
-    const globalQuery = query(
-      collection(db, 'promotions'),
-      where('code', '==', code.toUpperCase()),
-      where('active', '==', true)
-    )
-    const globalSnapshot = await getDocs(globalQuery)
+    const globalSnapshot = await db
+      .collection('promotions')
+      .where('code', '==', code.toUpperCase())
+      .where('active', '==', true)
+      .get()
 
     let promotion: any = null
 
@@ -41,10 +40,10 @@ export async function POST(request: NextRequest) {
 
     // If no global promotion found and we have an eventId, check event-specific promotions
     if (!promotion && eventId) {
-      const eventDoc = await getDoc(doc(db, 'events', eventId))
-      if (eventDoc.exists()) {
+      const eventDoc = await db.collection('events').doc(eventId).get()
+      if (eventDoc.exists) {
         const eventData = eventDoc.data()
-        const eventPromotions = eventData.promotions?.eventPromotions || []
+        const eventPromotions = eventData?.promotions?.eventPromotions || []
 
         const matchingPromo = eventPromotions.find(
           (p: any) => p.code?.toUpperCase() === code.toUpperCase() && p.active !== false

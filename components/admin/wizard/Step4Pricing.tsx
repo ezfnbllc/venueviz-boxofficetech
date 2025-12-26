@@ -32,13 +32,17 @@ export default function Step4Pricing() {
   }, [formData.pricing?.tiers])
   
   useEffect(() => {
+    console.log('Step4Pricing - formData.venue:', formData.venue)
     console.log('Step4Pricing - Price Categories:', formData.venue?.priceCategories)
     console.log('Step4Pricing - Available Sections:', formData.venue?.availableSections)
-    
+
     if (formData.venue?.availableSections?.length > 0) {
       const isSeatingChart = formData.venue?.layoutType === 'seating_chart'
       const priceCategories = formData.venue?.priceCategories || []
-      const availableSections = formData.venue.availableSections?.filter((s: any) => s.available) || []
+      // Be more lenient - only filter out sections explicitly marked as available: false
+      const availableSections = formData.venue.availableSections?.filter((s: any) => s.available !== false) || []
+
+      console.log('Step4Pricing - Filtered Available Sections:', availableSections.length, availableSections)
 
       if (availableSections.length > 0) {
         // Use price categories for both seating charts AND GA layouts with price categories
@@ -47,9 +51,9 @@ export default function Step4Pricing() {
 
         if (hasPriceCategories && (isSeatingChart || sectionsHavePriceCategories)) {
           console.log('Creating price category based tiers for', isSeatingChart ? 'seating chart' : 'GA layout')
-          
+
           const tiersByCategory = new Map()
-          
+
           // Create tiers from price categories
           priceCategories.forEach((category: any) => {
             tiersByCategory.set(category.id, {
@@ -63,15 +67,15 @@ export default function Step4Pricing() {
               isFromLayout: true
             })
           })
-          
+
           // Assign sections to their categories
           availableSections.forEach((section: any) => {
-            const categoryId = section.priceCategoryId || 
-                             section.priceCategory?.id || 
+            const categoryId = section.priceCategoryId ||
+                             section.priceCategory?.id ||
                              section.priceCategory ||
                              section.pricing ||
                              'standard'
-            
+
             const tier = tiersByCategory.get(categoryId)
             if (tier) {
               tier.sections.push({
@@ -82,33 +86,45 @@ export default function Step4Pricing() {
               tier.capacity += section.capacity || 0
             }
           })
-          
+
           const newTiers = Array.from(tiersByCategory.values()).filter(tier => tier.capacity > 0)
-          
-          updateFormData('pricing', {
-            ...formData.pricing,
-            tiers: newTiers,
-            usePriceCategories: true,
-            layoutId: formData.venue.layoutId,
-            isSeatingChart: isSeatingChart
-          })
+
+          if (newTiers.length > 0) {
+            updateFormData('pricing', {
+              ...formData.pricing,
+              tiers: newTiers,
+              usePriceCategories: true,
+              layoutId: formData.venue.layoutId,
+              isSeatingChart: isSeatingChart
+            })
+          } else {
+            // Fallback if no tiers matched
+            console.log('No tiers matched from price categories, falling back to section-based pricing')
+            createSectionBasedTiers()
+          }
         } else {
-          // Per-section pricing fallback
+          // Per-section pricing - try to get price from section data
+          createSectionBasedTiers()
+        }
+
+        function createSectionBasedTiers() {
           const newTiers = availableSections.map((section: any) => {
-            const existingTier = formData.pricing?.tiers?.find((t: any) => 
+            const existingTier = formData.pricing?.tiers?.find((t: any) =>
               t.id === section.sectionId || t.sectionId === section.sectionId
             )
-            
+            // Try to get price from multiple sources
+            const sectionPrice = section.priceCategory?.price || section.price || 0
+
             return {
               id: section.sectionId,
               name: section.sectionName,
-              basePrice: existingTier?.basePrice || 0,
+              basePrice: existingTier?.basePrice || sectionPrice,
               sectionId: section.sectionId,
               capacity: section.capacity || 0,
-              isFromLayout: false
+              isFromLayout: true
             }
           })
-          
+
           updateFormData('pricing', {
             ...formData.pricing,
             tiers: newTiers,

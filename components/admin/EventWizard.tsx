@@ -127,6 +127,15 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
   const prepareEventData = () => {
     const safeArray = (arr: any) => Array.isArray(arr) ? arr : []
 
+    // Calculate minPrice and maxPrice from pricing tiers
+    const tiers = safeArray(formData.pricing?.tiers)
+    const tierPrices = tiers
+      .map((t: any) => t.basePrice || t.price || 0)
+      .filter((p: number) => p > 0)
+
+    const minPrice = tierPrices.length > 0 ? Math.min(...tierPrices) : 0
+    const maxPrice = tierPrices.length > 0 ? Math.max(...tierPrices) : 0
+
     return {
       ...formData.basics,
       venueId: formData.venue?.venueId || '',
@@ -139,12 +148,15 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
       availableSections: safeArray(formData.venue?.availableSections),
       // Add date field for backward compatibility
       date: formData.schedule?.performances?.[0]?.date || null,
+      // Add minPrice and maxPrice for frontend display
+      minPrice,
+      maxPrice,
       schedule: {
         performances: safeArray(formData.schedule?.performances),
         timezone: formData.schedule?.timezone || 'America/Chicago'
       },
       pricing: {
-        tiers: safeArray(formData.pricing?.tiers),
+        tiers,
         fees: formData.pricing?.fees || {
           serviceFee: 0,
           processingFee: 0,

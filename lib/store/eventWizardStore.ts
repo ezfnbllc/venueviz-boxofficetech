@@ -24,8 +24,11 @@ const getCompleteInitialData = () => ({
     venueState: '',
     layoutId: '',
     layoutType: '',
+    layoutName: '',
     seatingType: 'general',
-    availableSections: []
+    availableSections: [],
+    priceCategories: [],
+    totalCapacity: 0
   },
   schedule: {
     performances: [],
@@ -180,8 +183,11 @@ export const useEventWizardStore = create<EventWizardStore>()(
             venueState: eventData.venueState || '',
             layoutId: eventData.layoutId || '',
             layoutType: eventData.layoutType || '',
+            layoutName: eventData.layoutName || '',
             seatingType: eventData.seatingType || 'general',
-            availableSections: safeArray(eventData.availableSections)
+            availableSections: safeArray(eventData.availableSections),
+            priceCategories: safeArray(eventData.priceCategories || eventData.venue?.priceCategories),
+            totalCapacity: eventData.totalCapacity || 0
           },
           schedule: {
             ...completeData.schedule,
