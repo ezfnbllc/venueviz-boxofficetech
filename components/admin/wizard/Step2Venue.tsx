@@ -1505,9 +1505,9 @@ export default function Step2Venue() {
 
                     <div className="space-y-3 max-h-64 overflow-y-auto">
                       {layoutFormData.gaLevels.map((level, idx) => (
-                        <div key={level.id} className="p-3 bg-slate-100 dark:bg-slate-800 rounded-lg">
-                          <div className="flex justify-between items-start mb-2">
-                            <span className="text-xs text-slate-500 dark:text-slate-400">Level {idx + 1}</span>
+                        <div key={level.id} className="p-4 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                          <div className="flex justify-between items-start mb-3">
+                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Level {idx + 1}</span>
                             {layoutFormData.gaLevels.length > 1 && (
                               <button
                                 onClick={() => removeGALevel(level.id)}
@@ -1517,39 +1517,51 @@ export default function Step2Venue() {
                               </button>
                             )}
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <input
-                              type="text"
-                              value={level.name}
-                              onChange={(e) => updateGALevel(level.id, 'name', e.target.value)}
-                              className="px-3 py-1 bg-white/10 rounded text-sm"
-                              placeholder="Level name"
-                            />
-                            <input
-                              type="number"
-                              value={level.capacity}
-                              onChange={(e) => updateGALevel(level.id, 'capacity', parseInt(e.target.value) || 0)}
-                              className="px-3 py-1 bg-white/10 rounded text-sm"
-                              placeholder="Capacity"
-                            />
-                            <select
-                              value={level.type}
-                              onChange={(e) => updateGALevel(level.id, 'type', e.target.value)}
-                              className="px-3 py-1 bg-white/10 rounded text-sm"
-                            >
-                              <option value="standing">Standing</option>
-                              <option value="seated">Seated</option>
-                              <option value="mixed">Mixed</option>
-                            </select>
-                            <div className="flex items-center gap-1">
-                              <span className="text-slate-500 dark:text-slate-400 text-sm">$</span>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Level Name</label>
+                              <input
+                                type="text"
+                                value={level.name}
+                                onChange={(e) => updateGALevel(level.id, 'name', e.target.value)}
+                                className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-sm text-slate-900 dark:text-white"
+                                placeholder="e.g., General Admission"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Capacity</label>
                               <input
                                 type="number"
-                                value={level.price}
-                                onChange={(e) => updateGALevel(level.id, 'price', parseInt(e.target.value) || 0)}
-                                className="flex-1 px-3 py-1 bg-white/10 rounded text-sm"
-                                placeholder="Price"
+                                value={level.capacity}
+                                onChange={(e) => updateGALevel(level.id, 'capacity', parseInt(e.target.value) || 0)}
+                                className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-sm text-slate-900 dark:text-white"
+                                placeholder="500"
                               />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Type</label>
+                              <select
+                                value={level.type}
+                                onChange={(e) => updateGALevel(level.id, 'type', e.target.value)}
+                                className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-sm text-slate-900 dark:text-white"
+                              >
+                                <option value="standing">Standing</option>
+                                <option value="seated">Seated</option>
+                                <option value="mixed">Mixed</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Ticket Price</label>
+                              <div className="flex items-center">
+                                <span className="px-3 py-2 bg-slate-200 dark:bg-slate-600 border border-r-0 border-slate-200 dark:border-slate-600 rounded-l text-sm text-slate-500 dark:text-slate-400">$</span>
+                                <input
+                                  type="number"
+                                  value={level.price}
+                                  onChange={(e) => updateGALevel(level.id, 'price', parseInt(e.target.value) || 0)}
+                                  className="flex-1 px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-r text-sm text-slate-900 dark:text-white"
+                                  placeholder="50"
+                                />
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -1571,9 +1583,9 @@ export default function Step2Venue() {
 
                     <div className="space-y-3 max-h-64 overflow-y-auto">
                       {layoutFormData.sections.map((section, idx) => (
-                        <div key={section.id} className="p-3 bg-slate-100 dark:bg-slate-800 rounded-lg">
-                          <div className="flex justify-between items-start mb-2">
-                            <span className="text-xs text-slate-500 dark:text-slate-400">Section {idx + 1}</span>
+                        <div key={section.id} className="p-4 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                          <div className="flex justify-between items-start mb-3">
+                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Section {idx + 1}</span>
                             {layoutFormData.sections.length > 1 && (
                               <button
                                 onClick={() => removeSection(section.id)}
@@ -1583,41 +1595,53 @@ export default function Step2Venue() {
                               </button>
                             )}
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <input
-                              type="text"
-                              value={section.name}
-                              onChange={(e) => updateSection(section.id, 'name', e.target.value)}
-                              className="px-3 py-1 bg-white/10 rounded text-sm"
-                              placeholder="Section name"
-                            />
-                            <div className="flex items-center gap-1">
-                              <span className="text-slate-500 dark:text-slate-400 text-sm">$</span>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Section Name</label>
                               <input
-                                type="number"
-                                value={section.price}
-                                onChange={(e) => updateSection(section.id, 'price', parseInt(e.target.value) || 0)}
-                                className="flex-1 px-3 py-1 bg-white/10 rounded text-sm"
-                                placeholder="Price"
+                                type="text"
+                                value={section.name}
+                                onChange={(e) => updateSection(section.id, 'name', e.target.value)}
+                                className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-sm text-slate-900 dark:text-white"
+                                placeholder="e.g., Section A"
                               />
                             </div>
-                            <input
-                              type="number"
-                              value={section.rows}
-                              onChange={(e) => updateSection(section.id, 'rows', parseInt(e.target.value) || 1)}
-                              className="px-3 py-1 bg-white/10 rounded text-sm"
-                              placeholder="Rows"
-                            />
-                            <input
-                              type="number"
-                              value={section.seatsPerRow}
-                              onChange={(e) => updateSection(section.id, 'seatsPerRow', parseInt(e.target.value) || 1)}
-                              className="px-3 py-1 bg-white/10 rounded text-sm"
-                              placeholder="Seats/Row"
-                            />
+                            <div>
+                              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Ticket Price</label>
+                              <div className="flex items-center">
+                                <span className="px-3 py-2 bg-slate-200 dark:bg-slate-600 border border-r-0 border-slate-200 dark:border-slate-600 rounded-l text-sm text-slate-500 dark:text-slate-400">$</span>
+                                <input
+                                  type="number"
+                                  value={section.price}
+                                  onChange={(e) => updateSection(section.id, 'price', parseInt(e.target.value) || 0)}
+                                  className="flex-1 px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-r text-sm text-slate-900 dark:text-white"
+                                  placeholder="75"
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Number of Rows</label>
+                              <input
+                                type="number"
+                                value={section.rows}
+                                onChange={(e) => updateSection(section.id, 'rows', parseInt(e.target.value) || 1)}
+                                className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-sm text-slate-900 dark:text-white"
+                                placeholder="10"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Seats per Row</label>
+                              <input
+                                type="number"
+                                value={section.seatsPerRow}
+                                onChange={(e) => updateSection(section.id, 'seatsPerRow', parseInt(e.target.value) || 1)}
+                                className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-sm text-slate-900 dark:text-white"
+                                placeholder="20"
+                              />
+                            </div>
                           </div>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
-                            Capacity: {section.rows * section.seatsPerRow} seats
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-3">
+                            Total Capacity: {section.rows * section.seatsPerRow} seats
                           </p>
                         </div>
                       ))}
