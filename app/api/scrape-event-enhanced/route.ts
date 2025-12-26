@@ -274,6 +274,281 @@ async function fetchAndParseHTML(url: string): Promise<{
   }
 }
 
+// Fetch and parse Sulekha event page for venue, tickets, and images
+async function fetchAndParseSulekhaHTML(url: string): Promise<{
+  eventName?: string
+  description?: string
+  venueName?: string
+  venueAddress?: string
+  venueCity?: string
+  venueState?: string
+  venueCapacity?: number
+  eventDate?: string
+  eventTime?: string
+  imageUrls?: string[]
+  ticketLevels?: Array<{
+    level: string
+    price: number
+    serviceFee: number
+    tax: number
+    sections: string[]
+    description: string
+    capacity?: number
+  }>
+}> {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Cache-Control': 'no-cache'
+      }
+    })
+
+    if (!response.ok) {
+      console.log('Failed to fetch Sulekha URL:', response.status)
+      return {}
+    }
+
+    const html = await response.text()
+    const result: any = {}
+
+    // Extract event name from page title or h1
+    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i)
+    if (titleMatch) {
+      // Clean up title (remove " - Sulekha Events" suffix)
+      result.eventName = titleMatch[1].replace(/\s*[-|]\s*Sulekha.*$/i, '').trim()
+    }
+
+    // Look for JSON-LD structured data first
+    const jsonLdMatch = html.match(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi)
+    if (jsonLdMatch) {
+      for (const match of jsonLdMatch) {
+        try {
+          const jsonContent = match.replace(/<script[^>]*>|<\/script>/gi, '')
+          const data = JSON.parse(jsonContent)
+
+          if (data['@type'] === 'Event' || data['@type'] === 'MusicEvent') {
+            if (data.location) {
+              result.venueName = data.location.name
+              if (data.location.address) {
+                if (typeof data.location.address === 'string') {
+                  result.venueAddress = data.location.address
+                } else {
+                  result.venueAddress = data.location.address.streetAddress
+                  result.venueCity = data.location.address.addressLocality
+                  result.venueState = data.location.address.addressRegion
+                }
+              }
+            }
+            if (data.name && !result.eventName) result.eventName = data.name
+            if (data.description) result.description = data.description
+            if (data.startDate) {
+              const date = new Date(data.startDate)
+              result.eventDate = date.toISOString().split('T')[0]
+              const hours = date.getHours().toString().padStart(2, '0')
+              const minutes = date.getMinutes().toString().padStart(2, '0')
+              result.eventTime = `${hours}:${minutes}`
+            }
+            if (data.image) {
+              result.imageUrls = Array.isArray(data.image) ? data.image : [data.image]
+            }
+          }
+        } catch (e) {
+          // Continue to next JSON-LD block
+        }
+      }
+    }
+
+    // Extract venue from common HTML patterns
+    if (!result.venueName) {
+      // Look for venue in typical event page patterns
+      const venuePatterns = [
+        /<[^>]*class="[^"]*venue[^"]*"[^>]*>([^<]+)</i,
+        /Venue[:\s]*<[^>]*>([^<]+)</i,
+        /Location[:\s]*<[^>]*>([^<]+)</i,
+        /<[^>]*itemprop="location"[^>]*>([^<]+)</i,
+        /data-venue="([^"]+)"/i
+      ]
+      for (const pattern of venuePatterns) {
+        const match = html.match(pattern)
+        if (match && match[1]) {
+          result.venueName = match[1].trim()
+          break
+        }
+      }
+    }
+
+    // Extract images from og:image and other sources
+    if (!result.imageUrls || result.imageUrls.length === 0) {
+      const images: string[] = []
+
+      // og:image tags
+      const ogImageMatches = html.matchAll(/og:image"[^>]*content="([^"]+)"/gi)
+      for (const match of ogImageMatches) {
+        if (match[1] && !images.includes(match[1]) && match[1].startsWith('http')) {
+          images.push(match[1])
+        }
+      }
+
+      // Look for event images in img tags with event-related classes
+      const imgPatterns = [
+        /<img[^>]*class="[^"]*event[^"]*"[^>]*src="([^"]+)"/gi,
+        /<img[^>]*class="[^"]*poster[^"]*"[^>]*src="([^"]+)"/gi,
+        /<img[^>]*class="[^"]*banner[^"]*"[^>]*src="([^"]+)"/gi,
+        /<img[^>]*data-src="([^"]+)"[^>]*class="[^"]*lazy[^"]*"/gi
+      ]
+
+      for (const pattern of imgPatterns) {
+        const matches = html.matchAll(pattern)
+        for (const match of matches) {
+          if (match[1] && !images.includes(match[1]) && match[1].startsWith('http')) {
+            images.push(match[1])
+          }
+        }
+      }
+
+      // Also try srcset for responsive images
+      const srcsetMatches = html.matchAll(/srcset="([^"]+)"/gi)
+      for (const match of srcsetMatches) {
+        const srcset = match[1]
+        // Get the largest image from srcset
+        const urls = srcset.split(',').map(s => s.trim().split(' ')[0])
+        for (const imgUrl of urls) {
+          if (imgUrl && imgUrl.startsWith('http') && !images.includes(imgUrl)) {
+            images.push(imgUrl)
+          }
+        }
+      }
+
+      if (images.length > 0) {
+        result.imageUrls = images.slice(0, 10) // Limit to 10 images
+      }
+    }
+
+    // Extract ticket information from Sulekha-specific patterns
+    const ticketLevels: any[] = []
+
+    // Look for ticket/pricing sections
+    // Pattern 1: Tables with ticket info
+    const ticketTableMatch = html.match(/<table[^>]*class="[^"]*ticket[^"]*"[^>]*>([\s\S]*?)<\/table>/i)
+    if (ticketTableMatch) {
+      const rows = ticketTableMatch[1].matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)
+      for (const row of rows) {
+        const cells = row[1].match(/<t[dh][^>]*>([^<]*)<\/t[dh]>/gi)
+        if (cells && cells.length >= 2) {
+          const levelName = cells[0].replace(/<[^>]+>/g, '').trim()
+          const priceMatch = cells[1] ? cells[1].match(/\$?\s*(\d+(?:\.\d{2})?)/) : null
+          if (levelName && priceMatch) {
+            ticketLevels.push({
+              level: levelName,
+              price: parseFloat(priceMatch[1]),
+              serviceFee: parseFloat(priceMatch[1]) * 0.1,
+              tax: 8,
+              sections: [],
+              description: cells[2] ? cells[2].replace(/<[^>]+>/g, '').trim() : ''
+            })
+          }
+        }
+      }
+    }
+
+    // Pattern 2: Div-based ticket listings
+    const ticketDivPatterns = [
+      /<div[^>]*class="[^"]*ticket-type[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
+      /<div[^>]*class="[^"]*price-tier[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
+      /<div[^>]*class="[^"]*admission[^"]*"[^>]*>([\s\S]*?)<\/div>/gi
+    ]
+
+    for (const pattern of ticketDivPatterns) {
+      const matches = html.matchAll(pattern)
+      for (const match of matches) {
+        const content = match[1]
+        // Extract name and price
+        const nameMatch = content.match(/<[^>]*class="[^"]*name[^"]*"[^>]*>([^<]+)</i) ||
+                         content.match(/<h[1-6][^>]*>([^<]+)</i) ||
+                         content.match(/<strong>([^<]+)</i)
+        const priceMatch = content.match(/\$\s*(\d+(?:\.\d{2})?)/i)
+        const descMatch = content.match(/<p[^>]*>([^<]+)</i) ||
+                         content.match(/<[^>]*class="[^"]*desc[^"]*"[^>]*>([^<]+)</i)
+
+        if (nameMatch && priceMatch) {
+          ticketLevels.push({
+            level: nameMatch[1].trim(),
+            price: parseFloat(priceMatch[1]),
+            serviceFee: parseFloat(priceMatch[1]) * 0.1,
+            tax: 8,
+            sections: [],
+            description: descMatch ? descMatch[1].trim() : ''
+          })
+        }
+      }
+    }
+
+    // Pattern 3: Generic price extraction with context
+    if (ticketLevels.length === 0) {
+      // Look for patterns like "VIP - $150" or "General Admission: $75"
+      const pricePatterns = html.matchAll(/(VIP|General|Premium|Standard|Early Bird|Gold|Silver|Platinum|Regular)[^$]*\$\s*(\d+(?:\.\d{2})?)/gi)
+      for (const match of pricePatterns) {
+        const levelName = match[1]
+        const price = parseFloat(match[2])
+        // Avoid duplicates
+        if (!ticketLevels.some(t => t.level.toLowerCase() === levelName.toLowerCase())) {
+          ticketLevels.push({
+            level: levelName.charAt(0).toUpperCase() + levelName.slice(1).toLowerCase(),
+            price,
+            serviceFee: price * 0.1,
+            tax: 8,
+            sections: [],
+            description: ''
+          })
+        }
+      }
+    }
+
+    // Pattern 4: Look for "Ticket Information" section
+    const ticketInfoMatch = html.match(/Ticket\s*Information[:\s]*([\s\S]*?)(?:<\/div>|<\/section>|<h[1-6])/i)
+    if (ticketInfoMatch && ticketLevels.length === 0) {
+      const ticketSection = ticketInfoMatch[1]
+      // Extract all price mentions in this section
+      const prices = ticketSection.matchAll(/([A-Za-z][A-Za-z\s]+?)[\s:-]*\$\s*(\d+(?:\.\d{2})?)/gi)
+      for (const price of prices) {
+        const levelName = price[1].trim()
+        const priceValue = parseFloat(price[2])
+        if (levelName.length < 50 && !ticketLevels.some(t => t.level.toLowerCase() === levelName.toLowerCase())) {
+          ticketLevels.push({
+            level: levelName,
+            price: priceValue,
+            serviceFee: priceValue * 0.1,
+            tax: 8,
+            sections: [],
+            description: ''
+          })
+        }
+      }
+    }
+
+    if (ticketLevels.length > 0) {
+      // Sort by price descending (VIP first)
+      ticketLevels.sort((a, b) => b.price - a.price)
+      result.ticketLevels = ticketLevels
+    }
+
+    console.log('Sulekha scrape result:', {
+      eventName: result.eventName,
+      venueName: result.venueName,
+      imageCount: result.imageUrls?.length || 0,
+      ticketLevels: result.ticketLevels?.length || 0
+    })
+
+    return result
+  } catch (error) {
+    console.error('Error fetching/parsing Sulekha HTML:', error)
+    return {}
+  }
+}
+
 // US State name to abbreviation mapping
 const stateAbbreviations: Record<string, string> = {
   'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR', 'california': 'CA',
@@ -591,11 +866,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // SULEKHA PARSER
+    // SULEKHA PARSER - Enhanced with HTML scraping
     else if (domain.includes('sulekha.com')) {
       const pathParts = url.split('/')
       const fullSlug = pathParts[pathParts.length - 1] || ''
       const [eventPart, locationPart] = fullSlug.split('_event-in_')
+
+      // First, fetch and parse actual HTML from Sulekha for venue, tickets, and images
+      const sulekhaData = await fetchAndParseSulekhaHTML(url)
 
       // Extract year from event name (e.g., "revolution-2026-1techno" -> 2026)
       const yearMatch = eventPart.match(/20\d{2}/)
@@ -606,13 +884,13 @@ export async function POST(req: NextRequest) {
                         eventPart.toLowerCase().includes('newyear') ||
                         eventPart.toLowerCase().includes('nye')
 
-      // Set appropriate date based on event type
-      let eventDate = `${eventYear}-12-31` // Default to NYE for new year events
-      if (!isNewYear) {
-        eventDate = `${eventYear}-01-15`
+      // Use scraped date if available, otherwise infer from event type
+      let eventDate = sulekhaData.eventDate || ''
+      if (!eventDate) {
+        eventDate = isNewYear ? `${eventYear}-12-31` : `${eventYear}-01-15`
       }
 
-      const eventName = eventPart
+      const eventName = sulekhaData.eventName || eventPart
         .replace(/-/g, ' ')
         .replace(/\d+techno/gi, 'Techno')
         .split(' ')
@@ -630,32 +908,44 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // Override with scraped data if available
+      if (sulekhaData.venueCity) city = sulekhaData.venueCity
+      if (sulekhaData.venueState) state = sulekhaData.venueState
+
       const eventType = eventName.toLowerCase().includes('bollywood') ? 'Bollywood' :
                        eventName.toLowerCase().includes('comedy') ? 'comedy' :
                        eventName.toLowerCase().includes('classical') ? 'classical music' : 'cultural'
 
-      const description = isNewYear
+      const description = sulekhaData.description || (isNewYear
         ? `Ring in ${eventYear} with an unforgettable ${eventType} celebration! Join us for a spectacular New Year's Eve party featuring live performances, amazing music, and festive entertainment. Dance the night away and welcome the new year in style!`
-        : `Experience an incredible ${eventType} event! Join us for a spectacular evening of live performances, amazing music, and unforgettable entertainment. This event celebrates the best of ${eventType} culture.`
+        : `Experience an incredible ${eventType} event! Join us for a spectacular evening of live performances, amazing music, and unforgettable entertainment. This event celebrates the best of ${eventType} culture.`)
+
+      // Use scraped ticket levels or generate defaults
+      const ticketLevels = sulekhaData.ticketLevels && sulekhaData.ticketLevels.length > 0
+        ? sulekhaData.ticketLevels
+        : [
+            { level: 'VIP', price: 150, serviceFee: 15, tax: 8, sections: [], description: '' },
+            { level: 'Premium', price: 100, serviceFee: 10, tax: 8, sections: [], description: '' },
+            { level: 'General', price: 75, serviceFee: 7.5, tax: 8, sections: [], description: '' }
+          ]
 
       eventData = {
         title: eventName || 'Cultural Event',
         description,
         date: eventDate,
-        time: isNewYear ? '21:00' : '18:30',
-        venueName: city + ' Convention Center',
-        venueAddress: '456 Convention Plaza',
+        time: sulekhaData.eventTime || (isNewYear ? '21:00' : '18:30'),
+        venueName: sulekhaData.venueName || '',
+        venueAddress: sulekhaData.venueAddress || '',
         venueCity: city,
         venueState: state,
-        venueCapacity: 5000,
-        pricing: [
-          { level: 'VIP', price: 150, serviceFee: 15, tax: 8, sections: [] },
-          { level: 'Premium', price: 100, serviceFee: 10, tax: 8, sections: [] },
-          { level: 'General', price: 75, serviceFee: 7.5, tax: 8, sections: [] }
-        ],
+        venueCapacity: sulekhaData.venueCapacity || 5000,
+        pricing: ticketLevels,
         performers: [eventName.split(' ').slice(0, 3).join(' ')],
         type: eventType === 'comedy' ? 'comedy' : 'concert',
-        capacity: 5000
+        capacity: sulekhaData.venueCapacity || 5000,
+        imageUrls: sulekhaData.imageUrls || [],
+        // Include scraped ticket info for layout auto-creation
+        scrapedTicketLevels: sulekhaData.ticketLevels || []
       }
     }
 

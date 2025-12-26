@@ -24,6 +24,8 @@ export interface AIExtractedData {
   venue?: {
     name?: string
     address?: string
+    city?: string
+    state?: string
   }
   venueId?: string
   pricing?: Array<{
@@ -36,6 +38,15 @@ export interface AIExtractedData {
     description?: string
     type?: 'percentage' | 'fixed'
     discount?: number
+  }>
+  // Scraped ticket levels for auto-creating GA layouts
+  scrapedTicketLevels?: Array<{
+    level: string
+    price: number
+    serviceFee?: number
+    tax?: number
+    description?: string
+    capacity?: number
   }>
 }
 
@@ -120,9 +131,11 @@ export class EventAI {
    */
   private static mapScrapedData(data: any): AIExtractedData {
     // Build venue object from flat fields
-    const venue = (data.venueName || data.venueAddress) ? {
+    const venue = (data.venueName || data.venueAddress || data.venueCity) ? {
       name: data.venueName || '',
-      address: [data.venueAddress, data.venueCity, data.venueState].filter(Boolean).join(', ')
+      address: data.venueAddress || '',
+      city: data.venueCity || '',
+      state: data.venueState || ''
     } : data.venue
 
     // Map pricing array if it exists
@@ -130,6 +143,16 @@ export class EventAI {
       name: p.level || p.name || 'General',
       price: p.price || 0,
       description: p.description || ''
+    }))
+
+    // Map scraped ticket levels for layout auto-creation
+    const scrapedTicketLevels = data.scrapedTicketLevels?.map((t: any) => ({
+      level: t.level || t.name || 'General',
+      price: t.price || 0,
+      serviceFee: t.serviceFee || 0,
+      tax: t.tax || 0,
+      description: t.description || '',
+      capacity: t.capacity || 500
     }))
 
     return {
@@ -144,7 +167,8 @@ export class EventAI {
       time: data.time || '',
       pricing,
       promotions: data.promotions,
-      images: data.images || (data.imageUrls?.length ? { gallery: data.imageUrls } : undefined)
+      images: data.images || (data.imageUrls?.length ? { gallery: data.imageUrls } : undefined),
+      scrapedTicketLevels
     }
   }
 

@@ -69,8 +69,13 @@ export default function Step1Basics() {
     }
 
     // Only set scrapedVenue if venue data exists (to avoid Firebase undefined errors)
-    if (data.venue && data.venue.name) {
+    if (data.venue && (data.venue.name || data.venue.city)) {
       basicsData.scrapedVenue = data.venue
+    }
+
+    // Save scraped ticket levels for auto-creating GA layout in Step 2
+    if (data.scrapedTicketLevels && data.scrapedTicketLevels.length > 0) {
+      basicsData.scrapedTicketLevels = data.scrapedTicketLevels
     }
 
     updateFormData('basics', basicsData)

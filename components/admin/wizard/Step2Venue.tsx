@@ -165,6 +165,7 @@ export default function Step2Venue() {
   }, [])
 
   // Auto-populate search query from existing venue (when editing) or scraped venue data
+  // Also auto-create venue and layout if scraped data is available
   useEffect(() => {
     if (initializedRef.current) return
     if (venues.length === 0) return
@@ -181,17 +182,133 @@ export default function Step2Venue() {
 
     // Otherwise check for scraped venue data (new event from URL scraping)
     const scrapedVenue = (formData.basics as any)?.scrapedVenue
-    if (scrapedVenue?.name) {
+    if (scrapedVenue?.name || scrapedVenue?.city) {
       initializedRef.current = true
-      setSearchQuery(scrapedVenue.name)
+      setSearchQuery(scrapedVenue.name || '')
 
-      // Try to find a matching venue
-      const matchedVenue = venues.find(v => fuzzyMatch(v.name, scrapedVenue.name) > 0.7)
+      // Try to find a matching venue (fuzzy match on name OR city match)
+      let matchedVenue = null
+      if (scrapedVenue.name) {
+        matchedVenue = venues.find(v => fuzzyMatch(v.name, scrapedVenue.name) > 0.7)
+      }
+      // If no name match, try city + type matching
+      if (!matchedVenue && scrapedVenue.city) {
+        matchedVenue = venues.find(v =>
+          v.city?.toLowerCase() === scrapedVenue.city?.toLowerCase() &&
+          fuzzyMatch(v.name, scrapedVenue.name || scrapedVenue.city) > 0.4
+        )
+      }
+
       if (matchedVenue) {
+        // Found a match - select it
         handleVenueChange(matchedVenue.id)
+      } else if (scrapedVenue.name) {
+        // No match found - auto-create the venue behind the scenes
+        autoCreateVenueFromScraped(scrapedVenue)
       }
     }
   }, [venues, formData.basics, formData.venue.venueId])
+
+  // Auto-create venue from scraped data (runs behind the scenes)
+  const autoCreateVenueFromScraped = async (scrapedVenue: any) => {
+    try {
+      console.log('Auto-creating venue from scraped data:', scrapedVenue)
+
+      const venueData = {
+        name: scrapedVenue.name || `${scrapedVenue.city || 'Event'} Venue`,
+        streetAddress1: scrapedVenue.address || '',
+        streetAddress2: '',
+        city: scrapedVenue.city || 'Dallas',
+        state: scrapedVenue.state || 'TX',
+        zipCode: '',
+        capacity: 5000,
+        type: 'convention_center',
+        amenities: ['Parking', 'Wheelchair Accessible'],
+        parkingCapacity: 500,
+        contactEmail: '',
+        contactPhone: '',
+        website: '',
+        description: `Venue for events in ${scrapedVenue.city || 'the area'}`,
+        images: [],
+        address: {
+          street: scrapedVenue.address || '',
+          city: scrapedVenue.city || 'Dallas',
+          state: scrapedVenue.state || 'TX',
+          zip: '',
+          country: 'USA'
+        }
+      }
+
+      const newVenueId = await AdminService.createVenue(venueData)
+      console.log('Auto-created venue with ID:', newVenueId)
+
+      // Reload venues and select the new one
+      const updatedVenues = await AdminService.getVenues()
+      setVenues(updatedVenues)
+
+      // Select the new venue and auto-create layout if we have ticket levels
+      handleVenueChange(newVenueId)
+
+      // Check if we have scraped ticket levels to auto-create a layout
+      const scrapedTicketLevels = (formData.basics as any)?.scrapedTicketLevels
+      if (scrapedTicketLevels && scrapedTicketLevels.length > 0) {
+        // Give it a moment for the venue to be fully set
+        setTimeout(() => {
+          autoCreateLayoutFromTickets(newVenueId, scrapedTicketLevels)
+        }, 500)
+      }
+    } catch (error) {
+      console.error('Error auto-creating venue:', error)
+      // Don't alert - just log, user can create manually
+    }
+  }
+
+  // Auto-create GA layout from scraped ticket levels
+  const autoCreateLayoutFromTickets = async (venueId: string, ticketLevels: any[]) => {
+    try {
+      console.log('Auto-creating layout from ticket levels:', ticketLevels)
+
+      let totalCapacity = 0
+      const gaLevels = ticketLevels.map((ticket, idx) => {
+        const capacity = ticket.capacity || 500
+        totalCapacity += capacity
+        return {
+          id: `ga-auto-${idx + 1}`,
+          name: ticket.level || ticket.name || `Level ${idx + 1}`,
+          capacity,
+          type: 'standing',
+          standingCapacity: capacity,
+          seatedCapacity: 0
+        }
+      })
+
+      const priceCategories = ticketLevels.map((ticket, idx) => ({
+        id: `cat-auto-${idx + 1}`,
+        name: ticket.level || ticket.name || `Level ${idx + 1}`,
+        price: ticket.price || 50,
+        color: ['#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#3B82F6'][idx % 5]
+      }))
+
+      const layoutData = {
+        venueId,
+        name: 'General Admission',
+        type: 'general_admission',
+        gaLevels,
+        priceCategories,
+        totalCapacity
+      }
+
+      const newLayoutId = await AdminService.createLayout(layoutData)
+      console.log('Auto-created layout with ID:', newLayoutId)
+
+      // Reload layouts and select the new one
+      await loadLayouts(venueId)
+      handleLayoutChange(newLayoutId)
+    } catch (error) {
+      console.error('Error auto-creating layout:', error)
+      // Don't alert - just log, user can create manually
+    }
+  }
 
   useEffect(() => {
     if (formData.venue.venueId) {
