@@ -85,15 +85,38 @@ export default function Step1Basics() {
   }
 
   const handlePosterImport = (data: AIExtractedData) => {
-    updateFormData('basics', {
+    // Save to basics (including scraped date/time for Step3 to pick up)
+    const basicsData: any = {
       name: data.name,
       description: data.description,
       category: data.category,
       type: data.category,
-      tags: data.tags,
-      performers: data.performers,
-      images: data.images || formData.basics?.images
-    })
+      tags: data.tags || [],
+      performers: data.performers || [],
+      images: data.images || formData.basics?.images,
+      // Save scraped date/time for Step3 Schedule
+      scrapedDate: data.date || '',
+      scrapedTime: data.time || ''
+    }
+
+    // Only set scrapedVenue if venue data exists (to avoid Firebase undefined errors)
+    if (data.venue && (data.venue.name || data.venue.city)) {
+      basicsData.scrapedVenue = data.venue
+    }
+
+    // Save scraped ticket levels for auto-creating GA layout in Step 2
+    if (data.scrapedTicketLevels && data.scrapedTicketLevels.length > 0) {
+      basicsData.scrapedTicketLevels = data.scrapedTicketLevels
+    } else if (data.pricing && data.pricing.length > 0) {
+      // Convert pricing to ticket levels format
+      basicsData.scrapedTicketLevels = data.pricing.map(p => ({
+        level: p.name,
+        price: p.price,
+        description: p.description || ''
+      }))
+    }
+
+    updateFormData('basics', basicsData)
 
     setAiConfidence(data.confidence)
     setTimeout(() => setAiConfidence(null), 10000)
