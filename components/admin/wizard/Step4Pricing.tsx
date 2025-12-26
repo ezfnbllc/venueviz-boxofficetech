@@ -241,12 +241,13 @@ export default function Step4Pricing() {
       <div className="mb-6">
         <h4 className="font-semibold mb-4">Service & Transaction Fees</h4>
         <div className="space-y-3">
+          {/* Convenience Fee */}
           <div className="flex items-center gap-3 p-4 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
-            <label className="w-32 text-sm">Convenience Fee</label>
+            <label className="w-32 text-sm font-medium">Convenience Fee</label>
             <select
               value={formData.pricing?.fees?.serviceFeeType || 'percentage'}
               onChange={(e) => updateFees('serviceFeeType', e.target.value)}
-              className="px-3 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg"
+              className="px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg"
             >
               <option value="percentage">Percentage (%)</option>
               <option value="fixed">Fixed ($)</option>
@@ -256,12 +257,160 @@ export default function Step4Pricing() {
               value={formData.pricing?.fees?.serviceFee ?? 0}
               onChange={(e) => updateFees('serviceFee', parseFloat(e.target.value) || 0)}
               onWheel={(e) => e.currentTarget.blur()}
-              className="w-20 px-3 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg text-center"
+              className="w-20 px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg text-center"
               placeholder="0"
               step={formData.pricing?.fees?.serviceFeeType === 'percentage' ? '0.1' : '0.01'}
               min="0"
             />
+            <select
+              value={formData.pricing?.fees?.serviceFeeScope || 'per_ticket'}
+              onChange={(e) => updateFees('serviceFeeScope', e.target.value)}
+              className="px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg text-sm"
+            >
+              <option value="per_ticket">Per Ticket</option>
+              <option value="per_transaction">Per Transaction</option>
+            </select>
           </div>
+
+          {/* Parking Fee */}
+          <div className="flex items-center gap-3 p-4 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+            <label className="w-32 text-sm font-medium">Parking Fee</label>
+            <select
+              value={formData.pricing?.fees?.parkingFeeType || 'fixed'}
+              onChange={(e) => updateFees('parkingFeeType', e.target.value)}
+              className="px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg"
+            >
+              <option value="percentage">Percentage (%)</option>
+              <option value="fixed">Fixed ($)</option>
+            </select>
+            <input
+              type="number"
+              value={formData.pricing?.fees?.parkingFee ?? 0}
+              onChange={(e) => updateFees('parkingFee', parseFloat(e.target.value) || 0)}
+              onWheel={(e) => e.currentTarget.blur()}
+              className="w-20 px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg text-center"
+              placeholder="0"
+              step={formData.pricing?.fees?.parkingFeeType === 'percentage' ? '0.1' : '0.01'}
+              min="0"
+            />
+            <select
+              value={formData.pricing?.fees?.parkingFeeScope || 'per_transaction'}
+              onChange={(e) => updateFees('parkingFeeScope', e.target.value)}
+              className="px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg text-sm"
+            >
+              <option value="per_ticket">Per Ticket</option>
+              <option value="per_transaction">Per Transaction</option>
+            </select>
+          </div>
+
+          {/* Venue Fee */}
+          <div className="flex items-center gap-3 p-4 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+            <label className="w-32 text-sm font-medium">Venue Fee</label>
+            <select
+              value={formData.pricing?.fees?.venueFeeType || 'fixed'}
+              onChange={(e) => updateFees('venueFeeType', e.target.value)}
+              className="px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg"
+            >
+              <option value="percentage">Percentage (%)</option>
+              <option value="fixed">Fixed ($)</option>
+            </select>
+            <input
+              type="number"
+              value={formData.pricing?.fees?.venueFee ?? 0}
+              onChange={(e) => updateFees('venueFee', parseFloat(e.target.value) || 0)}
+              onWheel={(e) => e.currentTarget.blur()}
+              className="w-20 px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg text-center"
+              placeholder="0"
+              step={formData.pricing?.fees?.venueFeeType === 'percentage' ? '0.1' : '0.01'}
+              min="0"
+            />
+            <select
+              value={formData.pricing?.fees?.venueFeeScope || 'per_ticket'}
+              onChange={(e) => updateFees('venueFeeScope', e.target.value)}
+              className="px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg text-sm"
+            >
+              <option value="per_ticket">Per Ticket</option>
+              <option value="per_transaction">Per Transaction</option>
+            </select>
+          </div>
+
+          {/* Custom Fees */}
+          {(formData.pricing?.fees?.customFees || []).map((customFee: any, idx: number) => (
+            <div key={idx} className="flex items-center gap-3 p-4 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+              <input
+                type="text"
+                value={customFee.name || ''}
+                onChange={(e) => {
+                  const customFees = [...(formData.pricing?.fees?.customFees || [])]
+                  customFees[idx] = { ...customFees[idx], name: e.target.value }
+                  updateFees('customFees', customFees)
+                }}
+                className="w-32 px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg text-sm"
+                placeholder="Fee Name"
+              />
+              <select
+                value={customFee.type || 'fixed'}
+                onChange={(e) => {
+                  const customFees = [...(formData.pricing?.fees?.customFees || [])]
+                  customFees[idx] = { ...customFees[idx], type: e.target.value }
+                  updateFees('customFees', customFees)
+                }}
+                className="px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg"
+              >
+                <option value="percentage">Percentage (%)</option>
+                <option value="fixed">Fixed ($)</option>
+              </select>
+              <input
+                type="number"
+                value={customFee.amount ?? 0}
+                onChange={(e) => {
+                  const customFees = [...(formData.pricing?.fees?.customFees || [])]
+                  customFees[idx] = { ...customFees[idx], amount: parseFloat(e.target.value) || 0 }
+                  updateFees('customFees', customFees)
+                }}
+                onWheel={(e) => e.currentTarget.blur()}
+                className="w-20 px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg text-center"
+                placeholder="0"
+                step={customFee.type === 'percentage' ? '0.1' : '0.01'}
+                min="0"
+              />
+              <select
+                value={customFee.scope || 'per_ticket'}
+                onChange={(e) => {
+                  const customFees = [...(formData.pricing?.fees?.customFees || [])]
+                  customFees[idx] = { ...customFees[idx], scope: e.target.value }
+                  updateFees('customFees', customFees)
+                }}
+                className="px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg text-sm"
+              >
+                <option value="per_ticket">Per Ticket</option>
+                <option value="per_transaction">Per Transaction</option>
+              </select>
+              <button
+                onClick={() => {
+                  const customFees = (formData.pricing?.fees?.customFees || []).filter((_: any, i: number) => i !== idx)
+                  updateFees('customFees', customFees)
+                }}
+                className="p-2 text-red-500 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                title="Remove fee"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          ))}
+
+          {/* Add Custom Fee Button */}
+          <button
+            onClick={() => {
+              const customFees = [...(formData.pricing?.fees?.customFees || []), { name: '', type: 'fixed', amount: 0, scope: 'per_ticket' }]
+              updateFees('customFees', customFees)
+            }}
+            className="w-full py-2 border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-purple-400 hover:text-purple-500 rounded-lg transition-colors text-sm"
+          >
+            + Add Custom Fee
+          </button>
         </div>
       </div>
     </div>
