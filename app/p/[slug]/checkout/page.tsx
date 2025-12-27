@@ -727,8 +727,8 @@ export default function CheckoutPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Payment Successful!</h2>
-          <p className="text-gray-600 dark:text-gray-300">Redirecting to your confirmation...</p>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Payment Successful!</h2>
+          <p className="text-gray-600">Redirecting to your confirmation...</p>
           <div className="mt-4">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#6ac045]"></div>
           </div>
@@ -742,17 +742,17 @@ export default function CheckoutPage() {
     return (
       <Layout promoterSlug={slug}>
         {/* Breadcrumb */}
-        <div className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+        <div className="bg-gray-50 border-b border-gray-200">
           <div className="container mx-auto px-4 py-4">
             <nav aria-label="breadcrumb">
               <ol className="flex items-center space-x-2 text-sm">
                 <li>
-                  <Link href={`/p/${slug}`} className="text-gray-600 dark:text-gray-300 hover:text-[#6ac045]">
+                  <Link href={`/p/${slug}`} className="text-gray-600 hover:text-[#6ac045]">
                     Home
                   </Link>
                 </li>
                 <li className="text-gray-400">/</li>
-                <li className="text-gray-900 dark:text-white font-medium">Checkout</li>
+                <li className="text-gray-900 font-medium">Checkout</li>
               </ol>
             </nav>
           </div>
@@ -760,13 +760,13 @@ export default function CheckoutPage() {
 
         <div className="container mx-auto px-4 py-20">
           <div className="text-center max-w-md mx-auto">
-            <div className="w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-6">
+            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
               <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
               </svg>
             </div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Your cart is empty</h2>
-            <p className="text-gray-600 dark:text-gray-300 mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Your cart is empty</h2>
+            <p className="text-gray-600 mb-8">
               Looks like you haven&apos;t added any tickets yet. Browse our events to find something exciting!
             </p>
             <Link
@@ -784,18 +784,18 @@ export default function CheckoutPage() {
   return (
     <Layout promoterSlug={slug}>
       {/* Breadcrumb */}
-      <div className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+      <div className="bg-gray-50 border-b border-gray-200">
         <div className="container mx-auto px-4 py-4">
           <nav aria-label="breadcrumb">
             <ol className="flex items-center space-x-2 text-sm">
               <li>
-                <Link href={`/p/${slug}`} className="text-gray-600 dark:text-gray-300 hover:text-[#6ac045]">
+                <Link href={`/p/${slug}`} className="text-gray-600 hover:text-[#6ac045]">
                   Home
                 </Link>
               </li>
               <li className="text-gray-400">/</li>
               <li>
-                <Link href={`/p/${slug}/events`} className="text-gray-600 dark:text-gray-300 hover:text-[#6ac045]">
+                <Link href={`/p/${slug}/events`} className="text-gray-600 hover:text-[#6ac045]">
                   Events
                 </Link>
               </li>
@@ -805,7 +805,7 @@ export default function CheckoutPage() {
                   <li>
                     <Link
                       href={`/p/${slug}/events/${currentEvent.eventId}`}
-                      className="text-gray-600 dark:text-gray-300 hover:text-[#6ac045]"
+                      className="text-gray-600 hover:text-[#6ac045]"
                     >
                       {currentEvent.eventName}
                     </Link>
@@ -813,7 +813,7 @@ export default function CheckoutPage() {
                 </>
               )}
               <li className="text-gray-400">/</li>
-              <li className="text-gray-900 dark:text-white font-medium">Checkout</li>
+              <li className="text-gray-900 font-medium">Checkout</li>
             </ol>
           </nav>
         </div>
@@ -866,7 +866,7 @@ export default function CheckoutPage() {
       <div className="py-12 lg:py-20">
         <div className="container mx-auto px-4">
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Order Confirmation</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Order Confirmation</h1>
           </div>
 
           {error && (
@@ -890,7 +890,7 @@ export default function CheckoutPage() {
                   <div className="p-6">
                     <div className="flex items-center justify-center py-8">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#6ac045]"></div>
-                      <span className="ml-3 text-gray-600 dark:text-gray-300">Loading payment configuration...</span>
+                      <span className="ml-3 text-gray-600">Loading payment configuration...</span>
                     </div>
                   </div>
                 </div>
@@ -937,7 +937,7 @@ export default function CheckoutPage() {
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#6ac045]"></div>
                       </div>
                     ) : (
-                      <p className="text-gray-600 dark:text-gray-300 text-center py-8">
+                      <p className="text-gray-600 text-center py-8">
                         Please fill in your billing information above to proceed with payment.
                       </p>
                     )}
