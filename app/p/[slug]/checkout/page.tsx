@@ -330,7 +330,7 @@ function OrderSummary({
       <div className="p-6">
         {/* Event Info */}
         {currentEvent && (
-          <div className="flex gap-4 mb-6 pb-6 border-b border-gray-200">
+          <div className="flex gap-4 mb-6 pb-6 border-b border-gray-200 dark:border-gray-700">
             {currentEvent.eventImage && (
               <div className="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
                 <img
@@ -341,9 +341,9 @@ function OrderSummary({
               </div>
             )}
             <div className="flex-1">
-              <h5 className="font-semibold text-gray-900 mb-1">{currentEvent.eventName}</h5>
+              <h5 className="font-semibold text-gray-900 dark:text-white mb-1">{currentEvent.eventName}</h5>
               {currentEvent.eventDate && (
-                <span className="text-sm text-gray-600">{currentEvent.eventDate}</span>
+                <span className="text-sm text-gray-600 dark:text-gray-300">{currentEvent.eventDate}</span>
               )}
               {currentEvent.venueName && (
                 <div className="text-sm text-[#6ac045] mt-1">{currentEvent.venueName}</div>
@@ -356,60 +356,60 @@ function OrderSummary({
         <div className="space-y-3 mb-6">
           {items.map((item) => (
             <div key={item.id} className="flex justify-between text-sm">
-              <span className="text-gray-600">
+              <span className="text-gray-600 dark:text-gray-300">
                 {item.ticketType || 'Ticket'}
                 {item.quantity > 1 && ` x${item.quantity}`}
                 {item.section && ` - ${item.section}`}
                 {item.row && ` Row ${item.row}`}
                 {item.seat && ` Seat ${item.seat}`}
               </span>
-              <span className="font-medium">${(item.price * item.quantity).toFixed(2)}</span>
+              <span className="font-medium text-gray-900 dark:text-white">${(item.price * item.quantity).toFixed(2)}</span>
             </div>
           ))}
         </div>
 
         {/* Totals */}
-        <div className="space-y-2 pt-4 border-t border-gray-200">
+        <div className="space-y-2 pt-4 border-t border-gray-200 dark:border-gray-700">
           <div className="flex justify-between text-sm">
-            <span className="text-gray-600">Subtotal ({getItemCount()} tickets)</span>
-            <span>${calculateSubtotal().toFixed(2)}</span>
+            <span className="text-gray-600 dark:text-gray-300">Subtotal ({getItemCount()} tickets)</span>
+            <span className="text-gray-900 dark:text-white">${calculateSubtotal().toFixed(2)}</span>
           </div>
 
           {/* Convenience/Service Fee */}
           {fees.convenienceFee > 0 && (
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Convenience Fee</span>
-              <span>${fees.convenienceFee.toFixed(2)}</span>
+              <span className="text-gray-600 dark:text-gray-300">Convenience Fee</span>
+              <span className="text-gray-900 dark:text-white">${fees.convenienceFee.toFixed(2)}</span>
             </div>
           )}
 
           {/* Parking Fee */}
           {fees.parkingFee > 0 && (
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Parking Fee</span>
-              <span>${fees.parkingFee.toFixed(2)}</span>
+              <span className="text-gray-600 dark:text-gray-300">Parking Fee</span>
+              <span className="text-gray-900 dark:text-white">${fees.parkingFee.toFixed(2)}</span>
             </div>
           )}
 
           {/* Venue Fee */}
           {fees.venueFee > 0 && (
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Venue Fee</span>
-              <span>${fees.venueFee.toFixed(2)}</span>
+              <span className="text-gray-600 dark:text-gray-300">Venue Fee</span>
+              <span className="text-gray-900 dark:text-white">${fees.venueFee.toFixed(2)}</span>
             </div>
           )}
 
           {/* Custom Fees */}
           {fees.customFees.map((cf, idx) => (
             <div key={idx} className="flex justify-between text-sm">
-              <span className="text-gray-600">{cf.name}</span>
-              <span>${cf.amount.toFixed(2)}</span>
+              <span className="text-gray-600 dark:text-gray-300">{cf.name}</span>
+              <span className="text-gray-900 dark:text-white">${cf.amount.toFixed(2)}</span>
             </div>
           ))}
 
           {/* Discount */}
           {fees.discount > 0 && (
-            <div className="flex justify-between text-sm text-green-600">
+            <div className="flex justify-between text-sm text-green-600 dark:text-green-400">
               <span>Discount ({appliedCoupon?.code})</span>
               <span>-${fees.discount.toFixed(2)}</span>
             </div>
@@ -418,13 +418,13 @@ function OrderSummary({
           {/* Sales Tax */}
           {fees.salesTax > 0 && (
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Sales Tax</span>
-              <span>${fees.salesTax.toFixed(2)}</span>
+              <span className="text-gray-600 dark:text-gray-300">Sales Tax</span>
+              <span className="text-gray-900 dark:text-white">${fees.salesTax.toFixed(2)}</span>
             </div>
           )}
 
-          <div className="border-t border-gray-200 pt-2 mt-2">
-            <div className="flex justify-between font-semibold text-lg">
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-2 mt-2">
+            <div className="flex justify-between font-semibold text-lg text-gray-900 dark:text-white">
               <span>Total</span>
               <span className="text-[#6ac045]">${calculateTotal().toFixed(2)}</span>
             </div>
@@ -435,17 +435,17 @@ function OrderSummary({
         <div className="mt-6">
           <label className="form-label">Coupon Code</label>
           {appliedCoupon ? (
-            <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
+            <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg">
               <div>
-                <span className="font-medium text-green-700">{appliedCoupon.code}</span>
-                <span className="text-sm text-green-600 ml-2">
+                <span className="font-medium text-green-700 dark:text-green-400">{appliedCoupon.code}</span>
+                <span className="text-sm text-green-600 dark:text-green-400 ml-2">
                   ({appliedCoupon.type === 'percentage' ? `${appliedCoupon.value}% off` : `$${appliedCoupon.value} off`})
                 </span>
               </div>
               <button
                 type="button"
                 onClick={removeCoupon}
-                className="text-red-500 hover:text-red-700 text-sm font-medium"
+                className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium"
               >
                 Remove
               </button>
@@ -464,7 +464,7 @@ function OrderSummary({
                   type="button"
                   onClick={onApplyCoupon}
                   disabled={couponLoading || !couponCode}
-                  className="px-4 h-12 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors disabled:opacity-50"
+                  className="px-4 h-12 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-medium rounded-lg transition-colors disabled:opacity-50"
                 >
                   {couponLoading ? '...' : 'Apply'}
                 </button>
@@ -476,7 +476,7 @@ function OrderSummary({
           )}
         </div>
 
-        <p className="text-xs text-gray-500 mt-6 text-center">
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-6 text-center">
           {fees.salesTax > 0 ? 'Sales tax applied to ticket price only' : 'Price is inclusive of all applicable fees'}
         </p>
       </div>

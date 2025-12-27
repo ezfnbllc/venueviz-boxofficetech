@@ -535,8 +535,8 @@ export default function TicketSelectionPage() {
             <div className="lg:col-span-1">
               <div className="sticky top-24">
                 <div className="main-card">
-                  <div className="p-6 border-b border-gray-100">
-                    <h2 className="text-lg font-semibold text-gray-900">Order Summary</h2>
+                  <div className="p-6 border-b border-gray-100 dark:border-gray-700">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Order Summary</h2>
                   </div>
 
                   <div className="p-6">
@@ -552,8 +552,8 @@ export default function TicketSelectionPage() {
                         </div>
                       )}
                       <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2">{event.name}</h3>
-                        <p className="text-sm text-gray-600">{formatDate(event.startDate, event.startTime)}</p>
+                        <h3 className="font-semibold text-gray-900 dark:text-white mb-1 line-clamp-2">{event.name}</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-300">{formatDate(event.startDate, event.startTime)}</p>
                         {event.venue?.name && (
                           <p className="text-sm text-[#6ac045] mt-1">{event.venue.name}</p>
                         )}
@@ -562,15 +562,15 @@ export default function TicketSelectionPage() {
 
                     {/* Selected Tickets/Seats */}
                     {getTotalQuantity() > 0 && (
-                      <div className="space-y-2 mb-6 pb-6 border-b border-gray-100">
+                      <div className="space-y-2 mb-6 pb-6 border-b border-gray-100 dark:border-gray-700">
                         {isReservedSeating ? (
                           /* Selected Seats for Reserved Seating */
                           selectedSeats.map(seat => (
                             <div key={seat.id} className="flex justify-between text-sm">
-                              <span className="text-gray-600">
+                              <span className="text-gray-600 dark:text-gray-300">
                                 {seat.sectionName} Row {seat.row}, Seat {seat.number}
                               </span>
-                              <span className="font-medium">
+                              <span className="font-medium text-gray-900 dark:text-white">
                                 ${seat.price.toFixed(2)}
                               </span>
                             </div>
@@ -583,10 +583,10 @@ export default function TicketSelectionPage() {
                             if (!ticketType) return null
                             return (
                               <div key={ticketId} className="flex justify-between text-sm">
-                                <span className="text-gray-600">
+                                <span className="text-gray-600 dark:text-gray-300">
                                   {ticketType.name} x{quantity}
                                 </span>
-                                <span className="font-medium">
+                                <span className="font-medium text-gray-900 dark:text-white">
                                   ${(ticketType.price * quantity).toFixed(2)}
                                 </span>
                               </div>
@@ -597,7 +597,7 @@ export default function TicketSelectionPage() {
                     )}
 
                     {/* Total */}
-                    <div className="flex justify-between font-semibold text-lg mb-6">
+                    <div className="flex justify-between font-semibold text-lg mb-6 text-gray-900 dark:text-white">
                       <span>Total</span>
                       <span className="text-[#6ac045]">${getTotalPrice().toFixed(2)}</span>
                     </div>
@@ -614,7 +614,7 @@ export default function TicketSelectionPage() {
                       }
                     </button>
 
-                    <p className="text-xs text-gray-500 mt-4 text-center">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-4 text-center">
                       Price shown excludes service fees
                     </p>
                   </div>

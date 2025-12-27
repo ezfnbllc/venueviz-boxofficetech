@@ -11,9 +11,11 @@ import {
   where,
   orderBy,
   limit,
-  Timestamp
+  Timestamp,
+  writeBatch
 } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { db, storage } from '@/lib/firebase'
+import { ref, deleteObject, listAll } from 'firebase/storage'
 
 // Helper to check if code is running in browser (prevents SSR/build-time Firebase calls)
 const isBrowser = typeof window !== 'undefined'
@@ -266,14 +268,153 @@ export class AdminService {
     }
   }
 
-  static async deleteEvent(eventId: string) {
+  /**
+   * Check if an event has any orders
+   */
+  static async checkEventOrders(eventId: string): Promise<{ hasOrders: boolean; orderCount: number }> {
     try {
+      const ordersRef = collection(db, 'orders')
+      const q = query(ordersRef, where('eventId', '==', eventId))
+      const snapshot = await getDocs(q)
+
+      return {
+        hasOrders: snapshot.size > 0,
+        orderCount: snapshot.size
+      }
+    } catch (error) {
+      console.error('Error checking event orders:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Delete an event - performs soft delete if orders exist, hard delete otherwise
+   * Hard delete also cleans up:
+   * - Images from Firebase Storage
+   * - Seat holds from seat_holds collection
+   * - Any other related data
+   */
+  static async deleteEvent(eventId: string, userId?: string): Promise<{ type: 'hard' | 'soft'; orderCount?: number }> {
+    try {
+      // First, check if event has orders
+      const orderCheck = await this.checkEventOrders(eventId)
+
+      if (orderCheck.hasOrders) {
+        // Soft delete - just mark as deleted but preserve data for order history
+        const eventRef = doc(db, 'events', eventId)
+        await updateDoc(eventRef, {
+          status: 'deleted',
+          deletedAt: Timestamp.now(),
+          deletedBy: userId || 'unknown',
+          updatedAt: Timestamp.now()
+        })
+
+        console.log(`[AdminService] Soft deleted event ${eventId} (has ${orderCheck.orderCount} orders)`)
+        return { type: 'soft', orderCount: orderCheck.orderCount }
+      }
+
+      // Hard delete - no orders, safe to permanently delete everything
+
+      // 1. Get event data first (to get image URLs)
       const eventRef = doc(db, 'events', eventId)
+      const eventDoc = await getDoc(eventRef)
+      const eventData = eventDoc.exists() ? eventDoc.data() : null
+
+      // 2. Delete images from Firebase Storage
+      if (eventData) {
+        await this.deleteEventImages(eventData)
+      }
+
+      // 3. Delete seat holds for this event
+      await this.deleteEventSeatHolds(eventId)
+
+      // 4. Delete the event document
       await deleteDoc(eventRef)
-      return true
+
+      console.log(`[AdminService] Hard deleted event ${eventId} and all associated data`)
+      return { type: 'hard' }
     } catch (error) {
       console.error('Error deleting event:', error)
       throw error
+    }
+  }
+
+  /**
+   * Delete all images associated with an event from Firebase Storage
+   */
+  private static async deleteEventImages(eventData: any): Promise<void> {
+    try {
+      const imagesToDelete: string[] = []
+
+      // Collect all image URLs from event data
+      if (eventData.basics?.images) {
+        const images = eventData.basics.images
+        if (images.cover) imagesToDelete.push(images.cover)
+        if (images.thumbnail) imagesToDelete.push(images.thumbnail)
+        if (images.gallery && Array.isArray(images.gallery)) {
+          imagesToDelete.push(...images.gallery)
+        }
+      }
+
+      // Also check legacy image fields
+      if (eventData.imageUrl) imagesToDelete.push(eventData.imageUrl)
+      if (eventData.posterUrl) imagesToDelete.push(eventData.posterUrl)
+      if (eventData.bannerUrl) imagesToDelete.push(eventData.bannerUrl)
+
+      // Delete each image from storage
+      for (const imageUrl of imagesToDelete) {
+        try {
+          // Only delete if it's a Firebase Storage URL
+          if (imageUrl && imageUrl.includes('firebasestorage.googleapis.com')) {
+            // Extract the path from the Firebase Storage URL
+            // URLs look like: https://firebasestorage.googleapis.com/v0/b/bucket/o/path%2Fto%2Ffile?token=xxx
+            const urlObj = new URL(imageUrl)
+            const pathMatch = urlObj.pathname.match(/\/o\/(.+)$/)
+            if (pathMatch) {
+              const encodedPath = pathMatch[1].split('?')[0]
+              const storagePath = decodeURIComponent(encodedPath)
+              const storageRef = ref(storage, storagePath)
+              await deleteObject(storageRef)
+              console.log(`[AdminService] Deleted image: ${storagePath}`)
+            }
+          }
+        } catch (imgError: any) {
+          // Log but don't fail if image deletion fails (might already be deleted)
+          if (imgError.code !== 'storage/object-not-found') {
+            console.warn(`[AdminService] Failed to delete image: ${imageUrl}`, imgError.message)
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting event images:', error)
+      // Don't throw - image cleanup failure shouldn't prevent event deletion
+    }
+  }
+
+  /**
+   * Delete all seat holds for an event
+   */
+  private static async deleteEventSeatHolds(eventId: string): Promise<void> {
+    try {
+      const holdsRef = collection(db, 'seat_holds')
+      const q = query(holdsRef, where('eventId', '==', eventId))
+      const snapshot = await getDocs(q)
+
+      if (snapshot.empty) {
+        return
+      }
+
+      // Use batch delete for efficiency
+      const batch = writeBatch(db)
+      snapshot.docs.forEach(doc => {
+        batch.delete(doc.ref)
+      })
+      await batch.commit()
+
+      console.log(`[AdminService] Deleted ${snapshot.size} seat holds for event ${eventId}`)
+    } catch (error) {
+      console.error('Error deleting seat holds:', error)
+      // Don't throw - seat hold cleanup failure shouldn't prevent event deletion
     }
   }
 
