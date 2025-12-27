@@ -15,8 +15,9 @@ import PaymentGatewaySetup from '@/components/admin/promoters/PaymentGatewaySetu
 import PromoterEvents from '@/components/admin/promoters/PromoterEvents'
 import PromoterCommissions from '@/components/admin/promoters/PromoterCommissions'
 import PromoterDocuments from '@/components/admin/promoters/PromoterDocuments'
+import PromoterAffiliates from '@/components/admin/promoters/PromoterAffiliates'
 
-type TabType = 'tenants' | 'branding' | 'users' | 'payment' | 'events' | 'commissions' | 'documents' | 'domains'
+type TabType = 'tenants' | 'branding' | 'users' | 'payment' | 'events' | 'commissions' | 'documents' | 'affiliates' | 'domains'
 
 // Default color scheme
 const DEFAULT_COLOR_SCHEME = {
@@ -705,8 +706,8 @@ export default function WhiteLabelPage() {
     )
   }
 
-  const adminTabs: TabType[] = ['tenants', 'branding', 'users', 'payment', 'events', 'commissions', 'documents', 'domains']
-  const promoterTabs: TabType[] = ['branding', 'payment', 'events', 'commissions', 'documents']
+  const adminTabs: TabType[] = ['tenants', 'branding', 'users', 'payment', 'events', 'commissions', 'documents', 'affiliates', 'domains']
+  const promoterTabs: TabType[] = ['branding', 'payment', 'events', 'commissions', 'documents', 'affiliates']
 
   return (
     <div className="space-y-6">
@@ -1748,6 +1749,59 @@ export default function WhiteLabelPage() {
             ) : (
               <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-12 border border-slate-200 dark:border-white/10 text-center">
                 <p className="text-slate-500 dark:text-gray-400">Select a tenant to view their documents</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* AFFILIATES TAB */}
+      {activeTab === 'affiliates' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Tenant Selector */}
+          {isAdmin && promoters.length > 1 && (
+            <div className="lg:col-span-1 bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-slate-200 dark:border-white/10">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Select Tenant</h3>
+              <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                {promoters.map(promoter => (
+                  <button
+                    key={promoter.id}
+                    onClick={() => handleSelectPromoter(promoter)}
+                    className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-left ${
+                      selectedPromoter?.id === promoter.id
+                        ? 'bg-purple-500/20 border border-purple-500/30'
+                        : 'bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 border border-transparent'
+                    }`}
+                  >
+                    {promoter.logo ? (
+                      <img src={promoter.logo} alt={promoter.name} className="w-10 h-10 rounded-lg object-cover" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg bg-slate-200 dark:bg-white/10 flex items-center justify-center text-slate-500 dark:text-gray-400">
+                        {promoter.name?.charAt(0) || '?'}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-slate-900 dark:text-white font-medium truncate">{promoter.name}</p>
+                      <p className="text-slate-500 dark:text-gray-400 text-sm capitalize">{promoter.brandingType || 'basic'} Plan</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Affiliates */}
+          <div className={`${isAdmin && promoters.length > 1 ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
+            {selectedPromoter ? (
+              <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-6 border border-slate-200 dark:border-white/10">
+                <PromoterAffiliates promoterId={selectedPromoter.id} />
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-12 border border-slate-200 dark:border-white/10 text-center">
+                <svg className="w-16 h-16 mx-auto text-slate-300 dark:text-slate-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+                <p className="text-slate-500 dark:text-gray-400">Select a tenant to manage their affiliate integrations</p>
               </div>
             )}
           </div>
