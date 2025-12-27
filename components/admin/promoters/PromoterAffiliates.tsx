@@ -228,6 +228,19 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
     return PLATFORM_CONFIGS.find(p => p.platform === platform)
   }
 
+  // Load imported events for display
+  const loadImportedEvents = async () => {
+    const q = query(
+      collection(db, 'affiliateEvents'),
+      where('promoterId', '==', promoterId)
+    )
+    const snapshot = await getDocs(q)
+    const events = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as AffiliateEvent[]
+    // Sort by date
+    events.sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
+    setImportedEvents(events)
+  }
+
   const resetForm = () => {
     setFormData({
       platform: '',
@@ -401,7 +414,7 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
       }
 
       // Refresh imported events
-      await fetchImportedEvents()
+      await loadImportedEvents()
       alert(`Successfully updated ${updatedCount} event URLs.`)
     } catch (error) {
       console.error('Error regenerating URLs:', error)
@@ -619,19 +632,6 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
     } finally {
       setImportingEvents(false)
     }
-  }
-
-  // Load imported events for display
-  const loadImportedEvents = async () => {
-    const q = query(
-      collection(db, 'affiliateEvents'),
-      where('promoterId', '==', promoterId)
-    )
-    const snapshot = await getDocs(q)
-    const events = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as AffiliateEvent[]
-    // Sort by date
-    events.sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
-    setImportedEvents(events)
   }
 
   useEffect(() => {
