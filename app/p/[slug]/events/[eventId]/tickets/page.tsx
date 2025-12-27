@@ -212,6 +212,7 @@ export default function TicketSelectionPage() {
         venueFeeScope: event.pricing.fees.venueFeeScope,
         salesTax: event.pricing.fees.salesTax,
         customFees: event.pricing.fees.customFees,
+        applyPercentFeesOnDiscountedPrice: event.pricing.fees.applyPercentFeesOnDiscountedPrice,
       } : undefined,
     })
 
@@ -265,7 +266,20 @@ export default function TicketSelectionPage() {
   }
 
   const formatDate = (dateStr: string, time?: string): string => {
-    const date = new Date(dateStr)
+    // Parse date carefully to avoid timezone issues
+    // If dateStr is ISO format (contains T), parse directly
+    // Otherwise, treat as local date string
+    let date: Date
+    if (dateStr.includes('T')) {
+      // ISO format - extract just the date part and treat as local
+      const datePart = dateStr.split('T')[0]
+      // Parse as local time by appending time or using noon to avoid DST issues
+      date = new Date(datePart + 'T12:00:00')
+    } else {
+      // Already just a date string - parse as local
+      date = new Date(dateStr + 'T12:00:00')
+    }
+
     const formatted = date.toLocaleDateString('en-US', {
       weekday: 'short',
       month: 'short',
