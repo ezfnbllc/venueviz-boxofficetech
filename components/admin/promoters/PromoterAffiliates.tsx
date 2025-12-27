@@ -1095,14 +1095,17 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-primary-contrast mb-2">
-                            API Secret
+                          <label className="block text-sm font-medium text-primary-contrast mb-1">
+                            API Secret <span className="text-[#717171] font-normal">(Optional)</span>
                           </label>
+                          <p className="text-xs text-[#717171] mb-2">
+                            Not required for Ticketmaster Discovery API
+                          </p>
                           <input
                             type="password"
                             value={formData.apiSecret}
                             onChange={(e) => setFormData({ ...formData, apiSecret: e.target.value })}
-                            placeholder="Your API secret"
+                            placeholder="Leave blank for most platforms"
                             className="form-control"
                           />
                         </div>
@@ -1242,14 +1245,17 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-primary-contrast mb-2">
-                        API Secret
+                      <label className="block text-sm font-medium text-primary-contrast mb-1">
+                        API Secret <span className="text-[#717171] font-normal">(Optional)</span>
                       </label>
+                      <p className="text-xs text-[#717171] mb-2">
+                        Not required for Ticketmaster Discovery API
+                      </p>
                       <input
                         type="password"
                         value={formData.apiSecret}
                         onChange={(e) => setFormData({ ...formData, apiSecret: e.target.value })}
-                        placeholder="Your API secret"
+                        placeholder="Leave blank for most platforms"
                         className="form-control"
                       />
                     </div>
