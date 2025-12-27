@@ -150,6 +150,34 @@ export async function GET(
       type: venueData.type,
     } : null
 
+    // Check if this is a reserved seating event
+    const seatingType = data.seatingType || 'general'
+    const layoutType = data.layoutType || 'general_admission'
+    const layoutId = data.layoutId || ''
+
+    // Fetch layout data for reserved seating events
+    let layoutData = null
+    if ((seatingType === 'reserved' || layoutType === 'seating_chart') && layoutId) {
+      try {
+        const layoutDoc = await db.collection('layouts').doc(layoutId).get()
+        if (layoutDoc.exists) {
+          const layout = layoutDoc.data()!
+          layoutData = {
+            id: layoutDoc.id,
+            name: layout.name,
+            type: layout.type,
+            totalCapacity: layout.totalCapacity,
+            sections: layout.sections || [],
+            priceCategories: layout.priceCategories || [],
+            stage: layout.stage,
+            gaLevels: layout.gaLevels || [],
+          }
+        }
+      } catch (layoutError) {
+        console.error('Error fetching layout:', layoutError)
+      }
+    }
+
     // Return event data
     const event = {
       id: eventDoc.id,
@@ -168,11 +196,18 @@ export async function GET(
         currency: data.pricing.currency || 'USD',
         minPrice: data.pricing.minPrice,
         maxPrice: data.pricing.maxPrice,
+        fees: data.pricing.fees || null,
       } : null,
       ticketTypes,
       isSoldOut: data.isSoldOut || false,
       ticketsAvailable: data.ticketsAvailable,
       status: data.status,
+      // Seating chart data
+      seatingType,
+      layoutType,
+      layoutId,
+      layout: layoutData,
+      availableSections: data.availableSections || [],
     }
 
     return NextResponse.json(event)

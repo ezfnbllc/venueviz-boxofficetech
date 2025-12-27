@@ -1,11 +1,20 @@
 'use client'
-import {useState, useEffect, useCallback} from 'react'
+import {useState, useEffect, useCallback, useRef} from 'react'
 import {useRouter} from 'next/navigation'
 import {AdminService} from '@/lib/admin/adminService'
 import {StorageService} from '@/lib/storage/storageService'
 import {auth} from '@/lib/firebase'
 import {onAuthStateChanged} from 'firebase/auth'
 import EnhancedLayoutBuilder from '@/components/EnhancedLayoutBuilder'
+
+// Venue suggestion type from autocomplete API
+interface VenueSuggestion {
+  placeId: string
+  name: string
+  address: string
+  fullDescription: string
+  types: string[]
+}
 
 export default function VenuesManagement() {
   const router = useRouter()
@@ -22,6 +31,14 @@ export default function VenuesManagement() {
   const [imageUrls, setImageUrls] = useState<string[]>([])
   const [lookingUpVenue, setLookingUpVenue] = useState(false)
   const [lookupMessage, setLookupMessage] = useState('')
+
+  // Autocomplete state
+  const [venueQuery, setVenueQuery] = useState('')
+  const [suggestions, setSuggestions] = useState<VenueSuggestion[]>([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false)
+  const autocompleteRef = useRef<HTMLDivElement>(null)
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   const [formData, setFormData] = useState({
     name: '',
@@ -74,8 +91,9 @@ export default function VenuesManagement() {
 
   const handleEdit = (venue: any) => {
     setEditingVenue(venue)
+    const venueName = venue.name || ''
     setFormData({
-      name: venue.name || '',
+      name: venueName,
       streetAddress1: venue.streetAddress1 || venue.address?.street || '',
       streetAddress2: venue.streetAddress2 || '',
       city: venue.city || venue.address?.city || 'Dallas',
@@ -95,6 +113,7 @@ export default function VenuesManagement() {
       website: venue.website || '',
       description: venue.description || ''
     })
+    setVenueQuery(venueName) // Set autocomplete input value
     setImageUrls(venue.images || [])
     setShowWizard(true)
     setWizardStep(1)
@@ -188,6 +207,11 @@ export default function VenuesManagement() {
     setImageUrls([])
     setEditingVenue(null)
     setWizardStep(1)
+    // Reset autocomplete state
+    setVenueQuery('')
+    setSuggestions([])
+    setShowSuggestions(false)
+    setLookupMessage('')
   }
 
   const toggleAmenity = (amenity: string) => {
@@ -197,7 +221,111 @@ export default function VenuesManagement() {
     setFormData({...formData, amenities})
   }
 
-  // AI-powered venue lookup to auto-fill address and details
+  // Close autocomplete when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (autocompleteRef.current && !autocompleteRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Fetch venue autocomplete suggestions
+  const fetchSuggestions = async (query: string) => {
+    if (query.length < 3) {
+      setSuggestions([])
+      setShowSuggestions(false)
+      return
+    }
+
+    setLoadingSuggestions(true)
+    try {
+      const response = await fetch(`/api/venue-autocomplete?query=${encodeURIComponent(query)}`)
+      const data = await response.json()
+
+      if (data.success && data.suggestions) {
+        setSuggestions(data.suggestions)
+        setShowSuggestions(data.suggestions.length > 0)
+      }
+    } catch (error) {
+      console.error('Autocomplete error:', error)
+    }
+    setLoadingSuggestions(false)
+  }
+
+  // Handle venue name input change with debounce
+  const handleVenueQueryChange = (value: string) => {
+    setVenueQuery(value)
+    setFormData({...formData, name: value})
+
+    // Clear previous timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+    }
+
+    // Debounce API call
+    debounceTimerRef.current = setTimeout(() => {
+      fetchSuggestions(value)
+    }, 300)
+  }
+
+  // Handle selecting a venue from suggestions
+  const handleSelectVenue = async (suggestion: VenueSuggestion) => {
+    setShowSuggestions(false)
+    setVenueQuery(suggestion.name)
+    setFormData({...formData, name: suggestion.name})
+    setLookingUpVenue(true)
+    setLookupMessage('Fetching venue details...')
+
+    try {
+      const response = await fetch(`/api/venue-details?placeId=${encodeURIComponent(suggestion.placeId)}`)
+      const data = await response.json()
+
+      if (data.success && data.venue) {
+        const venue = data.venue
+
+        // Update form with all venue details
+        setFormData(prev => ({
+          ...prev,
+          name: venue.name || prev.name,
+          streetAddress1: venue.streetAddress1 || prev.streetAddress1,
+          city: venue.city || prev.city,
+          state: venue.state || prev.state,
+          zipCode: venue.zipCode || prev.zipCode,
+          latitude: venue.latitude || prev.latitude,
+          longitude: venue.longitude || prev.longitude,
+          capacity: venue.capacity || prev.capacity,
+          type: venue.type || prev.type,
+          contactPhone: venue.contactPhone || prev.contactPhone,
+          website: venue.website || prev.website,
+          description: venue.description || prev.description,
+          amenities: venue.amenities || prev.amenities,
+          images: venue.images?.length ? venue.images : prev.images
+        }))
+
+        // Update image preview
+        if (venue.images?.length) {
+          setImageUrls(venue.images)
+        }
+
+        setLookupMessage(`✓ Found "${venue.name}" - All details loaded!`)
+        setTimeout(() => setLookupMessage(''), 5000)
+      } else {
+        setLookupMessage('Could not fetch venue details. You can enter them manually.')
+        setTimeout(() => setLookupMessage(''), 5000)
+      }
+    } catch (error) {
+      console.error('Venue details error:', error)
+      setLookupMessage('Error fetching venue details.')
+      setTimeout(() => setLookupMessage(''), 5000)
+    }
+
+    setLookingUpVenue(false)
+  }
+
+  // AI-powered venue lookup to auto-fill address and details (legacy button)
   const handleLookupVenue = async () => {
     if (!formData.name.trim()) {
       setLookupMessage('Please enter a venue name first')
@@ -417,16 +545,46 @@ export default function VenuesManagement() {
               {/* Step 1: Basic Info */}
               {wizardStep === 1 && (
                 <div className="space-y-4">
-                  <div>
+                  <div ref={autocompleteRef} className="relative">
                     <label className="block text-sm mb-2 text-slate-900 dark:text-white">Venue Name</label>
                     <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={formData.name}
-                        onChange={(e) => setFormData({...formData, name: e.target.value})}
-                        className="flex-1 px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white"
-                        placeholder="Enter venue name"
-                      />
+                      <div className="flex-1 relative">
+                        <input
+                          type="text"
+                          value={venueQuery || formData.name}
+                          onChange={(e) => handleVenueQueryChange(e.target.value)}
+                          onFocus={() => {
+                            // Only show suggestions on focus if we have them cached
+                            if (venueQuery.length >= 3 && suggestions.length > 0) {
+                              setShowSuggestions(true)
+                            }
+                          }}
+                          className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white"
+                          placeholder="Start typing venue name..."
+                        />
+                        {loadingSuggestions && (
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                            <div className="animate-spin h-4 w-4 border-2 border-accent-500 border-t-transparent rounded-full"></div>
+                          </div>
+                        )}
+
+                        {/* Autocomplete Dropdown */}
+                        {showSuggestions && suggestions.length > 0 && (
+                          <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                            {suggestions.map((suggestion, index) => (
+                              <button
+                                key={suggestion.placeId || index}
+                                type="button"
+                                onClick={() => handleSelectVenue(suggestion)}
+                                className="w-full px-4 py-3 text-left hover:bg-slate-100 dark:hover:bg-slate-700 border-b border-slate-100 dark:border-slate-700 last:border-0 transition-colors"
+                              >
+                                <div className="font-medium text-slate-900 dark:text-white">{suggestion.name}</div>
+                                <div className="text-sm text-slate-500 dark:text-slate-400">{suggestion.address}</div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       <button
                         type="button"
                         onClick={handleLookupVenue}
@@ -439,17 +597,17 @@ export default function VenuesManagement() {
                             Looking up...
                           </>
                         ) : (
-                          <>🔍 Lookup Details</>
+                          <>🔍 Lookup</>
                         )}
                       </button>
                     </div>
                     {lookupMessage && (
-                      <p className={`text-xs mt-2 ${lookupMessage.includes('Found') ? 'text-green-400' : lookupMessage.includes('Error') || lookupMessage.includes('not find') ? 'text-yellow-400' : 'text-blue-400'}`}>
+                      <p className={`text-xs mt-2 ${lookupMessage.includes('✓') || lookupMessage.includes('Found') ? 'text-green-400' : lookupMessage.includes('Error') || lookupMessage.includes('not find') || lookupMessage.includes('Could not') ? 'text-yellow-400' : 'text-blue-400'}`}>
                         {lookupMessage}
                       </p>
                     )}
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      Enter the venue name and click "Lookup Details" to auto-fill address and other information
+                      Type 3+ characters to see suggestions. Select a venue to auto-fill all details including address, phone, website, and photos.
                     </p>
                   </div>
 

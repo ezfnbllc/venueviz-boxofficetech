@@ -6,6 +6,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import Layout from '@/components/public/Layout'
 import { useCart } from '@/lib/stores/cartStore'
+import InteractiveSeatingChart from '@/components/public/InteractiveSeatingChart'
 
 interface TicketType {
   id: string
@@ -14,6 +15,33 @@ interface TicketType {
   price: number
   available: number
   maxPerOrder: number
+}
+
+interface PriceCategory {
+  id: string
+  name: string
+  color: string
+  price: number
+}
+
+interface LayoutData {
+  id: string
+  name: string
+  type: string
+  sections: any[]
+  priceCategories: PriceCategory[]
+  stage?: any
+  totalCapacity?: number
+}
+
+interface SelectedSeat {
+  id: string
+  sectionId: string
+  sectionName: string
+  row: string
+  number: string | number
+  price: number
+  priceCategoryName: string
 }
 
 interface EventData {
@@ -36,6 +64,12 @@ interface EventData {
   }
   ticketTypes?: TicketType[]
   isSoldOut?: boolean
+  // Seating chart data
+  seatingType?: 'general' | 'reserved'
+  layoutType?: 'general_admission' | 'seating_chart'
+  layoutId?: string
+  layout?: LayoutData
+  availableSections?: any[]
 }
 
 export default function TicketSelectionPage() {
@@ -50,11 +84,56 @@ export default function TicketSelectionPage() {
   const [loading, setLoading] = useState(true)
   const [quantities, setQuantities] = useState<Record<string, number>>({})
   const [isClient, setIsClient] = useState(false)
+  const [selectedSeats, setSelectedSeats] = useState<SelectedSeat[]>([])
+
+  // Seat hold timer state
+  const [holdExpiresAt, setHoldExpiresAt] = useState<Date | null>(null)
+  const [timeRemaining, setTimeRemaining] = useState<string | null>(null)
+
+  // Check if event uses reserved seating
+  const isReservedSeating = event?.seatingType === 'reserved' || event?.layoutType === 'seating_chart'
 
   // Handle hydration
   useEffect(() => {
     setIsClient(true)
   }, [])
+
+  // Countdown timer for seat holds
+  useEffect(() => {
+    if (!holdExpiresAt) {
+      setTimeRemaining(null)
+      return
+    }
+
+    const updateTimer = () => {
+      const now = new Date()
+      const diff = holdExpiresAt.getTime() - now.getTime()
+
+      if (diff <= 0) {
+        setTimeRemaining(null)
+        setHoldExpiresAt(null)
+        setSelectedSeats([])
+        // Show alert that seats have been released
+        alert('Your seat hold has expired. Please select your seats again.')
+        return
+      }
+
+      const minutes = Math.floor(diff / 60000)
+      const seconds = Math.floor((diff % 60000) / 1000)
+      setTimeRemaining(`${minutes}:${seconds.toString().padStart(2, '0')}`)
+    }
+
+    // Update immediately and then every second
+    updateTimer()
+    const intervalId = setInterval(updateTimer, 1000)
+
+    return () => clearInterval(intervalId)
+  }, [holdExpiresAt])
+
+  // Handle hold created callback from seating chart
+  const handleHoldCreated = (expiresAt: Date) => {
+    setHoldExpiresAt(expiresAt)
+  }
 
   // Fetch event data
   useEffect(() => {
@@ -102,13 +181,18 @@ export default function TicketSelectionPage() {
     })
   }
 
+  // Handle seat selection from seating chart
+  const handleSeatSelection = (seats: SelectedSeat[]) => {
+    setSelectedSeats(seats)
+  }
+
   const handleAddToCart = () => {
     if (!event) return
 
     // Clear existing cart first
     clearCart()
 
-    // Set current event context
+    // Set current event context including fee configuration
     setCurrentEvent({
       eventId: event.id,
       eventName: event.name,
@@ -116,35 +200,86 @@ export default function TicketSelectionPage() {
       eventDate: formatDate(event.startDate, event.startTime),
       venueName: event.venue?.name,
       promoterSlug: slug,
+      fees: event.pricing?.fees ? {
+        serviceFee: event.pricing.fees.serviceFee,
+        serviceFeeType: event.pricing.fees.serviceFeeType,
+        serviceFeeScope: event.pricing.fees.serviceFeeScope,
+        parkingFee: event.pricing.fees.parkingFee,
+        parkingFeeType: event.pricing.fees.parkingFeeType,
+        parkingFeeScope: event.pricing.fees.parkingFeeScope,
+        venueFee: event.pricing.fees.venueFee,
+        venueFeeType: event.pricing.fees.venueFeeType,
+        venueFeeScope: event.pricing.fees.venueFeeScope,
+        salesTax: event.pricing.fees.salesTax,
+        customFees: event.pricing.fees.customFees,
+        applyPercentFeesOnDiscountedPrice: event.pricing.fees.applyPercentFeesOnDiscountedPrice,
+      } : undefined,
     })
 
-    // Add selected tickets to cart
-    Object.entries(quantities).forEach(([ticketId, quantity]) => {
-      if (quantity > 0) {
-        const ticketType = event.ticketTypes?.find(t => t.id === ticketId)
-        if (ticketType) {
-          addItem({
-            id: `${event.id}-${ticketId}-${Date.now()}`,
-            type: 'ticket',
-            eventId: event.id,
-            eventName: event.name,
-            eventImage: event.bannerImage || event.thumbnail,
-            eventDate: formatDate(event.startDate, event.startTime),
-            venueName: event.venue?.name,
-            ticketType: ticketType.name,
-            price: ticketType.price,
-            quantity,
-          })
+    if (isReservedSeating && selectedSeats.length > 0) {
+      // Add selected seats to cart (reserved seating)
+      selectedSeats.forEach(seat => {
+        addItem({
+          id: `${event.id}-${seat.id}-${Date.now()}`,
+          type: 'ticket',
+          eventId: event.id,
+          eventName: event.name,
+          eventImage: event.bannerImage || event.thumbnail,
+          eventDate: formatDate(event.startDate, event.startTime),
+          venueName: event.venue?.name,
+          ticketType: `${seat.sectionName} - Row ${seat.row}, Seat ${seat.number}`,
+          price: seat.price,
+          quantity: 1,
+          seatInfo: {
+            sectionId: seat.sectionId,
+            sectionName: seat.sectionName,
+            row: seat.row,
+            seat: seat.number,
+          },
+        })
+      })
+    } else {
+      // Add selected tickets to cart (general admission)
+      Object.entries(quantities).forEach(([ticketId, quantity]) => {
+        if (quantity > 0) {
+          const ticketType = event.ticketTypes?.find(t => t.id === ticketId)
+          if (ticketType) {
+            addItem({
+              id: `${event.id}-${ticketId}-${Date.now()}`,
+              type: 'ticket',
+              eventId: event.id,
+              eventName: event.name,
+              eventImage: event.bannerImage || event.thumbnail,
+              eventDate: formatDate(event.startDate, event.startTime),
+              venueName: event.venue?.name,
+              ticketType: ticketType.name,
+              price: ticketType.price,
+              quantity,
+            })
+          }
         }
-      }
-    })
+      })
+    }
 
     // Navigate to checkout
     router.push(`/p/${slug}/checkout`)
   }
 
   const formatDate = (dateStr: string, time?: string): string => {
-    const date = new Date(dateStr)
+    // Parse date carefully to avoid timezone issues
+    // If dateStr is ISO format (contains T), parse directly
+    // Otherwise, treat as local date string
+    let date: Date
+    if (dateStr.includes('T')) {
+      // ISO format - extract just the date part and treat as local
+      const datePart = dateStr.split('T')[0]
+      // Parse as local time by appending time or using noon to avoid DST issues
+      date = new Date(datePart + 'T12:00:00')
+    } else {
+      // Already just a date string - parse as local
+      date = new Date(dateStr + 'T12:00:00')
+    }
+
     const formatted = date.toLocaleDateString('en-US', {
       weekday: 'short',
       month: 'short',
@@ -161,10 +296,16 @@ export default function TicketSelectionPage() {
   }
 
   const getTotalQuantity = () => {
+    if (isReservedSeating) {
+      return selectedSeats.length
+    }
     return Object.values(quantities).reduce((sum, q) => sum + q, 0)
   }
 
   const getTotalPrice = () => {
+    if (isReservedSeating) {
+      return selectedSeats.reduce((sum, seat) => sum + seat.price, 0)
+    }
     return Object.entries(quantities).reduce((sum, [ticketId, quantity]) => {
       const ticketType = event?.ticketTypes?.find(t => t.id === ticketId)
       return sum + (ticketType?.price || 0) * quantity
@@ -273,7 +414,9 @@ export default function TicketSelectionPage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Left Column - Ticket Selection */}
             <div className="lg:col-span-2">
-              <h2 className="text-xl font-bold text-gray-900 mb-6">Select Tickets</h2>
+              <h2 className="text-xl font-bold text-gray-900 mb-6">
+                {isReservedSeating ? 'Select Your Seats' : 'Select Tickets'}
+              </h2>
 
               {event.isSoldOut ? (
                 <div className="main-card p-8 text-center">
@@ -283,7 +426,59 @@ export default function TicketSelectionPage() {
                   <h2 className="text-xl font-semibold text-gray-900 mb-2">Sold Out</h2>
                   <p className="text-gray-600">Sorry, tickets for this event are no longer available.</p>
                 </div>
+              ) : isReservedSeating && event.layout ? (
+                /* Interactive Seating Chart for Reserved Seating */
+                <div className="main-card overflow-hidden">
+                  {/* Timer banner */}
+                  {timeRemaining && (
+                    <div className="p-3 bg-amber-50 border-b border-amber-200 flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-amber-800">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="font-medium">Your seats are reserved for</span>
+                      </div>
+                      <span className="text-xl font-bold text-amber-900">{timeRemaining}</span>
+                    </div>
+                  )}
+                  <InteractiveSeatingChart
+                    layout={event.layout}
+                    eventId={event.id}
+                    maxSeats={10}
+                    onSeatSelection={handleSeatSelection}
+                    onHoldCreated={handleHoldCreated}
+                    className="h-[500px] md:h-[600px]"
+                  />
+
+                  {/* Selected Seats Summary */}
+                  {selectedSeats.length > 0 && (
+                    <div className="p-4 bg-gray-50 border-t border-gray-200">
+                      <h3 className="font-semibold text-gray-900 mb-3">Your Selected Seats</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedSeats.map(seat => (
+                          <div
+                            key={seat.id}
+                            className="px-3 py-2 bg-green-100 border border-green-300 rounded-lg text-sm"
+                          >
+                            <span className="font-medium text-gray-900">
+                              {seat.sectionName}
+                            </span>
+                            <span className="text-gray-600 mx-1">•</span>
+                            <span className="text-gray-700">
+                              Row {seat.row}, Seat {seat.number}
+                            </span>
+                            <span className="text-gray-600 mx-1">•</span>
+                            <span className="font-semibold text-green-700">
+                              ${seat.price}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               ) : (
+                /* General Admission Ticket Selection */
                 <div className="space-y-4">
                   {event.ticketTypes?.map((ticketType) => (
                     <div
@@ -341,7 +536,7 @@ export default function TicketSelectionPage() {
               <div className="sticky top-24">
                 <div className="main-card">
                   <div className="p-6 border-b border-gray-100">
-                    <h2 className="text-lg font-semibold text-gray-900">Order Summary</h2>
+                    <h2 className="text-lg font-semibold text-[#1d1d1d]">Order Summary</h2>
                   </div>
 
                   <div className="p-6">
@@ -357,37 +552,52 @@ export default function TicketSelectionPage() {
                         </div>
                       )}
                       <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2">{event.name}</h3>
-                        <p className="text-sm text-gray-600">{formatDate(event.startDate, event.startTime)}</p>
+                        <h3 className="font-semibold text-[#1d1d1d] mb-1 line-clamp-2">{event.name}</h3>
+                        <p className="text-sm text-[#717171]">{formatDate(event.startDate, event.startTime)}</p>
                         {event.venue?.name && (
                           <p className="text-sm text-[#6ac045] mt-1">{event.venue.name}</p>
                         )}
                       </div>
                     </div>
 
-                    {/* Selected Tickets */}
+                    {/* Selected Tickets/Seats */}
                     {getTotalQuantity() > 0 && (
                       <div className="space-y-2 mb-6 pb-6 border-b border-gray-100">
-                        {Object.entries(quantities).map(([ticketId, quantity]) => {
-                          if (quantity === 0) return null
-                          const ticketType = event.ticketTypes?.find(t => t.id === ticketId)
-                          if (!ticketType) return null
-                          return (
-                            <div key={ticketId} className="flex justify-between text-sm">
-                              <span className="text-gray-600">
-                                {ticketType.name} x{quantity}
+                        {isReservedSeating ? (
+                          /* Selected Seats for Reserved Seating */
+                          selectedSeats.map(seat => (
+                            <div key={seat.id} className="flex justify-between text-sm">
+                              <span className="text-[#717171]">
+                                {seat.sectionName} Row {seat.row}, Seat {seat.number}
                               </span>
-                              <span className="font-medium">
-                                ${(ticketType.price * quantity).toFixed(2)}
+                              <span className="font-medium text-[#1d1d1d]">
+                                ${seat.price.toFixed(2)}
                               </span>
                             </div>
-                          )
-                        })}
+                          ))
+                        ) : (
+                          /* Selected Ticket Types for GA */
+                          Object.entries(quantities).map(([ticketId, quantity]) => {
+                            if (quantity === 0) return null
+                            const ticketType = event.ticketTypes?.find(t => t.id === ticketId)
+                            if (!ticketType) return null
+                            return (
+                              <div key={ticketId} className="flex justify-between text-sm">
+                                <span className="text-[#717171]">
+                                  {ticketType.name} x{quantity}
+                                </span>
+                                <span className="font-medium text-[#1d1d1d]">
+                                  ${(ticketType.price * quantity).toFixed(2)}
+                                </span>
+                              </div>
+                            )
+                          })
+                        )}
                       </div>
                     )}
 
                     {/* Total */}
-                    <div className="flex justify-between font-semibold text-lg mb-6">
+                    <div className="flex justify-between font-semibold text-lg mb-6 text-[#1d1d1d]">
                       <span>Total</span>
                       <span className="text-[#6ac045]">${getTotalPrice().toFixed(2)}</span>
                     </div>
@@ -398,10 +608,13 @@ export default function TicketSelectionPage() {
                       disabled={getTotalQuantity() === 0}
                       className="main-btn btn-hover h-12 w-full disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {getTotalQuantity() === 0 ? 'Select Tickets' : `Checkout (${getTotalQuantity()} tickets)`}
+                      {getTotalQuantity() === 0
+                        ? (isReservedSeating ? 'Select Seats' : 'Select Tickets')
+                        : `Checkout (${getTotalQuantity()} ${isReservedSeating ? 'seats' : 'tickets'})`
+                      }
                     </button>
 
-                    <p className="text-xs text-gray-500 mt-4 text-center">
+                    <p className="text-xs text-[#717171] mt-4 text-center">
                       Price shown excludes service fees
                     </p>
                   </div>

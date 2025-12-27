@@ -180,13 +180,30 @@ export async function getPromoterEvents(
       query = query.where('isFeatured', '==', true)
     }
 
-    const snapshot = await query.get()
-    console.log(`[PublicService] Query returned ${snapshot.size} events for promoterId: ${promoterId}`)
+    let snapshot = await query.get()
+    console.log(`[PublicService] Query (promoter.promoterId) returned ${snapshot.size} events for promoterId: ${promoterId}`)
 
-    // Debug: If no events found, let's check what promoterIds exist in events
+    // Fallback: Also try top-level promoterId field if no results
+    if (snapshot.empty) {
+      console.log(`[PublicService] Trying fallback query with top-level promoterId...`)
+      let fallbackQuery = db.collection('events')
+        .where('promoterId', '==', promoterId)
+
+      if (options?.category) {
+        fallbackQuery = fallbackQuery.where('category', '==', options.category)
+      }
+      if (options?.featured) {
+        fallbackQuery = fallbackQuery.where('isFeatured', '==', true)
+      }
+
+      snapshot = await fallbackQuery.get()
+      console.log(`[PublicService] Fallback query returned ${snapshot.size} events`)
+    }
+
+    // Debug: If still no events found, check what promoterIds exist in events
     if (snapshot.empty) {
       console.log(`[PublicService] No events found. Checking sample events...`)
-      const sampleEvents = await db.collection('events').limit(3).get()
+      const sampleEvents = await db.collection('events').limit(5).get()
       sampleEvents.docs.forEach(doc => {
         const data = doc.data()
         console.log(`[PublicService] Sample event: id=${doc.id}, promoter.promoterId=${data.promoter?.promoterId}, promoterId=${data.promoterId}, status=${data.status}`)
@@ -194,35 +211,50 @@ export async function getPromoterEvents(
     }
 
     const now = new Date()
+    // Set to start of today for date comparisons (include events happening today)
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     const validStatuses = ['active', 'published']
 
-    // Debug: Log first event's data structure
+    // Debug: Log all events and their statuses
     if (snapshot.docs.length > 0) {
-      const firstData = snapshot.docs[0].data()
-      console.log('[PublicService] Sample event data structure:', {
-        name: firstData.name,
-        hasImages: !!firstData.images,
-        imagesCover: firstData.images?.cover,
-        hasSchedule: !!firstData.schedule,
-        schedulePerformances: firstData.schedule?.performances?.length,
-        firstPerfStartTime: firstData.schedule?.performances?.[0]?.startTime,
-        venueName: firstData.venueName,
-        venueObj: firstData.venue,
-        pricingTiers: firstData.pricing?.tiers?.length,
-        pricingCurrency: firstData.pricing?.currency,
+      snapshot.docs.forEach((doc, idx) => {
+        const data = doc.data()
+        console.log(`[PublicService] Event ${idx + 1}:`, {
+          id: doc.id,
+          name: data.name,
+          status: data.status,
+          hasPromoter: !!data.promoter?.promoterId,
+          promoterId: data.promoter?.promoterId,
+          hasSchedule: !!data.schedule?.performances?.length,
+          firstPerfDate: data.schedule?.performances?.[0]?.date,
+        })
       })
     }
 
     let events = snapshot.docs
       .filter(doc => {
-        const status = doc.data().status
-        return validStatuses.includes(status)
+        const data = doc.data()
+        const status = (data.status || '').toLowerCase()
+        const isValidStatus = validStatuses.includes(status)
+        if (!isValidStatus) {
+          console.log(`[PublicService] Event ${doc.id} filtered out - status '${data.status}' not in valid statuses`)
+        }
+        return isValidStatus
       })
       .map(doc => parseEventDoc(doc.id, doc.data()))
 
-    // Filter upcoming if needed
+    // Filter upcoming if needed (include events from today onwards)
     if (options?.upcoming) {
-      events = events.filter(e => e.startDate > now)
+      const eventsBeforeFilter = events.length
+      events = events.filter(e => {
+        const eventDate = new Date(e.startDate)
+        const isUpcoming = eventDate >= today || isNaN(eventDate.getTime())  // Include events with invalid dates for now
+        if (!isUpcoming) {
+          console.log(`[PublicService] Event ${e.id} (${e.name}) filtered out - date ${e.startDate} is in the past`)
+        }
+        return isUpcoming
+      })
+      console.log(`[PublicService] Upcoming filter: ${eventsBeforeFilter} -> ${events.length} events`)
     }
 
     // Sort by date
@@ -502,7 +534,8 @@ function parseEventDoc(id: string, data: any): PublicEvent {
       aiSearchDescription: data.communications.seo.aiSearchDescription,
       keywords: data.communications.seo.keywords,
       socialMediaImage: data.communications.seo.socialMediaImage,
-      faqStructuredData: data.communications.seo.faqStructuredData,
+      // FAQ structured data can be stored in either field
+      faqStructuredData: data.communications.seo.faqStructuredData || data.communications.seo.structuredDataFAQ,
       localSeo: data.communications.seo.localSeo,
       targetSearchQueries: data.communications.seo.targetSearchQueries,
       semanticKeywords: data.communications.seo.semanticKeywords,

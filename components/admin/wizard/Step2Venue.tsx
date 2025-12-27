@@ -1,8 +1,31 @@
 'use client'
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useEventWizardStore } from '@/lib/store/eventWizardStore'
 import { AdminService } from '@/lib/admin/adminService'
 import { StorageService } from '@/lib/storage/storageService'
+
+// Generate acronym from event name (e.g., "Kamal Haasan Meet and Greet" -> "KHMG")
+function generateEventAcronym(eventName: string): string {
+  if (!eventName) return 'EVT'
+
+  // Common words to skip
+  const skipWords = new Set(['and', 'the', 'of', 'in', 'at', 'to', 'for', 'with', 'a', 'an', 'by', 'on'])
+
+  // Split into words and filter
+  const words = eventName.split(/\s+/).filter(word => {
+    const lower = word.toLowerCase()
+    return word.length > 0 && !skipWords.has(lower)
+  })
+
+  // Take first letter of each significant word (up to 5)
+  const acronym = words
+    .slice(0, 5)
+    .map(word => word[0].toUpperCase())
+    .join('')
+
+  return acronym || 'EVT'
+}
 
 // Fuzzy search function - returns match score 0-1
 function fuzzyMatch(text: string, query: string): number {
@@ -33,6 +56,15 @@ function fuzzyMatch(text: string, query: string): number {
     if (textLower[i] === queryLower[queryIndex]) queryIndex++
   }
   return queryIndex / queryLower.length * 0.4
+}
+
+// Venue suggestion type from autocomplete API
+interface VenueSuggestion {
+  placeId: string
+  name: string
+  address: string
+  fullDescription: string
+  types: string[]
 }
 
 interface VenueWizardFormData {
@@ -114,6 +146,14 @@ export default function Step2Venue() {
   const [lookingUpVenue, setLookingUpVenue] = useState(false)
   const [lookupMessage, setLookupMessage] = useState('')
 
+  // Venue autocomplete state
+  const [venueNameQuery, setVenueNameQuery] = useState('')
+  const [venueSuggestions, setVenueSuggestions] = useState<VenueSuggestion[]>([])
+  const [showVenueSuggestions, setShowVenueSuggestions] = useState(false)
+  const [loadingVenueSuggestions, setLoadingVenueSuggestions] = useState(false)
+  const venueAutocompleteRef = useRef<HTMLDivElement>(null)
+  const venueDebounceTimerRef = useRef<NodeJS.Timeout | null>(null)
+
   // Create layout sub-wizard state
   const [showLayoutWizard, setShowLayoutWizard] = useState(false)
   const [layoutWizardStep, setLayoutWizardStep] = useState(1)
@@ -132,30 +172,216 @@ export default function Step2Venue() {
   })
   const [savingLayout, setSavingLayout] = useState(false)
 
+  // Confirmation dialogs for auto-create
+  const [pendingVenueCreate, setPendingVenueCreate] = useState<any>(null)
+  const [pendingLayoutCreate, setPendingLayoutCreate] = useState<{ venueId: string; ticketLevels: any[]; layoutName: string } | null>(null)
+
   const searchInputRef = useRef<HTMLInputElement>(null)
   const initializedRef = useRef(false)
+
+  // For portal mounting (SSR compatibility)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
     loadVenues()
   }, [])
 
-  // Auto-populate from scraped venue data
+  // Auto-populate search query from existing venue (when editing) or scraped venue data
+  // Also auto-create venue and layout if scraped data is available
   useEffect(() => {
     if (initializedRef.current) return
     if (venues.length === 0) return
 
-    const scrapedVenue = (formData.basics as any)?.scrapedVenue
-    if (scrapedVenue?.name) {
-      initializedRef.current = true
-      setSearchQuery(scrapedVenue.name)
-
-      // Try to find a matching venue
-      const matchedVenue = venues.find(v => fuzzyMatch(v.name, scrapedVenue.name) > 0.7)
-      if (matchedVenue) {
-        handleVenueChange(matchedVenue.id)
+    // First check if we're editing an existing event with a venue already selected
+    if (formData.venue.venueId) {
+      const existingVenue = venues.find(v => v.id === formData.venue.venueId)
+      if (existingVenue) {
+        initializedRef.current = true
+        setSearchQuery(existingVenue.name)
+        return
       }
     }
-  }, [venues, formData.basics])
+
+    // Otherwise check for scraped venue data (new event from URL scraping)
+    const scrapedVenue = (formData.basics as any)?.scrapedVenue
+    if (scrapedVenue?.name || scrapedVenue?.city) {
+      initializedRef.current = true
+      setSearchQuery(scrapedVenue.name || scrapedVenue.city || '')
+
+      // Try to find a matching venue (fuzzy match on name ONLY)
+      // We should only auto-select if we have a strong name match
+      let matchedVenue = null
+      if (scrapedVenue.name) {
+        // First try exact/high confidence match on name
+        matchedVenue = venues.find(v => fuzzyMatch(v.name, scrapedVenue.name) > 0.7)
+
+        // If no high confidence match, try name + city combination for better matching
+        if (!matchedVenue && scrapedVenue.city) {
+          matchedVenue = venues.find(v =>
+            v.city?.toLowerCase() === scrapedVenue.city?.toLowerCase() &&
+            fuzzyMatch(v.name, scrapedVenue.name) > 0.5
+          )
+        }
+      }
+      // NOTE: We do NOT auto-select based on city alone - that leads to wrong matches
+      // If user scraped a venue but we can't match it, we should create it or let them search
+
+      if (matchedVenue) {
+        // Found a match - select it
+        handleVenueChange(matchedVenue.id)
+
+        // Also check for scraped ticket levels to offer layout creation
+        const scrapedTicketLevels = (formData.basics as any)?.scrapedTicketLevels
+        if (scrapedTicketLevels && scrapedTicketLevels.length > 0) {
+          // Generate layout name from event name
+          const eventName = formData.basics?.title || ''
+          const acronym = generateEventAcronym(eventName)
+          const layoutName = `GA-${acronym}`
+
+          // Show layout creation confirmation after a brief delay for venue to load
+          setTimeout(() => {
+            setPendingLayoutCreate({ venueId: matchedVenue.id, ticketLevels: scrapedTicketLevels, layoutName })
+          }, 800)
+        }
+      } else if (scrapedVenue.name) {
+        // No match found - show confirmation dialog before creating
+        setPendingVenueCreate(scrapedVenue)
+      }
+      // If only city is available (no venue name scraped), let the user search/select manually
+    }
+  }, [venues, formData.basics, formData.venue.venueId])
+
+  // Confirm and create venue from scraped data
+  const confirmCreateVenue = async () => {
+    if (!pendingVenueCreate) return
+
+    try {
+      console.log('Creating venue from scraped data:', pendingVenueCreate)
+
+      const venueData = {
+        name: pendingVenueCreate.name || `${pendingVenueCreate.city || 'Event'} Venue`,
+        streetAddress1: pendingVenueCreate.address || '',
+        streetAddress2: '',
+        city: pendingVenueCreate.city || 'Dallas',
+        state: pendingVenueCreate.state || 'TX',
+        zipCode: '',
+        capacity: 5000,
+        type: 'convention_center',
+        amenities: ['Parking', 'Wheelchair Accessible'],
+        parkingCapacity: 500,
+        contactEmail: '',
+        contactPhone: '',
+        website: '',
+        description: `Venue for events in ${pendingVenueCreate.city || 'the area'}`,
+        images: [],
+        address: {
+          street: pendingVenueCreate.address || '',
+          city: pendingVenueCreate.city || 'Dallas',
+          state: pendingVenueCreate.state || 'TX',
+          zip: '',
+          country: 'USA'
+        }
+      }
+
+      const newVenueId = await AdminService.createVenue(venueData)
+      console.log('Created venue with ID:', newVenueId)
+
+      // Reload venues and select the new one
+      const updatedVenues = await AdminService.getVenues()
+      setVenues(updatedVenues)
+
+      // Select the new venue
+      handleVenueChange(newVenueId)
+
+      // Check if we have scraped ticket levels - show layout confirmation
+      const scrapedTicketLevels = (formData.basics as any)?.scrapedTicketLevels
+      if (scrapedTicketLevels && scrapedTicketLevels.length > 0) {
+        // Generate layout name from event name
+        const eventName = formData.basics?.title || ''
+        const acronym = generateEventAcronym(eventName)
+        const layoutName = `GA-${acronym}`
+
+        // Show layout creation confirmation after a brief delay
+        setTimeout(() => {
+          setPendingLayoutCreate({ venueId: newVenueId, ticketLevels: scrapedTicketLevels, layoutName })
+        }, 500)
+      }
+
+      setPendingVenueCreate(null)
+    } catch (error) {
+      console.error('Error creating venue:', error)
+      alert('Failed to create venue. Please try again.')
+    }
+  }
+
+  // Decline venue creation - user will create manually
+  const declineCreateVenue = () => {
+    setPendingVenueCreate(null)
+  }
+
+  // Confirm and create GA layout from scraped ticket levels
+  const confirmCreateLayout = async () => {
+    if (!pendingLayoutCreate) return
+
+    try {
+      const { venueId, ticketLevels, layoutName } = pendingLayoutCreate
+      console.log('Creating layout from ticket levels:', ticketLevels, 'with name:', layoutName)
+
+      let totalCapacity = 0
+      const gaLevels = ticketLevels.map((ticket, idx) => {
+        const capacity = ticket.capacity || 500
+        const levelId = `ga-level-${idx + 1}`
+        totalCapacity += capacity
+        return {
+          id: levelId,
+          name: ticket.level || ticket.name || `Level ${idx + 1}`,
+          capacity,
+          type: 'standing',
+          standingCapacity: capacity,
+          seatedCapacity: 0,
+          priceCategoryId: levelId,  // Link to matching price category
+          price: ticket.price || 50  // Store price directly on level too
+        }
+      })
+
+      const priceCategories = ticketLevels.map((ticket, idx) => ({
+        id: `ga-level-${idx + 1}`,  // Match the gaLevel id
+        name: ticket.level || ticket.name || `Level ${idx + 1}`,
+        price: ticket.price || 50,
+        color: ['#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#3B82F6'][idx % 5]
+      }))
+
+      const layoutData = {
+        venueId,
+        name: layoutName || 'General Admission',
+        type: 'general_admission',
+        gaLevels,
+        priceCategories,
+        totalCapacity
+      }
+
+      const newLayoutId = await AdminService.createLayout(layoutData)
+      console.log('Created layout with ID:', newLayoutId)
+
+      // Reload layouts and select the new one
+      await loadLayouts(venueId)
+      handleLayoutChange(newLayoutId)
+
+      setPendingLayoutCreate(null)
+    } catch (error) {
+      console.error('Error creating layout:', error)
+      alert('Failed to create layout. Please try again.')
+    }
+  }
+
+  // Decline layout creation - user will create manually
+  const declineCreateLayout = () => {
+    setPendingLayoutCreate(null)
+  }
 
   useEffect(() => {
     if (formData.venue.venueId) {
@@ -223,6 +449,9 @@ export default function Step2Venue() {
     }
     updateFormData('venue', {
       venueId,
+      venueName: venue?.name || '',
+      venueCity: venue?.city || '',
+      venueState: venue?.state || '',
       layoutId: '',
       availableSections: []
     })
@@ -285,6 +514,9 @@ export default function Step2Venue() {
         availableSections = layout.gaLevels.map((level: any) => {
           const capacity = calculateGACapacity(level)
           totalCalculatedCapacity += capacity
+          // Find matching price category for this level
+          const priceCategoryId = level.priceCategoryId || level.id || level.name
+          const priceCategory = layout.priceCategories?.find((cat: any) => cat.id === priceCategoryId) || null
           return {
             sectionId: level.id || level.name,
             sectionName: level.name,
@@ -292,7 +524,10 @@ export default function Step2Venue() {
             capacity,
             standingCapacity: level.standingCapacity || 0,
             seatedCapacity: level.seatedCapacity || 0,
-            configurationType: level.type || 'mixed'
+            configurationType: level.type || 'mixed',
+            priceCategoryId,  // Link to price category
+            priceCategory,    // Include full price category data
+            price: priceCategory?.price || level.price || 0  // Include price
           }
         })
       }
@@ -403,6 +638,103 @@ export default function Step2Venue() {
     } catch (error) {
       console.error('Venue lookup error:', error)
       setLookupMessage('Error looking up venue. Please enter details manually.')
+      setTimeout(() => setLookupMessage(''), 5000)
+    }
+
+    setLookingUpVenue(false)
+  }
+
+  // Close venue autocomplete when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (venueAutocompleteRef.current && !venueAutocompleteRef.current.contains(event.target as Node)) {
+        setShowVenueSuggestions(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Fetch venue autocomplete suggestions
+  const fetchVenueSuggestions = async (query: string) => {
+    if (query.length < 3) {
+      setVenueSuggestions([])
+      setShowVenueSuggestions(false)
+      return
+    }
+
+    setLoadingVenueSuggestions(true)
+    try {
+      const response = await fetch(`/api/venue-autocomplete?query=${encodeURIComponent(query)}`)
+      const data = await response.json()
+
+      if (data.success && data.suggestions) {
+        setVenueSuggestions(data.suggestions)
+        setShowVenueSuggestions(data.suggestions.length > 0)
+      }
+    } catch (error) {
+      console.error('Venue autocomplete error:', error)
+    }
+    setLoadingVenueSuggestions(false)
+  }
+
+  // Handle venue name input change with debounce
+  const handleVenueNameQueryChange = (value: string) => {
+    setVenueNameQuery(value)
+    setVenueFormData({ ...venueFormData, name: value })
+
+    // Clear previous timer
+    if (venueDebounceTimerRef.current) {
+      clearTimeout(venueDebounceTimerRef.current)
+    }
+
+    // Debounce API call
+    venueDebounceTimerRef.current = setTimeout(() => {
+      fetchVenueSuggestions(value)
+    }, 300)
+  }
+
+  // Handle selecting a venue from suggestions
+  const handleSelectVenueSuggestion = async (suggestion: VenueSuggestion) => {
+    setShowVenueSuggestions(false)
+    setVenueNameQuery(suggestion.name)
+    setVenueFormData({ ...venueFormData, name: suggestion.name })
+    setLookingUpVenue(true)
+    setLookupMessage('Fetching venue details...')
+
+    try {
+      const response = await fetch(`/api/venue-details?placeId=${encodeURIComponent(suggestion.placeId)}`)
+      const data = await response.json()
+
+      if (data.success && data.venue) {
+        const venue = data.venue
+
+        // Update form with all venue details
+        setVenueFormData(prev => ({
+          ...prev,
+          name: venue.name || prev.name,
+          streetAddress1: venue.streetAddress1 || prev.streetAddress1,
+          city: venue.city || prev.city,
+          state: venue.state || prev.state,
+          zipCode: venue.zipCode || prev.zipCode,
+          capacity: venue.capacity || prev.capacity,
+          type: venue.type || prev.type,
+          contactPhone: venue.contactPhone || prev.contactPhone,
+          website: venue.website || prev.website,
+          description: venue.description || prev.description,
+          amenities: venue.amenities || prev.amenities,
+          images: venue.images?.length ? venue.images : prev.images
+        }))
+
+        setLookupMessage(`✓ Found "${venue.name}" - All details loaded!`)
+        setTimeout(() => setLookupMessage(''), 5000)
+      } else {
+        setLookupMessage('Could not fetch venue details. You can enter them manually.')
+        setTimeout(() => setLookupMessage(''), 5000)
+      }
+    } catch (error) {
+      console.error('Venue details error:', error)
+      setLookupMessage('Error fetching venue details.')
       setTimeout(() => setLookupMessage(''), 5000)
     }
 
@@ -840,19 +1172,253 @@ export default function Step2Venue() {
         </>
       )}
 
-      {/* Venue Creation Sub-Wizard Modal */}
-      {showVenueWizard && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 rounded-xl p-6 w-full max-w-2xl my-8">
+      {/* Venue Creation Confirmation Dialog */}
+      {mounted && pendingVenueCreate && createPortal(
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-6 w-full max-w-lg shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                <span className="text-2xl">🏢</span>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Create New Venue?</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400">We found venue info from your import</p>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg mb-4 space-y-2">
+              <div>
+                <span className="text-xs text-slate-500 dark:text-slate-400">Venue Name</span>
+                <p className="font-medium text-slate-900 dark:text-white">{pendingVenueCreate.name || 'Not specified'}</p>
+              </div>
+              {pendingVenueCreate.address && (
+                <div>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">Address</span>
+                  <p className="text-slate-700 dark:text-slate-300">{pendingVenueCreate.address}</p>
+                </div>
+              )}
+              <div className="flex gap-4">
+                {pendingVenueCreate.city && (
+                  <div>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">City</span>
+                    <p className="text-slate-700 dark:text-slate-300">{pendingVenueCreate.city}</p>
+                  </div>
+                )}
+                {pendingVenueCreate.state && (
+                  <div>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">State</span>
+                    <p className="text-slate-700 dark:text-slate-300">{pendingVenueCreate.state}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+              Would you like to create this venue automatically? You can also create it manually using the "+ New Venue" button.
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={declineCreateVenue}
+                className="flex-1 px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg transition-colors"
+              >
+                No, I'll Do It Manually
+              </button>
+              <button
+                onClick={confirmCreateVenue}
+                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+              >
+                Yes, Create Venue
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Layout Creation Confirmation Dialog - Editable */}
+      {mounted && pendingLayoutCreate && createPortal(
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-start justify-center p-4 pt-8 z-[9999] overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto my-4 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                  <span className="text-2xl">🎫</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">Create GA Layout</h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Review and edit ticket levels before creating</p>
+                </div>
+              </div>
+              <button
+                onClick={declineCreateLayout}
+                className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Layout Name Field */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Layout Name</label>
+              <input
+                type="text"
+                value={pendingLayoutCreate.layoutName}
+                onChange={(e) => {
+                  setPendingLayoutCreate({ ...pendingLayoutCreate, layoutName: e.target.value })
+                }}
+                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500"
+                placeholder="GA-EVT"
+              />
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Auto-generated from event name. Format: GA-{'{'}Acronym{'}'}</p>
+            </div>
+
+            <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg mb-4">
+              <div className="flex justify-between items-center mb-3">
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Ticket Levels</p>
+                <button
+                  onClick={() => {
+                    setPendingLayoutCreate({
+                      ...pendingLayoutCreate,
+                      ticketLevels: [
+                        ...pendingLayoutCreate.ticketLevels,
+                        { level: 'New Level', price: 50, capacity: 500 }
+                      ]
+                    })
+                  }}
+                  className="text-xs text-purple-600 dark:text-purple-400 hover:text-purple-700"
+                >
+                  + Add Level
+                </button>
+              </div>
+              <div className="space-y-3 max-h-72 overflow-y-auto">
+                {pendingLayoutCreate.ticketLevels.map((ticket, idx) => (
+                  <div key={idx} className="p-3 bg-white dark:bg-slate-700 rounded-lg">
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="text-xs text-slate-500 dark:text-slate-400">Level {idx + 1}</span>
+                      {pendingLayoutCreate.ticketLevels.length > 1 && (
+                        <button
+                          onClick={() => {
+                            setPendingLayoutCreate({
+                              ...pendingLayoutCreate,
+                              ticketLevels: pendingLayoutCreate.ticketLevels.filter((_, i) => i !== idx)
+                            })
+                          }}
+                          className="text-red-400 hover:text-red-500 text-xs"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-12 gap-2">
+                      <div className="col-span-5">
+                        <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Level Name</label>
+                        <input
+                          type="text"
+                          value={ticket.level || ticket.name || ''}
+                          onChange={(e) => {
+                            const newLevels = [...pendingLayoutCreate.ticketLevels]
+                            newLevels[idx] = { ...newLevels[idx], level: e.target.value }
+                            setPendingLayoutCreate({ ...pendingLayoutCreate, ticketLevels: newLevels })
+                          }}
+                          className="w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-600 border border-slate-200 dark:border-slate-500 rounded text-sm text-slate-900 dark:text-white"
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Capacity</label>
+                        <input
+                          type="number"
+                          value={ticket.capacity || 500}
+                          onChange={(e) => {
+                            const newLevels = [...pendingLayoutCreate.ticketLevels]
+                            newLevels[idx] = { ...newLevels[idx], capacity: parseInt(e.target.value) || 0 }
+                            setPendingLayoutCreate({ ...pendingLayoutCreate, ticketLevels: newLevels })
+                          }}
+                          className="w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-600 border border-slate-200 dark:border-slate-500 rounded text-sm text-slate-900 dark:text-white"
+                          placeholder="500"
+                        />
+                      </div>
+                      <div className="col-span-4">
+                        <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Price</label>
+                        <div className="flex items-center">
+                          <span className="px-2 py-1.5 bg-slate-200 dark:bg-slate-500 border border-r-0 border-slate-200 dark:border-slate-500 rounded-l text-sm text-slate-500 dark:text-slate-300">$</span>
+                          <input
+                            type="number"
+                            value={ticket.price || 0}
+                            onChange={(e) => {
+                              const newLevels = [...pendingLayoutCreate.ticketLevels]
+                              newLevels[idx] = { ...newLevels[idx], price: parseFloat(e.target.value) || 0 }
+                              setPendingLayoutCreate({ ...pendingLayoutCreate, ticketLevels: newLevels })
+                            }}
+                            className="w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-600 border border-slate-200 dark:border-slate-500 rounded-r text-sm text-slate-900 dark:text-white"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* Total capacity summary */}
+              <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-600">
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  Total Capacity: <span className="font-semibold text-slate-900 dark:text-white">
+                    {pendingLayoutCreate.ticketLevels.reduce((sum, t) => sum + (t.capacity || 500), 0)}
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={declineCreateLayout}
+                className="flex-1 px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg transition-colors"
+              >
+                Skip / Do Manually
+              </button>
+              <button
+                onClick={confirmCreateLayout}
+                className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
+              >
+                Create Layout
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Venue Creation Sub-Wizard Modal - Using Portal to escape parent CSS constraints */}
+      {mounted && showVenueWizard && createPortal(
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-start justify-center p-4 pt-8 z-[9999] overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto my-4 shadow-2xl">
             {/* Header */}
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold">Create New Venue</h2>
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">Create New Venue</h2>
               <button
                 onClick={() => {
                   setShowVenueWizard(false)
                   setVenueWizardStep(1)
+                  // Reset form data
+                  setVenueNameQuery('')
+                  setVenueFormData({
+                    name: '',
+                    streetAddress1: '',
+                    streetAddress2: '',
+                    city: 'Dallas',
+                    state: 'TX',
+                    zipCode: '',
+                    capacity: 1000,
+                    type: 'theater',
+                    amenities: [],
+                    contactEmail: '',
+                    contactPhone: '',
+                    website: '',
+                    description: '',
+                    images: []
+                  })
                 }}
-                className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white text-2xl leading-none"
+                title="Close"
               >
                 ✕
               </button>
@@ -878,16 +1444,45 @@ export default function Step2Venue() {
             {/* Step 1: Basic Info */}
             {venueWizardStep === 1 && (
               <div className="space-y-4">
-                <div>
+                <div ref={venueAutocompleteRef} className="relative">
                   <label className="block text-sm mb-2">Venue Name *</label>
                   <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={venueFormData.name}
-                      onChange={(e) => setVenueFormData({ ...venueFormData, name: e.target.value })}
-                      className="flex-1 px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
-                      placeholder="Enter venue name"
-                    />
+                    <div className="flex-1 relative">
+                      <input
+                        type="text"
+                        value={venueNameQuery || venueFormData.name}
+                        onChange={(e) => handleVenueNameQueryChange(e.target.value)}
+                        onFocus={() => {
+                          if (venueNameQuery.length >= 3 && venueSuggestions.length > 0) {
+                            setShowVenueSuggestions(true)
+                          }
+                        }}
+                        className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
+                        placeholder="Start typing venue name..."
+                      />
+                      {loadingVenueSuggestions && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                        </div>
+                      )}
+
+                      {/* Autocomplete Dropdown */}
+                      {showVenueSuggestions && venueSuggestions.length > 0 && (
+                        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                          {venueSuggestions.map((suggestion, index) => (
+                            <button
+                              key={suggestion.placeId || index}
+                              type="button"
+                              onClick={() => handleSelectVenueSuggestion(suggestion)}
+                              className="w-full px-4 py-3 text-left hover:bg-slate-100 dark:hover:bg-slate-700 border-b border-slate-100 dark:border-slate-700 last:border-0 transition-colors"
+                            >
+                              <div className="font-medium text-slate-900 dark:text-white">{suggestion.name}</div>
+                              <div className="text-sm text-slate-500 dark:text-slate-400">{suggestion.address}</div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <button
                       type="button"
                       onClick={handleLookupVenue}
@@ -900,19 +1495,17 @@ export default function Step2Venue() {
                           Looking up...
                         </>
                       ) : (
-                        <>
-                          🔍 Lookup Details
-                        </>
+                        <>🔍 Lookup</>
                       )}
                     </button>
                   </div>
                   {lookupMessage && (
-                    <p className={`text-xs mt-2 ${lookupMessage.includes('Found') ? 'text-green-400' : lookupMessage.includes('Error') || lookupMessage.includes('not find') ? 'text-yellow-400' : 'text-blue-400'}`}>
+                    <p className={`text-xs mt-2 ${lookupMessage.includes('✓') || lookupMessage.includes('Found') ? 'text-green-400' : lookupMessage.includes('Error') || lookupMessage.includes('not find') || lookupMessage.includes('Could not') ? 'text-yellow-400' : 'text-blue-400'}`}>
                       {lookupMessage}
                     </p>
                   )}
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    Enter the venue name and click "Lookup Details" to auto-fill address and other information
+                    Type 3+ characters to see suggestions. Select a venue to auto-fill all details including address, phone, website, and photos.
                   </p>
                 </div>
 
@@ -955,7 +1548,17 @@ export default function Step2Venue() {
                   </div>
                 </div>
 
-                <div className="flex justify-end">
+                <div className="flex justify-between">
+                  <button
+                    onClick={() => {
+                      setShowVenueWizard(false)
+                      setVenueWizardStep(1)
+                      setVenueNameQuery('')
+                    }}
+                    className="px-6 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white"
+                  >
+                    Cancel
+                  </button>
                   <button
                     onClick={() => setVenueWizardStep(2)}
                     disabled={!venueFormData.name.trim()}
@@ -1183,22 +1786,24 @@ export default function Step2Venue() {
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* Layout Creation Sub-Wizard Modal */}
-      {showLayoutWizard && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 rounded-xl p-6 w-full max-w-2xl my-8">
+      {/* Layout Creation Sub-Wizard Modal - Using Portal to escape parent CSS constraints */}
+      {mounted && showLayoutWizard && createPortal(
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-start justify-center p-4 pt-8 z-[9999] overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto my-4 shadow-2xl">
             {/* Header */}
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold">Create New Layout</h2>
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">Create New Layout</h2>
               <button
                 onClick={() => {
                   setShowLayoutWizard(false)
                   setLayoutWizardStep(1)
                 }}
-                className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white text-2xl leading-none"
+                title="Close"
               >
                 ✕
               </button>
@@ -1272,7 +1877,16 @@ export default function Step2Venue() {
                   </div>
                 </div>
 
-                <div className="flex justify-end">
+                <div className="flex justify-between">
+                  <button
+                    onClick={() => {
+                      setShowLayoutWizard(false)
+                      setLayoutWizardStep(1)
+                    }}
+                    className="px-6 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg text-slate-900 dark:text-white"
+                  >
+                    Cancel
+                  </button>
                   <button
                     onClick={() => setLayoutWizardStep(2)}
                     disabled={!layoutFormData.name.trim()}
@@ -1302,9 +1916,9 @@ export default function Step2Venue() {
 
                     <div className="space-y-3 max-h-64 overflow-y-auto">
                       {layoutFormData.gaLevels.map((level, idx) => (
-                        <div key={level.id} className="p-3 bg-slate-100 dark:bg-slate-800 rounded-lg">
-                          <div className="flex justify-between items-start mb-2">
-                            <span className="text-xs text-slate-500 dark:text-slate-400">Level {idx + 1}</span>
+                        <div key={level.id} className="p-4 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                          <div className="flex justify-between items-start mb-3">
+                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Level {idx + 1}</span>
                             {layoutFormData.gaLevels.length > 1 && (
                               <button
                                 onClick={() => removeGALevel(level.id)}
@@ -1314,39 +1928,51 @@ export default function Step2Venue() {
                               </button>
                             )}
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <input
-                              type="text"
-                              value={level.name}
-                              onChange={(e) => updateGALevel(level.id, 'name', e.target.value)}
-                              className="px-3 py-1 bg-white/10 rounded text-sm"
-                              placeholder="Level name"
-                            />
-                            <input
-                              type="number"
-                              value={level.capacity}
-                              onChange={(e) => updateGALevel(level.id, 'capacity', parseInt(e.target.value) || 0)}
-                              className="px-3 py-1 bg-white/10 rounded text-sm"
-                              placeholder="Capacity"
-                            />
-                            <select
-                              value={level.type}
-                              onChange={(e) => updateGALevel(level.id, 'type', e.target.value)}
-                              className="px-3 py-1 bg-white/10 rounded text-sm"
-                            >
-                              <option value="standing">Standing</option>
-                              <option value="seated">Seated</option>
-                              <option value="mixed">Mixed</option>
-                            </select>
-                            <div className="flex items-center gap-1">
-                              <span className="text-slate-500 dark:text-slate-400 text-sm">$</span>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Level Name</label>
+                              <input
+                                type="text"
+                                value={level.name}
+                                onChange={(e) => updateGALevel(level.id, 'name', e.target.value)}
+                                className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-sm text-slate-900 dark:text-white"
+                                placeholder="e.g., General Admission"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Capacity</label>
                               <input
                                 type="number"
-                                value={level.price}
-                                onChange={(e) => updateGALevel(level.id, 'price', parseInt(e.target.value) || 0)}
-                                className="flex-1 px-3 py-1 bg-white/10 rounded text-sm"
-                                placeholder="Price"
+                                value={level.capacity}
+                                onChange={(e) => updateGALevel(level.id, 'capacity', parseInt(e.target.value) || 0)}
+                                className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-sm text-slate-900 dark:text-white"
+                                placeholder="500"
                               />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Type</label>
+                              <select
+                                value={level.type}
+                                onChange={(e) => updateGALevel(level.id, 'type', e.target.value)}
+                                className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-sm text-slate-900 dark:text-white"
+                              >
+                                <option value="standing">Standing</option>
+                                <option value="seated">Seated</option>
+                                <option value="mixed">Mixed</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Ticket Price</label>
+                              <div className="flex items-center">
+                                <span className="px-3 py-2 bg-slate-200 dark:bg-slate-600 border border-r-0 border-slate-200 dark:border-slate-600 rounded-l text-sm text-slate-500 dark:text-slate-400">$</span>
+                                <input
+                                  type="number"
+                                  value={level.price}
+                                  onChange={(e) => updateGALevel(level.id, 'price', parseInt(e.target.value) || 0)}
+                                  className="flex-1 px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-r text-sm text-slate-900 dark:text-white"
+                                  placeholder="50"
+                                />
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -1368,9 +1994,9 @@ export default function Step2Venue() {
 
                     <div className="space-y-3 max-h-64 overflow-y-auto">
                       {layoutFormData.sections.map((section, idx) => (
-                        <div key={section.id} className="p-3 bg-slate-100 dark:bg-slate-800 rounded-lg">
-                          <div className="flex justify-between items-start mb-2">
-                            <span className="text-xs text-slate-500 dark:text-slate-400">Section {idx + 1}</span>
+                        <div key={section.id} className="p-4 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                          <div className="flex justify-between items-start mb-3">
+                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Section {idx + 1}</span>
                             {layoutFormData.sections.length > 1 && (
                               <button
                                 onClick={() => removeSection(section.id)}
@@ -1380,41 +2006,53 @@ export default function Step2Venue() {
                               </button>
                             )}
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <input
-                              type="text"
-                              value={section.name}
-                              onChange={(e) => updateSection(section.id, 'name', e.target.value)}
-                              className="px-3 py-1 bg-white/10 rounded text-sm"
-                              placeholder="Section name"
-                            />
-                            <div className="flex items-center gap-1">
-                              <span className="text-slate-500 dark:text-slate-400 text-sm">$</span>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Section Name</label>
                               <input
-                                type="number"
-                                value={section.price}
-                                onChange={(e) => updateSection(section.id, 'price', parseInt(e.target.value) || 0)}
-                                className="flex-1 px-3 py-1 bg-white/10 rounded text-sm"
-                                placeholder="Price"
+                                type="text"
+                                value={section.name}
+                                onChange={(e) => updateSection(section.id, 'name', e.target.value)}
+                                className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-sm text-slate-900 dark:text-white"
+                                placeholder="e.g., Section A"
                               />
                             </div>
-                            <input
-                              type="number"
-                              value={section.rows}
-                              onChange={(e) => updateSection(section.id, 'rows', parseInt(e.target.value) || 1)}
-                              className="px-3 py-1 bg-white/10 rounded text-sm"
-                              placeholder="Rows"
-                            />
-                            <input
-                              type="number"
-                              value={section.seatsPerRow}
-                              onChange={(e) => updateSection(section.id, 'seatsPerRow', parseInt(e.target.value) || 1)}
-                              className="px-3 py-1 bg-white/10 rounded text-sm"
-                              placeholder="Seats/Row"
-                            />
+                            <div>
+                              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Ticket Price</label>
+                              <div className="flex items-center">
+                                <span className="px-3 py-2 bg-slate-200 dark:bg-slate-600 border border-r-0 border-slate-200 dark:border-slate-600 rounded-l text-sm text-slate-500 dark:text-slate-400">$</span>
+                                <input
+                                  type="number"
+                                  value={section.price}
+                                  onChange={(e) => updateSection(section.id, 'price', parseInt(e.target.value) || 0)}
+                                  className="flex-1 px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-r text-sm text-slate-900 dark:text-white"
+                                  placeholder="75"
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Number of Rows</label>
+                              <input
+                                type="number"
+                                value={section.rows}
+                                onChange={(e) => updateSection(section.id, 'rows', parseInt(e.target.value) || 1)}
+                                className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-sm text-slate-900 dark:text-white"
+                                placeholder="10"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Seats per Row</label>
+                              <input
+                                type="number"
+                                value={section.seatsPerRow}
+                                onChange={(e) => updateSection(section.id, 'seatsPerRow', parseInt(e.target.value) || 1)}
+                                className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-sm text-slate-900 dark:text-white"
+                                placeholder="20"
+                              />
+                            </div>
                           </div>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
-                            Capacity: {section.rows * section.seatsPerRow} seats
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-3">
+                            Total Capacity: {section.rows * section.seatsPerRow} seats
                           </p>
                         </div>
                       ))}
@@ -1501,7 +2139,8 @@ export default function Step2Venue() {
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

@@ -269,26 +269,69 @@ export default function Step9Review() {
                   </div>
                   {formData.pricing?.fees && (
                     <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
-                      <span className="text-xs text-slate-500 dark:text-slate-400">Fees</span>
-                      <div className="grid grid-cols-2 gap-2 mt-2">
+                      <span className="text-xs text-slate-500 dark:text-slate-400">Fees & Taxes</span>
+                      <div className="space-y-1 mt-2">
+                        {/* Convenience/Service Fee */}
                         {formData.pricing.fees.serviceFee > 0 && (
-                          <div className="text-xs">
-                            <span className="text-slate-500 dark:text-slate-400">Service:</span> ${formData.pricing.fees.serviceFee}
+                          <div className="text-xs flex justify-between">
+                            <span className="text-slate-500 dark:text-slate-400">Convenience Fee:</span>
+                            <span>
+                              {(formData.pricing.fees.serviceFeeType || 'percentage') === 'percentage'
+                                ? `${formData.pricing.fees.serviceFee}%`
+                                : `$${formData.pricing.fees.serviceFee}`}
+                              <span className="text-slate-400 ml-1">
+                                ({(formData.pricing.fees.serviceFeeScope || 'per_ticket') === 'per_transaction' ? 'per order' : 'per ticket'})
+                              </span>
+                            </span>
                           </div>
                         )}
-                        {formData.pricing.fees.processingFee > 0 && (
-                          <div className="text-xs">
-                            <span className="text-slate-500 dark:text-slate-400">Processing:</span> ${formData.pricing.fees.processingFee}
+                        {/* Parking Fee */}
+                        {formData.pricing.fees.parkingFee > 0 && (
+                          <div className="text-xs flex justify-between">
+                            <span className="text-slate-500 dark:text-slate-400">Parking Fee:</span>
+                            <span>
+                              {(formData.pricing.fees.parkingFeeType || 'fixed') === 'percentage'
+                                ? `${formData.pricing.fees.parkingFee}%`
+                                : `$${formData.pricing.fees.parkingFee}`}
+                              <span className="text-slate-400 ml-1">
+                                ({(formData.pricing.fees.parkingFeeScope || 'per_transaction') === 'per_transaction' ? 'per order' : 'per ticket'})
+                              </span>
+                            </span>
                           </div>
                         )}
-                        {formData.pricing.fees.facilityFee > 0 && (
-                          <div className="text-xs">
-                            <span className="text-slate-500 dark:text-slate-400">Facility:</span> ${formData.pricing.fees.facilityFee}
+                        {/* Venue Fee */}
+                        {formData.pricing.fees.venueFee > 0 && (
+                          <div className="text-xs flex justify-between">
+                            <span className="text-slate-500 dark:text-slate-400">Venue Fee:</span>
+                            <span>
+                              {(formData.pricing.fees.venueFeeType || 'fixed') === 'percentage'
+                                ? `${formData.pricing.fees.venueFee}%`
+                                : `$${formData.pricing.fees.venueFee}`}
+                              <span className="text-slate-400 ml-1">
+                                ({(formData.pricing.fees.venueFeeScope || 'per_ticket') === 'per_transaction' ? 'per order' : 'per ticket'})
+                              </span>
+                            </span>
                           </div>
                         )}
+                        {/* Custom Fees */}
+                        {formData.pricing.fees.customFees?.map((fee: any, idx: number) => (
+                          fee.amount > 0 && (
+                            <div key={idx} className="text-xs flex justify-between">
+                              <span className="text-slate-500 dark:text-slate-400">{fee.name || `Custom Fee ${idx + 1}`}:</span>
+                              <span>
+                                {fee.type === 'percentage' ? `${fee.amount}%` : `$${fee.amount}`}
+                                <span className="text-slate-400 ml-1">
+                                  ({fee.scope === 'per_transaction' ? 'per order' : 'per ticket'})
+                                </span>
+                              </span>
+                            </div>
+                          )
+                        ))}
+                        {/* Sales Tax */}
                         {formData.pricing.fees.salesTax > 0 && (
-                          <div className="text-xs">
-                            <span className="text-slate-500 dark:text-slate-400">Tax:</span> {formData.pricing.fees.salesTax}%
+                          <div className="text-xs flex justify-between pt-1 border-t border-slate-200 dark:border-slate-600 mt-1">
+                            <span className="text-slate-500 dark:text-slate-400">Sales Tax:</span>
+                            <span>{formData.pricing.fees.salesTax}%</span>
                           </div>
                         )}
                       </div>

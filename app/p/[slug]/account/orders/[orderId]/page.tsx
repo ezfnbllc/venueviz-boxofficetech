@@ -113,23 +113,23 @@ export default async function OrderDetailPage({ params }: PageProps) {
   return (
     <Layout promoterSlug={slug}>
       {/* Breadcrumb */}
-      <div className="bg-gray-50 border-b border-gray-200">
+      <div className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
         <div className="container mx-auto px-4 py-4">
           <nav aria-label="breadcrumb">
             <ol className="flex items-center space-x-2 text-sm">
               <li>
-                <Link href={`/p/${slug}`} className="text-gray-600 hover:text-[#6ac045]">
+                <Link href={`/p/${slug}`} className="text-gray-600 dark:text-gray-300 hover:text-[#6ac045]">
                   Home
                 </Link>
               </li>
               <li className="text-gray-400">/</li>
               <li>
-                <Link href={`/p/${slug}/account`} className="text-gray-600 hover:text-[#6ac045]">
+                <Link href={`/p/${slug}/account`} className="text-gray-600 dark:text-gray-300 hover:text-[#6ac045]">
                   My Account
                 </Link>
               </li>
               <li className="text-gray-400">/</li>
-              <li className="text-gray-900 font-medium">Order {order.orderId}</li>
+              <li className="text-gray-900 dark:text-white font-medium">Order {order.orderId}</li>
             </ol>
           </nav>
         </div>
@@ -140,25 +140,25 @@ export default async function OrderDetailPage({ params }: PageProps) {
         <div className="container mx-auto px-4">
           <div className="max-w-3xl mx-auto">
             {/* Order Header */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6 mb-6">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 p-6 mb-6">
               <div className="flex items-center justify-between mb-4">
-                <h1 className="text-2xl font-bold text-gray-900">Order #{order.orderId}</h1>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Order #{order.orderId}</h1>
                 <span className={`inline-block px-3 py-1 text-sm font-medium rounded-full ${
-                  order.status === 'confirmed' ? 'bg-green-100 text-green-700' :
-                  order.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                  order.status === 'refunded' ? 'bg-red-100 text-red-700' :
-                  'bg-gray-100 text-gray-700'
+                  order.status === 'confirmed' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' :
+                  order.status === 'pending' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400' :
+                  order.status === 'refunded' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' :
+                  'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
                 }`}>
                   {order.status?.charAt(0).toUpperCase() + order.status?.slice(1)}
                 </span>
               </div>
-              <p className="text-gray-600">{formattedDate}</p>
+              <p className="text-gray-600 dark:text-gray-300">{formattedDate}</p>
             </div>
 
             {/* Event Info */}
             {primaryEvent && (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6 mb-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Event</h2>
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 p-6 mb-6">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Event</h2>
                 <div className="flex gap-4">
                   {primaryEvent.eventImage ? (
                     <div className="w-24 h-24 rounded-lg overflow-hidden flex-shrink-0">
@@ -169,14 +169,14 @@ export default async function OrderDetailPage({ params }: PageProps) {
                       />
                     </div>
                   ) : (
-                    <div className="w-24 h-24 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                    <div className="w-24 h-24 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
                       <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
                     </div>
                   )}
                   <div>
-                    <h3 className="font-semibold text-gray-900">{primaryEvent.eventName}</h3>
+                    <h3 className="font-semibold text-gray-900 dark:text-white">{primaryEvent.eventName}</h3>
                     <Link
                       href={`/p/${slug}/events/${primaryEvent.eventId}`}
                       className="text-[#6ac045] hover:underline text-sm mt-1 inline-block"
@@ -190,8 +190,8 @@ export default async function OrderDetailPage({ params }: PageProps) {
 
             {/* Tickets */}
             {order.tickets && order.tickets.length > 0 && (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6 mb-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Your Tickets</h2>
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 p-6 mb-6">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Your Tickets</h2>
                 <div className="space-y-4">
                   {order.tickets.map((ticket, index) => (
                     <TicketCard
@@ -212,27 +212,27 @@ export default async function OrderDetailPage({ params }: PageProps) {
             )}
 
             {/* Order Summary */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6 mb-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Order Summary</h2>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 p-6 mb-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Order Summary</h2>
               <div className="space-y-3">
                 {order.items?.map((item, index) => (
                   <div key={index} className="flex justify-between text-sm">
-                    <span className="text-gray-600">
+                    <span className="text-gray-600 dark:text-gray-300">
                       {item.ticketType || 'Ticket'} x{item.quantity}
                     </span>
-                    <span>${(item.price * item.quantity).toFixed(2)}</span>
+                    <span className="text-gray-900 dark:text-white">${(item.price * item.quantity).toFixed(2)}</span>
                   </div>
                 ))}
-                <div className="border-t border-gray-100 pt-3 mt-3">
+                <div className="border-t border-gray-100 dark:border-gray-700 pt-3 mt-3">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Subtotal</span>
-                    <span>${order.subtotal?.toFixed(2)}</span>
+                    <span className="text-gray-600 dark:text-gray-300">Subtotal</span>
+                    <span className="text-gray-900 dark:text-white">${order.subtotal?.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-sm mt-2">
-                    <span className="text-gray-600">Service Fee</span>
-                    <span>${order.serviceFee?.toFixed(2)}</span>
+                    <span className="text-gray-600 dark:text-gray-300">Service Fee</span>
+                    <span className="text-gray-900 dark:text-white">${order.serviceFee?.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between font-semibold text-lg mt-4">
+                  <div className="flex justify-between font-semibold text-lg mt-4 text-gray-900 dark:text-white">
                     <span>Total</span>
                     <span className="text-[#6ac045]">${order.total?.toFixed(2)}</span>
                   </div>
@@ -241,16 +241,16 @@ export default async function OrderDetailPage({ params }: PageProps) {
             </div>
 
             {/* Customer Info */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Customer Information</h2>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Customer Information</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-gray-500 mb-1">Name</label>
-                  <p className="text-gray-900">{order.customerName}</p>
+                  <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">Name</label>
+                  <p className="text-gray-900 dark:text-white">{order.customerName}</p>
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-500 mb-1">Email</label>
-                  <p className="text-gray-900">{order.customerEmail}</p>
+                  <label className="block text-sm text-gray-500 dark:text-gray-400 mb-1">Email</label>
+                  <p className="text-gray-900 dark:text-white">{order.customerEmail}</p>
                 </div>
               </div>
             </div>

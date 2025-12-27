@@ -528,6 +528,38 @@ export default async function EventDetailPage({ params }: PageProps) {
                   </Card>
                 )
               })()}
+
+              {/* FAQ Section */}
+              {event.seo?.faqStructuredData && event.seo.faqStructuredData.length > 0 && (
+                <Card className="mt-6">
+                  <CardContent className="p-6">
+                    <h2 className="text-xl font-bold text-[#1d1d1d] mb-6">Frequently Asked Questions</h2>
+                    <div className="space-y-4">
+                      {event.seo.faqStructuredData.map((faq, index) => (
+                        <details
+                          key={index}
+                          className="group border border-[#efefef] rounded-lg overflow-hidden"
+                        >
+                          <summary className="flex items-center justify-between gap-4 p-4 cursor-pointer hover:bg-[#f5f7f9] transition-colors">
+                            <span className="font-semibold text-[#1d1d1d]">{faq.question}</span>
+                            <svg
+                              className="w-5 h-5 text-[#717171] flex-shrink-0 group-open:rotate-180 transition-transform"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </summary>
+                          <div className="px-4 pb-4 text-[#717171]">
+                            {faq.answer}
+                          </div>
+                        </details>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </div>
 
             {/* Right Column - Event Details Sidebar */}

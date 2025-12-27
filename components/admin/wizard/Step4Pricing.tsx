@@ -32,20 +32,28 @@ export default function Step4Pricing() {
   }, [formData.pricing?.tiers])
   
   useEffect(() => {
+    console.log('Step4Pricing - formData.venue:', formData.venue)
     console.log('Step4Pricing - Price Categories:', formData.venue?.priceCategories)
     console.log('Step4Pricing - Available Sections:', formData.venue?.availableSections)
-    
+
     if (formData.venue?.availableSections?.length > 0) {
       const isSeatingChart = formData.venue?.layoutType === 'seating_chart'
       const priceCategories = formData.venue?.priceCategories || []
-      const availableSections = formData.venue.availableSections?.filter((s: any) => s.available) || []
-      
+      // Be more lenient - only filter out sections explicitly marked as available: false
+      const availableSections = formData.venue.availableSections?.filter((s: any) => s.available !== false) || []
+
+      console.log('Step4Pricing - Filtered Available Sections:', availableSections.length, availableSections)
+
       if (availableSections.length > 0) {
-        if (isSeatingChart && priceCategories.length > 0) {
-          console.log('Creating price category based tiers')
-          
+        // Use price categories for both seating charts AND GA layouts with price categories
+        const hasPriceCategories = priceCategories.length > 0
+        const sectionsHavePriceCategories = availableSections.some((s: any) => s.priceCategoryId || s.priceCategory)
+
+        if (hasPriceCategories && (isSeatingChart || sectionsHavePriceCategories)) {
+          console.log('Creating price category based tiers for', isSeatingChart ? 'seating chart' : 'GA layout')
+
           const tiersByCategory = new Map()
-          
+
           // Create tiers from price categories
           priceCategories.forEach((category: any) => {
             tiersByCategory.set(category.id, {
@@ -59,15 +67,15 @@ export default function Step4Pricing() {
               isFromLayout: true
             })
           })
-          
+
           // Assign sections to their categories
           availableSections.forEach((section: any) => {
-            const categoryId = section.priceCategoryId || 
-                             section.priceCategory?.id || 
+            const categoryId = section.priceCategoryId ||
+                             section.priceCategory?.id ||
                              section.priceCategory ||
                              section.pricing ||
                              'standard'
-            
+
             const tier = tiersByCategory.get(categoryId)
             if (tier) {
               tier.sections.push({
@@ -78,33 +86,45 @@ export default function Step4Pricing() {
               tier.capacity += section.capacity || 0
             }
           })
-          
+
           const newTiers = Array.from(tiersByCategory.values()).filter(tier => tier.capacity > 0)
-          
-          updateFormData('pricing', {
-            ...formData.pricing,
-            tiers: newTiers,
-            usePriceCategories: true,
-            layoutId: formData.venue.layoutId,
-            isSeatingChart: true
-          })
+
+          if (newTiers.length > 0) {
+            updateFormData('pricing', {
+              ...formData.pricing,
+              tiers: newTiers,
+              usePriceCategories: true,
+              layoutId: formData.venue.layoutId,
+              isSeatingChart: isSeatingChart
+            })
+          } else {
+            // Fallback if no tiers matched
+            console.log('No tiers matched from price categories, falling back to section-based pricing')
+            createSectionBasedTiers()
+          }
         } else {
-          // Per-section pricing fallback
+          // Per-section pricing - try to get price from section data
+          createSectionBasedTiers()
+        }
+
+        function createSectionBasedTiers() {
           const newTiers = availableSections.map((section: any) => {
-            const existingTier = formData.pricing?.tiers?.find((t: any) => 
+            const existingTier = formData.pricing?.tiers?.find((t: any) =>
               t.id === section.sectionId || t.sectionId === section.sectionId
             )
-            
+            // Try to get price from multiple sources
+            const sectionPrice = section.priceCategory?.price || section.price || 0
+
             return {
               id: section.sectionId,
               name: section.sectionName,
-              basePrice: existingTier?.basePrice || 0,
+              basePrice: existingTier?.basePrice || sectionPrice,
               sectionId: section.sectionId,
               capacity: section.capacity || 0,
-              isFromLayout: false
+              isFromLayout: true
             }
           })
-          
+
           updateFormData('pricing', {
             ...formData.pricing,
             tiers: newTiers,
@@ -237,12 +257,13 @@ export default function Step4Pricing() {
       <div className="mb-6">
         <h4 className="font-semibold mb-4">Service & Transaction Fees</h4>
         <div className="space-y-3">
+          {/* Convenience Fee */}
           <div className="flex items-center gap-3 p-4 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
-            <label className="w-32 text-sm">Convenience Fee</label>
+            <label className="w-32 text-sm font-medium">Convenience Fee</label>
             <select
               value={formData.pricing?.fees?.serviceFeeType || 'percentage'}
               onChange={(e) => updateFees('serviceFeeType', e.target.value)}
-              className="px-3 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg"
+              className="px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg"
             >
               <option value="percentage">Percentage (%)</option>
               <option value="fixed">Fixed ($)</option>
@@ -250,14 +271,240 @@ export default function Step4Pricing() {
             <input
               type="number"
               value={formData.pricing?.fees?.serviceFee ?? 0}
-              onChange={(e) => updateFees('serviceFee', parseFloat(e.target.value) || 0)}
+              onChange={(e) => {
+                const value = parseFloat(e.target.value) || 0
+                // Also ensure type and scope are saved with defaults
+                updateFormData('pricing', {
+                  ...formData.pricing,
+                  fees: {
+                    ...formData.pricing?.fees,
+                    serviceFee: value,
+                    serviceFeeType: formData.pricing?.fees?.serviceFeeType || 'percentage',
+                    serviceFeeScope: formData.pricing?.fees?.serviceFeeScope || 'per_ticket'
+                  }
+                })
+              }}
               onWheel={(e) => e.currentTarget.blur()}
-              className="w-20 px-3 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg text-center"
+              className="w-20 px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg text-center"
               placeholder="0"
               step={formData.pricing?.fees?.serviceFeeType === 'percentage' ? '0.1' : '0.01'}
               min="0"
             />
+            <select
+              value={formData.pricing?.fees?.serviceFeeScope || 'per_ticket'}
+              onChange={(e) => updateFees('serviceFeeScope', e.target.value)}
+              className="px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg text-sm"
+            >
+              <option value="per_ticket">Per Ticket</option>
+              <option value="per_transaction">Per Transaction</option>
+            </select>
           </div>
+
+          {/* Parking Fee */}
+          <div className="flex items-center gap-3 p-4 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+            <label className="w-32 text-sm font-medium">Parking Fee</label>
+            <select
+              value={formData.pricing?.fees?.parkingFeeType || 'fixed'}
+              onChange={(e) => updateFees('parkingFeeType', e.target.value)}
+              className="px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg"
+            >
+              <option value="percentage">Percentage (%)</option>
+              <option value="fixed">Fixed ($)</option>
+            </select>
+            <input
+              type="number"
+              value={formData.pricing?.fees?.parkingFee ?? 0}
+              onChange={(e) => {
+                const value = parseFloat(e.target.value) || 0
+                // Also ensure type and scope are saved with defaults
+                updateFormData('pricing', {
+                  ...formData.pricing,
+                  fees: {
+                    ...formData.pricing?.fees,
+                    parkingFee: value,
+                    parkingFeeType: formData.pricing?.fees?.parkingFeeType || 'fixed',
+                    parkingFeeScope: formData.pricing?.fees?.parkingFeeScope || 'per_transaction'
+                  }
+                })
+              }}
+              onWheel={(e) => e.currentTarget.blur()}
+              className="w-20 px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg text-center"
+              placeholder="0"
+              step={formData.pricing?.fees?.parkingFeeType === 'percentage' ? '0.1' : '0.01'}
+              min="0"
+            />
+            <select
+              value={formData.pricing?.fees?.parkingFeeScope || 'per_transaction'}
+              onChange={(e) => updateFees('parkingFeeScope', e.target.value)}
+              className="px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg text-sm"
+            >
+              <option value="per_ticket">Per Ticket</option>
+              <option value="per_transaction">Per Transaction</option>
+            </select>
+          </div>
+
+          {/* Venue Fee */}
+          <div className="flex items-center gap-3 p-4 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+            <label className="w-32 text-sm font-medium">Venue Fee</label>
+            <select
+              value={formData.pricing?.fees?.venueFeeType || 'fixed'}
+              onChange={(e) => updateFees('venueFeeType', e.target.value)}
+              className="px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg"
+            >
+              <option value="percentage">Percentage (%)</option>
+              <option value="fixed">Fixed ($)</option>
+            </select>
+            <input
+              type="number"
+              value={formData.pricing?.fees?.venueFee ?? 0}
+              onChange={(e) => {
+                const value = parseFloat(e.target.value) || 0
+                // Also ensure type and scope are saved with defaults
+                updateFormData('pricing', {
+                  ...formData.pricing,
+                  fees: {
+                    ...formData.pricing?.fees,
+                    venueFee: value,
+                    venueFeeType: formData.pricing?.fees?.venueFeeType || 'fixed',
+                    venueFeeScope: formData.pricing?.fees?.venueFeeScope || 'per_ticket'
+                  }
+                })
+              }}
+              onWheel={(e) => e.currentTarget.blur()}
+              className="w-20 px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg text-center"
+              placeholder="0"
+              step={formData.pricing?.fees?.venueFeeType === 'percentage' ? '0.1' : '0.01'}
+              min="0"
+            />
+            <select
+              value={formData.pricing?.fees?.venueFeeScope || 'per_ticket'}
+              onChange={(e) => updateFees('venueFeeScope', e.target.value)}
+              className="px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg text-sm"
+            >
+              <option value="per_ticket">Per Ticket</option>
+              <option value="per_transaction">Per Transaction</option>
+            </select>
+          </div>
+
+          {/* Custom Fees */}
+          {(formData.pricing?.fees?.customFees || []).map((customFee: any, idx: number) => (
+            <div key={idx} className="flex items-center gap-3 p-4 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+              <input
+                type="text"
+                value={customFee.name || ''}
+                onChange={(e) => {
+                  const customFees = [...(formData.pricing?.fees?.customFees || [])]
+                  customFees[idx] = { ...customFees[idx], name: e.target.value }
+                  updateFees('customFees', customFees)
+                }}
+                className="w-32 px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg text-sm"
+                placeholder="Fee Name"
+              />
+              <select
+                value={customFee.type || 'fixed'}
+                onChange={(e) => {
+                  const customFees = [...(formData.pricing?.fees?.customFees || [])]
+                  customFees[idx] = { ...customFees[idx], type: e.target.value }
+                  updateFees('customFees', customFees)
+                }}
+                className="px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg"
+              >
+                <option value="percentage">Percentage (%)</option>
+                <option value="fixed">Fixed ($)</option>
+              </select>
+              <input
+                type="number"
+                value={customFee.amount ?? 0}
+                onChange={(e) => {
+                  const customFees = [...(formData.pricing?.fees?.customFees || [])]
+                  customFees[idx] = { ...customFees[idx], amount: parseFloat(e.target.value) || 0 }
+                  updateFees('customFees', customFees)
+                }}
+                onWheel={(e) => e.currentTarget.blur()}
+                className="w-20 px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg text-center"
+                placeholder="0"
+                step={customFee.type === 'percentage' ? '0.1' : '0.01'}
+                min="0"
+              />
+              <select
+                value={customFee.scope || 'per_ticket'}
+                onChange={(e) => {
+                  const customFees = [...(formData.pricing?.fees?.customFees || [])]
+                  customFees[idx] = { ...customFees[idx], scope: e.target.value }
+                  updateFees('customFees', customFees)
+                }}
+                className="px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg text-sm"
+              >
+                <option value="per_ticket">Per Ticket</option>
+                <option value="per_transaction">Per Transaction</option>
+              </select>
+              <button
+                onClick={() => {
+                  const customFees = (formData.pricing?.fees?.customFees || []).filter((_: any, i: number) => i !== idx)
+                  updateFees('customFees', customFees)
+                }}
+                className="p-2 text-red-500 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                title="Remove fee"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          ))}
+
+          {/* Add Custom Fee Button */}
+          <button
+            onClick={() => {
+              const customFees = [...(formData.pricing?.fees?.customFees || []), { name: '', type: 'fixed', amount: 0, scope: 'per_ticket' }]
+              updateFees('customFees', customFees)
+            }}
+            className="w-full py-2 border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-purple-400 hover:text-purple-500 rounded-lg transition-colors text-sm"
+          >
+            + Add Custom Fee
+          </button>
+        </div>
+      </div>
+
+      {/* Sales Tax Section */}
+      <div className="mb-6">
+        <h4 className="font-semibold mb-4">Sales Tax</h4>
+        <div className="flex items-center gap-3 p-4 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+          <label className="w-32 text-sm font-medium">Sales Tax Rate</label>
+          <input
+            type="number"
+            value={formData.pricing?.fees?.salesTax ?? 8.25}
+            onChange={(e) => updateFees('salesTax', parseFloat(e.target.value) || 0)}
+            onWheel={(e) => e.currentTarget.blur()}
+            className="w-24 px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg text-center"
+            placeholder="8.25"
+            step="0.01"
+            min="0"
+          />
+          <span className="text-slate-500 dark:text-slate-400">%</span>
+          <span className="text-xs text-slate-400 ml-2">(Applied to discounted ticket price only, not fees)</span>
+        </div>
+      </div>
+
+      {/* Fee Calculation Options */}
+      <div className="mb-6">
+        <h4 className="font-semibold mb-4">Fee Calculation Options</h4>
+        <div className="p-4 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={formData.pricing?.fees?.applyPercentFeesOnDiscountedPrice ?? false}
+              onChange={(e) => updateFees('applyPercentFeesOnDiscountedPrice', e.target.checked)}
+              className="mt-1 w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-purple-600 focus:ring-purple-500"
+            />
+            <div>
+              <p className="font-medium text-sm">Apply percentage fees on discounted price</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                When checked, percentage-based per-ticket fees will be calculated on the discounted ticket price.
+                When unchecked (default), percentage fees are calculated on the original ticket price.
+              </p>
+            </div>
+          </label>
         </div>
       </div>
     </div>

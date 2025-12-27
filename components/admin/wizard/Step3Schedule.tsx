@@ -183,8 +183,16 @@ export default function Step3Schedule() {
                     type="date"
                     value={perf.date}
                     onChange={(e) => updatePerformance(index, 'date', e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded"
+                    min={new Date().toISOString().split('T')[0]}
+                    className={`w-full px-3 py-2 bg-slate-100 dark:bg-slate-700/50 border rounded ${
+                      perf.date && new Date(perf.date) < new Date(new Date().toISOString().split('T')[0])
+                        ? 'border-red-400 dark:border-red-500'
+                        : 'border-slate-200 dark:border-slate-600'
+                    } text-slate-900 dark:text-white`}
                   />
+                  {perf.date && new Date(perf.date) < new Date(new Date().toISOString().split('T')[0]) && (
+                    <p className="text-xs text-red-500 mt-1">Warning: Date is in the past</p>
+                  )}
                 </div>
 
                 <div>

@@ -100,14 +100,14 @@ export default function URLImportModal({ onClose, onImport }: URLImportModalProp
                    (extractedData?.images?.gallery && extractedData.images.gallery.length > 0)
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[70] flex items-start justify-center p-4 pt-16 overflow-y-auto">
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 max-w-2xl w-full max-h-[80vh] overflow-y-auto my-4">
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b border-slate-200 dark:border-slate-700">
           <div>
             <h3 className="text-xl font-bold text-slate-900 dark:text-white">Import from URL</h3>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Paste a URL from Sulekha, StubHub, Fandango, TicketMaster, or similar
+              Paste a URL from Eventbrite, Sulekha, StubHub, Fandango, TicketMaster, or similar
             </p>
           </div>
           <button
@@ -143,7 +143,7 @@ export default function URLImportModal({ onClose, onImport }: URLImportModalProp
               {/* Supported Sites */}
               <div className="flex flex-wrap gap-2">
                 <span className="text-xs text-slate-500 dark:text-slate-400">Supported:</span>
-                {['Sulekha', 'StubHub', 'Fandango', 'TicketMaster'].map(site => (
+                {['Eventbrite', 'Sulekha', 'StubHub', 'Fandango', 'TicketMaster'].map(site => (
                   <span key={site} className="text-xs px-2 py-1 bg-accent-600/20 text-accent-500 dark:text-accent-400 rounded">
                     {site}
                   </span>
