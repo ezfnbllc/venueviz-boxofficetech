@@ -276,11 +276,11 @@ export default function Step9Review() {
                           <div className="text-xs flex justify-between">
                             <span className="text-slate-500 dark:text-slate-400">Convenience Fee:</span>
                             <span>
-                              {formData.pricing.fees.serviceFeeType === 'percentage'
+                              {(formData.pricing.fees.serviceFeeType || 'percentage') === 'percentage'
                                 ? `${formData.pricing.fees.serviceFee}%`
                                 : `$${formData.pricing.fees.serviceFee}`}
                               <span className="text-slate-400 ml-1">
-                                ({formData.pricing.fees.serviceFeeScope === 'per_transaction' ? 'per order' : 'per ticket'})
+                                ({(formData.pricing.fees.serviceFeeScope || 'per_ticket') === 'per_transaction' ? 'per order' : 'per ticket'})
                               </span>
                             </span>
                           </div>
@@ -290,11 +290,11 @@ export default function Step9Review() {
                           <div className="text-xs flex justify-between">
                             <span className="text-slate-500 dark:text-slate-400">Parking Fee:</span>
                             <span>
-                              {formData.pricing.fees.parkingFeeType === 'percentage'
+                              {(formData.pricing.fees.parkingFeeType || 'fixed') === 'percentage'
                                 ? `${formData.pricing.fees.parkingFee}%`
                                 : `$${formData.pricing.fees.parkingFee}`}
                               <span className="text-slate-400 ml-1">
-                                ({formData.pricing.fees.parkingFeeScope === 'per_transaction' ? 'per order' : 'per ticket'})
+                                ({(formData.pricing.fees.parkingFeeScope || 'per_transaction') === 'per_transaction' ? 'per order' : 'per ticket'})
                               </span>
                             </span>
                           </div>
@@ -304,11 +304,11 @@ export default function Step9Review() {
                           <div className="text-xs flex justify-between">
                             <span className="text-slate-500 dark:text-slate-400">Venue Fee:</span>
                             <span>
-                              {formData.pricing.fees.venueFeeType === 'percentage'
+                              {(formData.pricing.fees.venueFeeType || 'fixed') === 'percentage'
                                 ? `${formData.pricing.fees.venueFee}%`
                                 : `$${formData.pricing.fees.venueFee}`}
                               <span className="text-slate-400 ml-1">
-                                ({formData.pricing.fees.venueFeeScope === 'per_transaction' ? 'per order' : 'per ticket'})
+                                ({(formData.pricing.fees.venueFeeScope || 'per_ticket') === 'per_transaction' ? 'per order' : 'per ticket'})
                               </span>
                             </span>
                           </div>

@@ -271,7 +271,19 @@ export default function Step4Pricing() {
             <input
               type="number"
               value={formData.pricing?.fees?.serviceFee ?? 0}
-              onChange={(e) => updateFees('serviceFee', parseFloat(e.target.value) || 0)}
+              onChange={(e) => {
+                const value = parseFloat(e.target.value) || 0
+                // Also ensure type and scope are saved with defaults
+                updateFormData('pricing', {
+                  ...formData.pricing,
+                  fees: {
+                    ...formData.pricing?.fees,
+                    serviceFee: value,
+                    serviceFeeType: formData.pricing?.fees?.serviceFeeType || 'percentage',
+                    serviceFeeScope: formData.pricing?.fees?.serviceFeeScope || 'per_ticket'
+                  }
+                })
+              }}
               onWheel={(e) => e.currentTarget.blur()}
               className="w-20 px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg text-center"
               placeholder="0"
@@ -302,7 +314,19 @@ export default function Step4Pricing() {
             <input
               type="number"
               value={formData.pricing?.fees?.parkingFee ?? 0}
-              onChange={(e) => updateFees('parkingFee', parseFloat(e.target.value) || 0)}
+              onChange={(e) => {
+                const value = parseFloat(e.target.value) || 0
+                // Also ensure type and scope are saved with defaults
+                updateFormData('pricing', {
+                  ...formData.pricing,
+                  fees: {
+                    ...formData.pricing?.fees,
+                    parkingFee: value,
+                    parkingFeeType: formData.pricing?.fees?.parkingFeeType || 'fixed',
+                    parkingFeeScope: formData.pricing?.fees?.parkingFeeScope || 'per_transaction'
+                  }
+                })
+              }}
               onWheel={(e) => e.currentTarget.blur()}
               className="w-20 px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg text-center"
               placeholder="0"
@@ -333,7 +357,19 @@ export default function Step4Pricing() {
             <input
               type="number"
               value={formData.pricing?.fees?.venueFee ?? 0}
-              onChange={(e) => updateFees('venueFee', parseFloat(e.target.value) || 0)}
+              onChange={(e) => {
+                const value = parseFloat(e.target.value) || 0
+                // Also ensure type and scope are saved with defaults
+                updateFormData('pricing', {
+                  ...formData.pricing,
+                  fees: {
+                    ...formData.pricing?.fees,
+                    venueFee: value,
+                    venueFeeType: formData.pricing?.fees?.venueFeeType || 'fixed',
+                    venueFeeScope: formData.pricing?.fees?.venueFeeScope || 'per_ticket'
+                  }
+                })
+              }}
               onWheel={(e) => e.currentTarget.blur()}
               className="w-20 px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg text-center"
               placeholder="0"
