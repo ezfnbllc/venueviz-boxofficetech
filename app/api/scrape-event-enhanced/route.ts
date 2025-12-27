@@ -931,6 +931,448 @@ async function fetchAndParseEventbriteHTML(url: string): Promise<{
   }
 }
 
+// Fetch and parse StubHub event/performer page
+async function fetchAndParseStubHubHTML(url: string): Promise<{
+  eventName?: string
+  description?: string
+  venueName?: string
+  venueAddress?: string
+  venueCity?: string
+  venueState?: string
+  eventDate?: string
+  eventTime?: string
+  imageUrls?: string[]
+  ticketLevels?: Array<{
+    level: string
+    price: number
+    serviceFee: number
+    tax: number
+    sections: string[]
+    description: string
+  }>
+  isPerformerPage?: boolean
+  performerName?: string
+  upcomingEvents?: Array<{
+    name: string
+    date: string
+    venue: string
+    city: string
+  }>
+}> {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Cache-Control': 'no-cache'
+      }
+    })
+
+    if (!response.ok) {
+      console.log('Failed to fetch StubHub URL:', response.status)
+      return {}
+    }
+
+    const html = await response.text()
+    const result: any = {}
+
+    // Check if this is a performer page (e.g., /performer/374244)
+    const isPerformerPage = url.includes('/performer/')
+
+    // Extract from JSON-LD structured data
+    const jsonLdMatch = html.match(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi)
+    if (jsonLdMatch) {
+      for (const match of jsonLdMatch) {
+        try {
+          const jsonContent = match.replace(/<script[^>]*>|<\/script>/gi, '')
+          const data = JSON.parse(jsonContent)
+
+          // Handle array of schemas
+          const schemas = Array.isArray(data) ? data : [data]
+
+          for (const schema of schemas) {
+            // Handle Event schema
+            if (schema['@type'] === 'Event' || schema['@type'] === 'MusicEvent' ||
+                schema['@type'] === 'SportsEvent' || schema['@type'] === 'TheaterEvent') {
+              if (schema.name && !result.eventName) result.eventName = schema.name
+              if (schema.description && !result.description) {
+                result.description = schema.description.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+              }
+
+              if (schema.location) {
+                const location = schema.location
+                if (location.name && !result.venueName) result.venueName = location.name
+                if (location.address) {
+                  if (typeof location.address === 'string') {
+                    result.venueAddress = location.address
+                  } else {
+                    if (location.address.streetAddress) result.venueAddress = location.address.streetAddress
+                    if (location.address.addressLocality) result.venueCity = location.address.addressLocality
+                    if (location.address.addressRegion) result.venueState = location.address.addressRegion
+                  }
+                }
+              }
+
+              if (schema.startDate) {
+                const date = new Date(schema.startDate)
+                if (!isNaN(date.getTime())) {
+                  result.eventDate = date.toISOString().split('T')[0]
+                  const hours = date.getHours().toString().padStart(2, '0')
+                  const minutes = date.getMinutes().toString().padStart(2, '0')
+                  result.eventTime = `${hours}:${minutes}`
+                }
+              }
+
+              if (schema.image) {
+                const images = Array.isArray(schema.image) ? schema.image : [schema.image]
+                result.imageUrls = images.filter((img: string) => typeof img === 'string' && img.startsWith('http'))
+              }
+
+              // Extract offers/pricing
+              if (schema.offers) {
+                const offers = Array.isArray(schema.offers) ? schema.offers : [schema.offers]
+                if (offers.length > 0 && offers[0].lowPrice) {
+                  result.ticketLevels = [
+                    { level: 'Starting From', price: parseFloat(offers[0].lowPrice), serviceFee: 0, tax: 0, sections: [], description: '' }
+                  ]
+                }
+              }
+            }
+
+            // Handle MusicGroup/Person schema (performer page)
+            if (schema['@type'] === 'MusicGroup' || schema['@type'] === 'Person' || schema['@type'] === 'PerformingGroup') {
+              result.isPerformerPage = true
+              result.performerName = schema.name
+              if (schema.image) {
+                const images = Array.isArray(schema.image) ? schema.image : [schema.image]
+                result.imageUrls = images.filter((img: string) => typeof img === 'string' && img.startsWith('http'))
+              }
+            }
+
+            // Handle ItemList (list of events on performer page)
+            if (schema['@type'] === 'ItemList' && schema.itemListElement) {
+              const events = schema.itemListElement
+                .filter((item: any) => item['@type'] === 'ListItem' && item.item)
+                .map((item: any) => item.item)
+                .filter((event: any) => event['@type'] === 'Event' || event['@type'] === 'MusicEvent')
+
+              if (events.length > 0) {
+                result.upcomingEvents = events.slice(0, 10).map((event: any) => ({
+                  name: event.name,
+                  date: event.startDate,
+                  venue: event.location?.name,
+                  city: event.location?.address?.addressLocality
+                }))
+
+                // Use first upcoming event as default
+                const firstEvent = events[0]
+                if (!result.eventName) result.eventName = firstEvent.name
+                if (firstEvent.location) {
+                  if (!result.venueName) result.venueName = firstEvent.location.name
+                  if (firstEvent.location.address) {
+                    if (!result.venueCity) result.venueCity = firstEvent.location.address.addressLocality
+                    if (!result.venueState) result.venueState = firstEvent.location.address.addressRegion
+                  }
+                }
+                if (firstEvent.startDate) {
+                  const date = new Date(firstEvent.startDate)
+                  if (!isNaN(date.getTime())) {
+                    result.eventDate = date.toISOString().split('T')[0]
+                    const hours = date.getHours().toString().padStart(2, '0')
+                    const minutes = date.getMinutes().toString().padStart(2, '0')
+                    result.eventTime = `${hours}:${minutes}`
+                  }
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.log('StubHub JSON-LD parse error:', e)
+        }
+      }
+    }
+
+    // Fallback: Extract event name from title
+    if (!result.eventName && !result.performerName) {
+      const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i)
+      if (titleMatch) {
+        result.eventName = titleMatch[1]
+          .replace(/\s*[\|\-]\s*StubHub.*$/i, '')
+          .replace(/\s*Tickets.*$/i, '')
+          .trim()
+      }
+    }
+
+    // Extract from meta tags
+    if (!result.description) {
+      const descMatch = html.match(/property="og:description"[^>]*content="([^"]+)"/i) ||
+                       html.match(/name="description"[^>]*content="([^"]+)"/i)
+      if (descMatch) {
+        result.description = descMatch[1]
+      }
+    }
+
+    // Extract images from og:image
+    if (!result.imageUrls || result.imageUrls.length === 0) {
+      const images: string[] = []
+      const ogImageMatches = html.matchAll(/property="og:image"[^>]*content="([^"]+)"/gi)
+      for (const match of ogImageMatches) {
+        if (match[1] && match[1].startsWith('http') && !images.includes(match[1])) {
+          images.push(match[1])
+        }
+      }
+      if (images.length > 0) {
+        result.imageUrls = images
+      }
+    }
+
+    // Extract price from HTML patterns
+    if (!result.ticketLevels || result.ticketLevels.length === 0) {
+      // Look for price patterns like "$45+" or "from $45"
+      const pricePatterns = [
+        /(?:from|starting at|starts at)\s*\$\s*(\d+(?:\.\d{2})?)/gi,
+        /\$\s*(\d+(?:\.\d{2})?)\s*(?:\+|and up|starting)/gi,
+        /data-price[^>]*>?\s*\$?\s*(\d+(?:\.\d{2})?)/gi
+      ]
+
+      for (const pattern of pricePatterns) {
+        const match = html.match(pattern)
+        if (match) {
+          const priceMatch = match[0].match(/(\d+(?:\.\d{2})?)/)
+          if (priceMatch) {
+            result.ticketLevels = [
+              { level: 'Starting From', price: parseFloat(priceMatch[1]), serviceFee: 0, tax: 0, sections: [], description: '' }
+            ]
+            break
+          }
+        }
+      }
+    }
+
+    result.isPerformerPage = isPerformerPage
+
+    console.log('StubHub scrape result:', {
+      eventName: result.eventName,
+      performerName: result.performerName,
+      venueName: result.venueName,
+      venueCity: result.venueCity,
+      eventDate: result.eventDate,
+      isPerformerPage: result.isPerformerPage,
+      upcomingEventsCount: result.upcomingEvents?.length || 0,
+      imageCount: result.imageUrls?.length || 0
+    })
+
+    return result
+  } catch (error) {
+    console.error('Error fetching/parsing StubHub HTML:', error)
+    return {}
+  }
+}
+
+// Fetch and parse Ticketmaster event page (enhanced HTML scraper)
+async function fetchAndParseTicketmasterHTML(url: string): Promise<{
+  eventName?: string
+  description?: string
+  venueName?: string
+  venueAddress?: string
+  venueCity?: string
+  venueState?: string
+  eventDate?: string
+  eventTime?: string
+  imageUrls?: string[]
+  ticketLevels?: Array<{
+    level: string
+    price: number
+    serviceFee: number
+    tax: number
+    sections: string[]
+    description: string
+  }>
+  performers?: string[]
+}> {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Cache-Control': 'no-cache'
+      }
+    })
+
+    if (!response.ok) {
+      console.log('Failed to fetch Ticketmaster URL:', response.status)
+      return {}
+    }
+
+    const html = await response.text()
+    const result: any = {}
+
+    // Extract from JSON-LD structured data (most reliable)
+    const jsonLdMatch = html.match(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi)
+    if (jsonLdMatch) {
+      for (const match of jsonLdMatch) {
+        try {
+          const jsonContent = match.replace(/<script[^>]*>|<\/script>/gi, '')
+          const data = JSON.parse(jsonContent)
+
+          const schemas = Array.isArray(data) ? data : [data]
+
+          for (const schema of schemas) {
+            if (schema['@type'] === 'Event' || schema['@type'] === 'MusicEvent' ||
+                schema['@type'] === 'TheaterEvent' || schema['@type'] === 'SportsEvent' ||
+                schema['@type'] === 'ComedyEvent' || schema['@type'] === 'DanceEvent') {
+
+              if (schema.name && !result.eventName) result.eventName = schema.name
+              if (schema.description && !result.description) {
+                result.description = schema.description.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+              }
+
+              if (schema.location) {
+                const location = schema.location
+                if (location.name && !result.venueName) result.venueName = location.name
+                if (location.address) {
+                  if (typeof location.address === 'string') {
+                    result.venueAddress = location.address
+                  } else {
+                    if (location.address.streetAddress) result.venueAddress = location.address.streetAddress
+                    if (location.address.addressLocality) result.venueCity = location.address.addressLocality
+                    if (location.address.addressRegion) result.venueState = location.address.addressRegion
+                  }
+                }
+              }
+
+              if (schema.startDate) {
+                const date = new Date(schema.startDate)
+                if (!isNaN(date.getTime())) {
+                  result.eventDate = date.toISOString().split('T')[0]
+                  const hours = date.getHours().toString().padStart(2, '0')
+                  const minutes = date.getMinutes().toString().padStart(2, '0')
+                  result.eventTime = `${hours}:${minutes}`
+                }
+              }
+
+              if (schema.image) {
+                const images = Array.isArray(schema.image) ? schema.image : [schema.image]
+                result.imageUrls = images.filter((img: string) => typeof img === 'string' && img.startsWith('http'))
+              }
+
+              // Extract performers
+              if (schema.performer) {
+                const performers = Array.isArray(schema.performer) ? schema.performer : [schema.performer]
+                result.performers = performers
+                  .map((p: any) => typeof p === 'string' ? p : p.name)
+                  .filter(Boolean)
+              }
+
+              // Extract offers/pricing
+              if (schema.offers) {
+                const offers = Array.isArray(schema.offers) ? schema.offers : [schema.offers]
+                const ticketLevels: any[] = []
+
+                for (const offer of offers) {
+                  if (offer.price && parseFloat(offer.price) > 0) {
+                    ticketLevels.push({
+                      level: offer.name || 'General Admission',
+                      price: parseFloat(offer.price),
+                      serviceFee: parseFloat(offer.price) * 0.1,
+                      tax: 8,
+                      sections: [],
+                      description: offer.description || ''
+                    })
+                  } else if (offer.lowPrice) {
+                    ticketLevels.push({
+                      level: 'Starting From',
+                      price: parseFloat(offer.lowPrice),
+                      serviceFee: 0,
+                      tax: 0,
+                      sections: [],
+                      description: ''
+                    })
+                  }
+                }
+
+                if (ticketLevels.length > 0) {
+                  result.ticketLevels = ticketLevels.sort((a, b) => b.price - a.price)
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.log('Ticketmaster JSON-LD parse error:', e)
+        }
+      }
+    }
+
+    // Fallback: Extract event name from title
+    if (!result.eventName) {
+      const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i)
+      if (titleMatch) {
+        result.eventName = titleMatch[1]
+          .replace(/\s*[\|\-]\s*Ticketmaster.*$/i, '')
+          .replace(/\s*Tickets.*$/i, '')
+          .trim()
+      }
+    }
+
+    // Extract from meta tags
+    if (!result.description) {
+      const descMatch = html.match(/property="og:description"[^>]*content="([^"]+)"/i) ||
+                       html.match(/name="description"[^>]*content="([^"]+)"/i)
+      if (descMatch) {
+        result.description = descMatch[1]
+      }
+    }
+
+    // Extract images from og:image
+    if (!result.imageUrls || result.imageUrls.length === 0) {
+      const images: string[] = []
+      const ogImageMatches = html.matchAll(/property="og:image"[^>]*content="([^"]+)"/gi)
+      for (const match of ogImageMatches) {
+        if (match[1] && match[1].startsWith('http') && !images.includes(match[1])) {
+          images.push(match[1])
+        }
+      }
+      if (images.length > 0) {
+        result.imageUrls = images
+      }
+    }
+
+    // Extract venue from common patterns if not in JSON-LD
+    if (!result.venueName) {
+      const venuePatterns = [
+        /data-testid="venue-name"[^>]*>([^<]+)</i,
+        /class="[^"]*venue[^"]*"[^>]*>([^<]+)</i,
+        /<span[^>]*class="[^"]*location[^"]*"[^>]*>([^<]+)</i,
+        /itemprop="location"[^>]*>([^<]+)</i
+      ]
+      for (const pattern of venuePatterns) {
+        const match = html.match(pattern)
+        if (match && match[1]) {
+          result.venueName = match[1].trim()
+          break
+        }
+      }
+    }
+
+    console.log('Ticketmaster HTML scrape result:', {
+      eventName: result.eventName,
+      venueName: result.venueName,
+      venueCity: result.venueCity,
+      eventDate: result.eventDate,
+      performersCount: result.performers?.length || 0,
+      imageCount: result.imageUrls?.length || 0,
+      ticketLevelsCount: result.ticketLevels?.length || 0
+    })
+
+    return result
+  } catch (error) {
+    console.error('Error fetching/parsing Ticketmaster HTML:', error)
+    return {}
+  }
+}
+
 // US State name to abbreviation mapping
 const stateAbbreviations: Record<string, string> = {
   'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR', 'california': 'CA',
@@ -1085,12 +1527,21 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // 3. Fall back to HTML parsing
+      // 3. Fall back to enhanced HTML parsing (dedicated Ticketmaster scraper)
       if (!parsedData.venueName) {
-        const htmlData = await fetchAndParseHTML(url)
-        if (htmlData.venueName) {
+        const htmlData = await fetchAndParseTicketmasterHTML(url)
+        if (htmlData.venueName || htmlData.eventName) {
           parsedData = { ...parsedData, ...htmlData }
-          console.log('Got data from HTML parsing:', htmlData.venueName)
+          console.log('Got data from Ticketmaster HTML scraper:', htmlData.venueName || htmlData.eventName)
+        }
+      }
+
+      // 4. Final fallback to generic HTML parsing
+      if (!parsedData.venueName && !parsedData.eventName) {
+        const genericHtmlData = await fetchAndParseHTML(url)
+        if (genericHtmlData.venueName || genericHtmlData.eventName) {
+          parsedData = { ...parsedData, ...genericHtmlData }
+          console.log('Got data from generic HTML parsing:', genericHtmlData.venueName || genericHtmlData.eventName)
         }
       }
 
@@ -1178,73 +1629,102 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // STUBHUB PARSER
-    // Example: https://www.stubhub.com/world-cup-arlington-tickets-6-14-2026/event/153021218/?...
+    // STUBHUB PARSER - Enhanced with HTML scraping
+    // Supports: /event/... pages, /performer/... pages, /-tickets-... URLs
     else if (domain.includes('stubhub.com')) {
-      // First, try to fetch and parse actual HTML for accurate venue info
-      const parsedData = await fetchAndParseHTML(url)
+      // Fetch and parse HTML using dedicated StubHub scraper
+      const stubhubData = await fetchAndParseStubHubHTML(url)
 
       const pathParts = url.split('/')
-      const eventSlug = pathParts.find((p: string) => p.includes('-tickets-')) || ''
 
-      // Split by '-tickets-' to separate event/city from date
-      const [eventCityPart, datePart] = eventSlug.split('-tickets-')
+      // Handle performer pages (e.g., /performer/374244)
+      if (stubhubData.isPerformerPage || url.includes('/performer/')) {
+        const performerName = stubhubData.performerName || stubhubData.eventName || 'Artist'
+        const { type, category } = detectEventType(performerName)
 
-      // Parse date (format: M-DD-YYYY or MM-DD-YYYY)
-      let eventDate = parsedData.eventDate || ''
-      if (!eventDate && datePart) {
-        const dateMatch = datePart.match(/^(\d{1,2})-(\d{1,2})-(\d{4})/)
-        if (dateMatch) {
-          const [, month, day, year] = dateMatch
-          eventDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+        // Use first upcoming event data if available
+        const firstEvent = stubhubData.upcomingEvents?.[0]
+
+        eventData = {
+          title: performerName,
+          description: stubhubData.description || `Get tickets for ${performerName}! Don't miss your chance to see this incredible performer live.`,
+          date: stubhubData.eventDate || firstEvent?.date?.split('T')[0] || '',
+          time: stubhubData.eventTime || '20:00',
+          venueName: stubhubData.venueName || firstEvent?.venue || '',
+          venueAddress: stubhubData.venueAddress || '',
+          venueCity: stubhubData.venueCity || firstEvent?.city || '',
+          venueState: stubhubData.venueState || '',
+          venueCapacity: type === 'sports' ? 50000 : 20000,
+          pricing: stubhubData.ticketLevels && stubhubData.ticketLevels.length > 0
+            ? stubhubData.ticketLevels
+            : [
+                { level: 'VIP', price: 250, serviceFee: 25, tax: 8, sections: ['VIP'] },
+                { level: 'Premium', price: 150, serviceFee: 15, tax: 8, sections: ['Premium'] },
+                { level: 'Standard', price: 75, serviceFee: 7.5, tax: 8, sections: ['Standard'] }
+              ],
+          performers: [performerName],
+          type: category,
+          capacity: type === 'sports' ? 50000 : 20000,
+          imageUrls: stubhubData.imageUrls || [],
+          // Include upcoming events for reference
+          upcomingEvents: stubhubData.upcomingEvents,
+          scrapedTicketLevels: stubhubData.ticketLevels || []
         }
-      }
-
-      // Parse event name and city from the first part
-      const slugParts = eventCityPart ? eventCityPart.split('-') : []
-
-      // Last part before '-tickets-' is usually the city
-      let city = parsedData.venueCity || 'Dallas'
-      if (!parsedData.venueCity && slugParts.length >= 2) {
-        city = slugParts.pop() || 'Dallas'
-        city = city.charAt(0).toUpperCase() + city.slice(1)
-      }
-
-      const eventName = parsedData.eventName || formatTitle(slugParts)
-      const { type, category } = detectEventType(eventName)
-
-      // Generate appropriate description
-      let description = ''
-      if (type === 'sports') {
-        description = `Don't miss the ${eventName} in ${city}! This is your chance to witness history in the making. Get your tickets now for an unforgettable sports experience.`
       } else {
-        description = `Experience ${eventName} live in ${city}! Secure your tickets for this highly anticipated event and be part of something special.`
-      }
+        // Handle event pages
+        const eventSlug = pathParts.find((p: string) => p.includes('-tickets-')) || ''
+        const [eventCityPart, datePart] = eventSlug.split('-tickets-')
 
-      const venueName = parsedData.venueName || `${city} ${type === 'sports' ? 'Stadium' : 'Arena'}`
-      const venueAddress = parsedData.venueAddress || ''
-      const state = parsedData.venueState || 'TX'
+        // Parse date from URL if not scraped
+        let eventDate = stubhubData.eventDate || ''
+        if (!eventDate && datePart) {
+          const dateMatch = datePart.match(/^(\d{1,2})-(\d{1,2})-(\d{4})/)
+          if (dateMatch) {
+            const [, month, day, year] = dateMatch
+            eventDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+          }
+        }
 
-      eventData = {
-        title: eventName,
-        description,
-        date: eventDate,
-        time: parsedData.eventTime || (type === 'sports' ? '18:00' : '20:00'),
-        venueName,
-        venueAddress,
-        venueCity: city,
-        venueState: state,
-        venueCapacity: type === 'sports' ? 80000 : 20000,
-        pricing: [
-          { level: 'Field/Floor', price: 500, serviceFee: 50, tax: 8, sections: ['Field'] },
-          { level: 'Lower Bowl', price: 300, serviceFee: 30, tax: 8, sections: ['Lower'] },
-          { level: 'Club Level', price: 200, serviceFee: 20, tax: 8, sections: ['Club'] },
-          { level: 'Upper Deck', price: 100, serviceFee: 10, tax: 8, sections: ['Upper'] }
-        ],
-        performers: [eventName],
-        type: category,
-        capacity: type === 'sports' ? 80000 : 20000,
-        imageUrls: parsedData.imageUrls || []
+        // Parse city from URL if not scraped
+        const slugParts = eventCityPart ? eventCityPart.split('-') : []
+        let city = stubhubData.venueCity || ''
+        if (!city && slugParts.length >= 2) {
+          city = slugParts.pop() || ''
+          city = city.charAt(0).toUpperCase() + city.slice(1)
+        }
+
+        const eventName = stubhubData.eventName || formatTitle(slugParts)
+        const { type, category } = detectEventType(eventName)
+
+        // Use scraped description or generate
+        const description = stubhubData.description || (type === 'sports'
+          ? `Don't miss the ${eventName}${city ? ` in ${city}` : ''}! This is your chance to witness history in the making.`
+          : `Experience ${eventName} live${city ? ` in ${city}` : ''}! Secure your tickets for this highly anticipated event.`)
+
+        eventData = {
+          title: eventName,
+          description,
+          date: eventDate,
+          time: stubhubData.eventTime || (type === 'sports' ? '18:00' : '20:00'),
+          venueName: stubhubData.venueName || '',
+          venueAddress: stubhubData.venueAddress || '',
+          venueCity: city,
+          venueState: stubhubData.venueState || '',
+          venueCapacity: type === 'sports' ? 80000 : 20000,
+          pricing: stubhubData.ticketLevels && stubhubData.ticketLevels.length > 0
+            ? stubhubData.ticketLevels
+            : [
+                { level: 'Field/Floor', price: 500, serviceFee: 50, tax: 8, sections: ['Field'] },
+                { level: 'Lower Bowl', price: 300, serviceFee: 30, tax: 8, sections: ['Lower'] },
+                { level: 'Club Level', price: 200, serviceFee: 20, tax: 8, sections: ['Club'] },
+                { level: 'Upper Deck', price: 100, serviceFee: 10, tax: 8, sections: ['Upper'] }
+              ],
+          performers: [eventName],
+          type: category,
+          capacity: type === 'sports' ? 80000 : 20000,
+          imageUrls: stubhubData.imageUrls || [],
+          scrapedTicketLevels: stubhubData.ticketLevels || []
+        }
       }
     }
 
