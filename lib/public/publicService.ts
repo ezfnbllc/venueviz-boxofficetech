@@ -598,6 +598,111 @@ export interface PublicVenue {
 }
 
 /**
+ * Public affiliate event interface
+ */
+export interface PublicAffiliateEvent {
+  id: string
+  name: string
+  description?: string
+  imageUrl?: string
+  startDate: Date
+  venueName: string
+  venueCity: string
+  venueState?: string
+  venueCountry?: string
+  minPrice?: number
+  maxPrice?: number
+  currency?: string
+  affiliateUrl: string
+  platform: string
+  isAffiliate: true  // Flag to distinguish from regular events
+}
+
+/**
+ * Get affiliate events for a promoter (server-side)
+ */
+export async function getPromoterAffiliateEvents(
+  promoterId: string,
+  options?: {
+    limit?: number
+    upcoming?: boolean
+  }
+): Promise<PublicAffiliateEvent[]> {
+  try {
+    const db = getAdminDb()
+    console.log(`[PublicService] Fetching affiliate events for promoterId: ${promoterId}`)
+
+    // Query affiliate events for this promoter that are active
+    const query = db.collection('affiliateEvents')
+      .where('promoterId', '==', promoterId)
+      .where('isActive', '==', true)
+
+    const snapshot = await query.get()
+    console.log(`[PublicService] Found ${snapshot.size} active affiliate events`)
+
+    const now = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+
+    let events = snapshot.docs.map(doc => {
+      const data = doc.data()
+
+      // Parse date
+      let startDate: Date
+      if (data.startDate) {
+        if (typeof data.startDate?.toDate === 'function') {
+          startDate = data.startDate.toDate()
+        } else if (data.startDate?._seconds) {
+          startDate = new Date(data.startDate._seconds * 1000)
+        } else {
+          startDate = new Date(data.startDate)
+        }
+      } else {
+        startDate = new Date(NaN)
+      }
+
+      return {
+        id: doc.id,
+        name: data.name || '',
+        description: data.description,
+        imageUrl: data.imageUrl,
+        startDate,
+        venueName: data.venueName || 'TBA',
+        venueCity: data.venueCity || '',
+        venueState: data.venueState,
+        venueCountry: data.venueCountry || 'US',
+        minPrice: data.minPrice,
+        maxPrice: data.maxPrice,
+        currency: data.currency || 'USD',
+        affiliateUrl: data.affiliateUrl,
+        platform: data.platform,
+        isAffiliate: true as const,
+      }
+    })
+
+    // Filter upcoming if needed
+    if (options?.upcoming) {
+      events = events.filter(e => {
+        const eventDate = new Date(e.startDate)
+        return eventDate >= today || isNaN(eventDate.getTime())
+      })
+    }
+
+    // Sort by date
+    events.sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
+
+    // Apply limit
+    if (options?.limit) {
+      events = events.slice(0, options.limit)
+    }
+
+    return events
+  } catch (error) {
+    console.error('Error fetching affiliate events:', error)
+    return []
+  }
+}
+
+/**
  * Get venue by ID
  */
 export async function getVenueById(venueId: string): Promise<PublicVenue | null> {

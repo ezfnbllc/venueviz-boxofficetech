@@ -168,6 +168,7 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
   const [fetchingEvents, setFetchingEvents] = useState(false)
   const [importingEvents, setImportingEvents] = useState(false)
   const [importedEvents, setImportedEvents] = useState<AffiliateEvent[]>([])
+  const [regeneratingUrls, setRegeneratingUrls] = useState(false)
 
   // Event management state
   const [showEventEditModal, setShowEventEditModal] = useState(false)
@@ -350,6 +351,63 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
       ))
     } catch (error) {
       console.error('Error toggling affiliate:', error)
+    }
+  }
+
+  // Regenerate affiliate URLs for all imported events
+  const handleRegenerateUrls = async (affiliate: PromoterAffiliate) => {
+    if (!affiliate.publisherId || !affiliate.affiliateId) {
+      alert('Please set both Publisher ID and Campaign/Program ID first.')
+      return
+    }
+
+    if (!confirm(`This will update all ${importedEvents.filter(e => e.affiliateId === affiliate.id).length} event URLs to use the new Campaign/Program ID. Continue?`)) {
+      return
+    }
+
+    setRegeneratingUrls(true)
+    try {
+      const eventsToUpdate = importedEvents.filter(e => e.affiliateId === affiliate.id)
+      let updatedCount = 0
+
+      for (const event of eventsToUpdate) {
+        // Extract the original Ticketmaster URL from the current affiliate URL
+        let originalUrl = ''
+        try {
+          const urlMatch = event.affiliateUrl.match(/[?&]u=([^&]+)/)
+          if (urlMatch) {
+            originalUrl = decodeURIComponent(urlMatch[1])
+          } else {
+            // If no u= param, the affiliateUrl might be the direct URL
+            originalUrl = event.affiliateUrl
+          }
+        } catch {
+          originalUrl = event.affiliateUrl
+        }
+
+        // Build new affiliate URL
+        let newAffiliateUrl = originalUrl
+        if (affiliate.affiliateNetwork === 'impact' && affiliate.publisherId && affiliate.affiliateId) {
+          newAffiliateUrl = `https://ticketmaster.evyy.net/c/${affiliate.publisherId}/${affiliate.affiliateId}/4272?subId1=${affiliate.trackingId || 'bot'}&u=${encodeURIComponent(originalUrl)}`
+        }
+
+        // Update in Firestore
+        await updateDoc(doc(db, 'affiliateEvents', event.id), {
+          affiliateUrl: newAffiliateUrl,
+          updatedAt: new Date().toISOString(),
+        })
+
+        updatedCount++
+      }
+
+      // Refresh imported events
+      await fetchImportedEvents()
+      alert(`Successfully updated ${updatedCount} event URLs.`)
+    } catch (error) {
+      console.error('Error regenerating URLs:', error)
+      alert('Failed to regenerate URLs. Please try again.')
+    } finally {
+      setRegeneratingUrls(false)
     }
   }
 
@@ -852,6 +910,38 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
             <h3 className="text-lg font-bold text-primary-contrast">
               Imported Events ({importedEvents.length})
             </h3>
+            {affiliates.length > 0 && (
+              <button
+                onClick={() => {
+                  // Find the affiliate with imported events
+                  const affiliateWithEvents = affiliates.find(a =>
+                    importedEvents.some(e => e.affiliateId === a.id)
+                  )
+                  if (affiliateWithEvents) {
+                    handleRegenerateUrls(affiliateWithEvents)
+                  }
+                }}
+                disabled={regeneratingUrls}
+                className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {regeneratingUrls ? (
+                  <>
+                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Updating URLs...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Regenerate URLs
+                  </>
+                )}
+              </button>
+            )}
           </div>
 
           <div className="stat-card rounded-xl overflow-hidden">
@@ -1047,26 +1137,32 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
                   {/* Network Credentials */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-primary-contrast mb-2">
-                        Publisher/Partner ID
+                      <label className="block text-sm font-medium text-primary-contrast mb-1">
+                        Publisher ID <span className="text-red-500">*</span>
                       </label>
+                      <p className="text-xs text-[#717171] mb-2">
+                        Your Impact.com media partner account ID
+                      </p>
                       <input
                         type="text"
                         value={formData.publisherId}
                         onChange={(e) => setFormData({ ...formData, publisherId: e.target.value })}
-                        placeholder="Your network publisher ID"
+                        placeholder="e.g., 377764"
                         className="form-control"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-primary-contrast mb-2">
-                        Affiliate/Tracking ID
+                      <label className="block text-sm font-medium text-primary-contrast mb-1">
+                        Campaign/Program ID <span className="text-red-500">*</span>
                       </label>
+                      <p className="text-xs text-[#717171] mb-2">
+                        From Impact.com → Brands → Ticketmaster → Program ID
+                      </p>
                       <input
                         type="text"
                         value={formData.affiliateId}
                         onChange={(e) => setFormData({ ...formData, affiliateId: e.target.value })}
-                        placeholder="Platform affiliate ID"
+                        placeholder="e.g., 234264"
                         className="form-control"
                       />
                     </div>
@@ -1202,26 +1298,32 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
               {/* Network Credentials */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-primary-contrast mb-2">
-                    Publisher/Partner ID
+                  <label className="block text-sm font-medium text-primary-contrast mb-1">
+                    Publisher ID
                   </label>
+                  <p className="text-xs text-[#717171] mb-2">
+                    Your Impact.com media partner account ID
+                  </p>
                   <input
                     type="text"
                     value={formData.publisherId}
                     onChange={(e) => setFormData({ ...formData, publisherId: e.target.value })}
-                    placeholder="Your network publisher ID"
+                    placeholder="e.g., 377764"
                     className="form-control"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-primary-contrast mb-2">
-                    Affiliate/Tracking ID
+                  <label className="block text-sm font-medium text-primary-contrast mb-1">
+                    Campaign/Program ID
                   </label>
+                  <p className="text-xs text-[#717171] mb-2">
+                    From Impact.com → Brands → Ticketmaster → Program ID
+                  </p>
                   <input
                     type="text"
                     value={formData.affiliateId}
                     onChange={(e) => setFormData({ ...formData, affiliateId: e.target.value })}
-                    placeholder="Platform affiliate ID"
+                    placeholder="e.g., 234264"
                     className="form-control"
                   />
                 </div>
