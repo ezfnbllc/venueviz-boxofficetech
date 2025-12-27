@@ -395,7 +395,7 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
     setShowImportWizard(true)
   }
 
-  // Fetch events from Ticketmaster
+  // Fetch events from Ticketmaster via API route (avoids CORS)
   const fetchTicketmasterEvents = async () => {
     if (!importingAffiliate?.apiKey) {
       alert('API key is required to fetch events')
@@ -424,12 +424,12 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
         params.set('unit', 'miles')
       }
 
-      const response = await fetch(
-        `https://app.ticketmaster.com/discovery/v2/events.json?${params.toString()}`
-      )
+      // Use our API route to avoid CORS issues
+      const response = await fetch(`/api/affiliates/ticketmaster/events?${params.toString()}`)
 
       if (!response.ok) {
-        throw new Error(`API error: ${response.status}`)
+        const errorData = await response.json()
+        throw new Error(errorData.error || `API error: ${response.status}`)
       }
 
       const data = await response.json()
@@ -696,11 +696,6 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
                       {NETWORK_OPTIONS.find(n => n.value === affiliate.affiliateNetwork)?.label || affiliate.affiliateNetwork}
                     </span>
                   )}
-                  {affiliate.autoImportEvents && (
-                    <span className="text-xs px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">
-                      Auto-Import
-                    </span>
-                  )}
                   {affiliate.apiKey && (
                     <span className="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded">
                       API Connected
@@ -910,79 +905,6 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
                     </div>
                   )}
 
-                  {/* Auto-Import Settings */}
-                  <div className="border-t border-slate-200 dark:border-slate-700 pt-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="font-medium text-primary-contrast">Auto-Import Events</h4>
-                      <button
-                        onClick={() => setFormData({ ...formData, autoImportEvents: !formData.autoImportEvents })}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                          formData.autoImportEvents ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            formData.autoImportEvents ? 'translate-x-6' : 'translate-x-1'
-                          }`}
-                        />
-                      </button>
-                    </div>
-
-                    {formData.autoImportEvents && (
-                      <div className="space-y-4 pl-4 border-l-2 border-slate-200 dark:border-slate-600">
-                        <div>
-                          <label className="block text-sm font-medium text-primary-contrast mb-2">
-                            Categories to Import
-                          </label>
-                          <div className="flex flex-wrap gap-2">
-                            {CATEGORY_OPTIONS.map(category => (
-                              <button
-                                key={category}
-                                onClick={() => {
-                                  const cats = formData.importCategories.includes(category)
-                                    ? formData.importCategories.filter(c => c !== category)
-                                    : [...formData.importCategories, category]
-                                  setFormData({ ...formData, importCategories: cats })
-                                }}
-                                className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                                  formData.importCategories.includes(category)
-                                    ? 'bg-blue-500 text-white'
-                                    : 'bg-slate-100 dark:bg-slate-700 text-secondary-contrast'
-                                }`}
-                              >
-                                {category}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-primary-contrast mb-2">
-                            Search Radius (miles): {formData.importRadius}
-                          </label>
-                          <input
-                            type="range"
-                            min="10"
-                            max="200"
-                            value={formData.importRadius}
-                            onChange={(e) => setFormData({ ...formData, importRadius: parseInt(e.target.value) })}
-                            className="w-full"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-primary-contrast mb-2">
-                            Keywords (comma-separated)
-                          </label>
-                          <input
-                            type="text"
-                            value={formData.importKeywords}
-                            onChange={(e) => setFormData({ ...formData, importKeywords: e.target.value })}
-                            placeholder="e.g., concert, festival, live"
-                            className="form-control"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
                 </>
               )}
             </div>
@@ -1120,79 +1042,6 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
                 </div>
               )}
 
-              {/* Auto-Import Settings */}
-              <div className="border-t border-slate-200 dark:border-slate-700 pt-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-medium text-primary-contrast">Auto-Import Events</h4>
-                  <button
-                    onClick={() => setFormData({ ...formData, autoImportEvents: !formData.autoImportEvents })}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      formData.autoImportEvents ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        formData.autoImportEvents ? 'translate-x-6' : 'translate-x-1'
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                {formData.autoImportEvents && (
-                  <div className="space-y-4 pl-4 border-l-2 border-slate-200 dark:border-slate-600">
-                    <div>
-                      <label className="block text-sm font-medium text-primary-contrast mb-2">
-                        Categories to Import
-                      </label>
-                      <div className="flex flex-wrap gap-2">
-                        {CATEGORY_OPTIONS.map(category => (
-                          <button
-                            key={category}
-                            onClick={() => {
-                              const cats = formData.importCategories.includes(category)
-                                ? formData.importCategories.filter(c => c !== category)
-                                : [...formData.importCategories, category]
-                              setFormData({ ...formData, importCategories: cats })
-                            }}
-                            className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                              formData.importCategories.includes(category)
-                                ? 'bg-blue-500 text-white'
-                                : 'bg-slate-100 dark:bg-slate-700 text-secondary-contrast'
-                            }`}
-                          >
-                            {category}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-primary-contrast mb-2">
-                        Search Radius (miles): {formData.importRadius}
-                      </label>
-                      <input
-                        type="range"
-                        min="10"
-                        max="200"
-                        value={formData.importRadius}
-                        onChange={(e) => setFormData({ ...formData, importRadius: parseInt(e.target.value) })}
-                        className="w-full"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-primary-contrast mb-2">
-                        Keywords (comma-separated)
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.importKeywords}
-                        onChange={(e) => setFormData({ ...formData, importKeywords: e.target.value })}
-                        placeholder="e.g., concert, festival, live"
-                        className="form-control"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
             </div>
 
             <div className="p-6 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-3">
