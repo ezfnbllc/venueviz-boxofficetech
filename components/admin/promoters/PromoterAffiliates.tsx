@@ -3,10 +3,31 @@
 import { useState, useEffect } from 'react'
 import { db } from '@/lib/firebase'
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, Timestamp } from 'firebase/firestore'
-import { PromoterAffiliate, AffiliatePlatform, AffiliateNetwork, AffiliatePlatformConfig } from '@/lib/types/promoter'
+import { PromoterAffiliate, AffiliatePlatform, AffiliateNetwork, AffiliatePlatformConfig, AffiliateEvent } from '@/lib/types/promoter'
 
 interface PromoterAffiliatesProps {
   promoterId: string
+}
+
+// Ticketmaster API response types
+interface TicketmasterEvent {
+  id: string
+  name: string
+  url: string
+  info?: string
+  images?: Array<{ url: string; width: number; height: number }>
+  dates?: {
+    start?: { localDate?: string; localTime?: string; dateTime?: string }
+  }
+  priceRanges?: Array<{ type: string; currency: string; min: number; max: number }>
+  _embedded?: {
+    venues?: Array<{
+      name: string
+      city?: { name: string }
+      state?: { stateCode: string }
+      country?: { countryCode: string }
+    }>
+  }
 }
 
 // Platform configuration with details
@@ -131,6 +152,22 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
   const [saving, setSaving] = useState(false)
   const [testingConnection, setTestingConnection] = useState(false)
   const [selectedPlatform, setSelectedPlatform] = useState<AffiliatePlatform | null>(null)
+
+  // Import wizard state
+  const [showImportWizard, setShowImportWizard] = useState(false)
+  const [importingAffiliate, setImportingAffiliate] = useState<PromoterAffiliate | null>(null)
+  const [importSearch, setImportSearch] = useState({
+    city: '',
+    stateCode: '',
+    keyword: '',
+    startDate: new Date().toISOString().split('T')[0],
+    endDate: '',
+  })
+  const [fetchedEvents, setFetchedEvents] = useState<TicketmasterEvent[]>([])
+  const [selectedEventIds, setSelectedEventIds] = useState<Set<string>>(new Set())
+  const [fetchingEvents, setFetchingEvents] = useState(false)
+  const [importingEvents, setImportingEvents] = useState(false)
+  const [importedEvents, setImportedEvents] = useState<AffiliateEvent[]>([])
 
   // Form state
   const [formData, setFormData] = useState({
@@ -343,6 +380,190 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
   }
 
+  // Open import wizard
+  const openImportWizard = (affiliate: PromoterAffiliate) => {
+    setImportingAffiliate(affiliate)
+    setFetchedEvents([])
+    setSelectedEventIds(new Set())
+    setImportSearch({
+      city: '',
+      stateCode: '',
+      keyword: affiliate.importKeywords?.join(' ') || '',
+      startDate: new Date().toISOString().split('T')[0],
+      endDate: '',
+    })
+    setShowImportWizard(true)
+  }
+
+  // Fetch events from Ticketmaster
+  const fetchTicketmasterEvents = async () => {
+    if (!importingAffiliate?.apiKey) {
+      alert('API key is required to fetch events')
+      return
+    }
+
+    setFetchingEvents(true)
+    try {
+      const params = new URLSearchParams({
+        apikey: importingAffiliate.apiKey,
+        size: '50',
+        sort: 'date,asc',
+      })
+
+      if (importSearch.city) params.set('city', importSearch.city)
+      if (importSearch.stateCode) params.set('stateCode', importSearch.stateCode)
+      if (importSearch.keyword) params.set('keyword', importSearch.keyword)
+      if (importSearch.startDate) {
+        params.set('startDateTime', `${importSearch.startDate}T00:00:00Z`)
+      }
+      if (importSearch.endDate) {
+        params.set('endDateTime', `${importSearch.endDate}T23:59:59Z`)
+      }
+      if (importingAffiliate.importRadius) {
+        params.set('radius', importingAffiliate.importRadius.toString())
+        params.set('unit', 'miles')
+      }
+
+      const response = await fetch(
+        `https://app.ticketmaster.com/discovery/v2/events.json?${params.toString()}`
+      )
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`)
+      }
+
+      const data = await response.json()
+      const events = data._embedded?.events || []
+      setFetchedEvents(events)
+
+      if (events.length === 0) {
+        alert('No events found. Try adjusting your search criteria.')
+      }
+    } catch (error) {
+      console.error('Error fetching events:', error)
+      alert('Failed to fetch events. Please check your API key and try again.')
+    } finally {
+      setFetchingEvents(false)
+    }
+  }
+
+  // Toggle event selection
+  const toggleEventSelection = (eventId: string) => {
+    const newSelection = new Set(selectedEventIds)
+    if (newSelection.has(eventId)) {
+      newSelection.delete(eventId)
+    } else {
+      newSelection.add(eventId)
+    }
+    setSelectedEventIds(newSelection)
+  }
+
+  // Select/deselect all events
+  const toggleSelectAll = () => {
+    if (selectedEventIds.size === fetchedEvents.length) {
+      setSelectedEventIds(new Set())
+    } else {
+      setSelectedEventIds(new Set(fetchedEvents.map(e => e.id)))
+    }
+  }
+
+  // Import selected events
+  const handleImportEvents = async () => {
+    if (!importingAffiliate || selectedEventIds.size === 0) return
+
+    setImportingEvents(true)
+    try {
+      const eventsToImport = fetchedEvents.filter(e => selectedEventIds.has(e.id))
+      const now = new Date().toISOString()
+      const importedDocs: AffiliateEvent[] = []
+
+      for (const event of eventsToImport) {
+        const venue = event._embedded?.venues?.[0]
+        const image = event.images?.find(img => img.width >= 500) || event.images?.[0]
+        const priceRange = event.priceRanges?.[0]
+
+        // Build affiliate URL
+        let affiliateUrl = event.url
+        if (importingAffiliate.affiliateNetwork === 'impact' && importingAffiliate.publisherId) {
+          affiliateUrl = `https://ticketmaster.evyy.net/c/${importingAffiliate.publisherId}/${importingAffiliate.affiliateId || 'ticketmaster'}/4272?subId1=${importingAffiliate.trackingId || 'bot'}&u=${encodeURIComponent(event.url)}`
+        }
+
+        const affiliateEvent = removeUndefined({
+          promoterId,
+          affiliateId: importingAffiliate.id,
+          platform: 'ticketmaster' as AffiliatePlatform,
+          externalEventId: event.id,
+          name: event.name,
+          description: event.info || null,
+          imageUrl: image?.url || null,
+          startDate: event.dates?.start?.dateTime || event.dates?.start?.localDate || '',
+          venueName: venue?.name || 'TBA',
+          venueCity: venue?.city?.name || '',
+          venueState: venue?.state?.stateCode || null,
+          venueCountry: venue?.country?.countryCode || 'US',
+          minPrice: priceRange?.min || null,
+          maxPrice: priceRange?.max || null,
+          currency: priceRange?.currency || 'USD',
+          affiliateUrl,
+          clicks: 0,
+          conversions: 0,
+          revenue: 0,
+          isActive: true,
+          createdAt: now,
+          updatedAt: now,
+        })
+
+        // Check if already imported
+        const existingQuery = query(
+          collection(db, 'affiliateEvents'),
+          where('externalEventId', '==', event.id),
+          where('promoterId', '==', promoterId)
+        )
+        const existing = await getDocs(existingQuery)
+
+        if (existing.empty) {
+          const docRef = await addDoc(collection(db, 'affiliateEvents'), affiliateEvent)
+          importedDocs.push({ id: docRef.id, ...affiliateEvent } as AffiliateEvent)
+        } else {
+          // Update existing
+          const docId = existing.docs[0].id
+          await updateDoc(doc(db, 'affiliateEvents', docId), {
+            ...affiliateEvent,
+            updatedAt: now,
+          })
+          importedDocs.push({ id: docId, ...affiliateEvent } as AffiliateEvent)
+        }
+      }
+
+      setImportedEvents(importedDocs)
+      alert(`Successfully imported ${importedDocs.length} events!`)
+      setShowImportWizard(false)
+      setFetchedEvents([])
+      setSelectedEventIds(new Set())
+    } catch (error) {
+      console.error('Error importing events:', error)
+      alert('Failed to import some events. Please try again.')
+    } finally {
+      setImportingEvents(false)
+    }
+  }
+
+  // Load imported events for display
+  const loadImportedEvents = async () => {
+    const q = query(
+      collection(db, 'affiliateEvents'),
+      where('promoterId', '==', promoterId),
+      where('isActive', '==', true)
+    )
+    const snapshot = await getDocs(q)
+    const events = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as AffiliateEvent[]
+    setImportedEvents(events)
+  }
+
+  useEffect(() => {
+    loadImportedEvents()
+  }, [promoterId])
+
   if (loading) {
     return <div className="animate-pulse text-secondary-contrast">Loading affiliates...</div>
   }
@@ -489,6 +710,17 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
 
                 {/* Actions */}
                 <div className="flex gap-2">
+                  {affiliate.apiKey && config?.supportsApi && (
+                    <button
+                      onClick={() => openImportWizard(affiliate)}
+                      className="flex-1 btn-primary px-3 py-2 rounded-lg text-sm flex items-center justify-center gap-1"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                      </svg>
+                      Import
+                    </button>
+                  )}
                   <button
                     onClick={() => openEditModal(affiliate)}
                     className="flex-1 btn-secondary px-3 py-2 rounded-lg text-sm"
@@ -981,6 +1213,250 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
               >
                 {saving ? 'Saving...' : 'Save Changes'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Wizard Modal */}
+      {showImportWizard && importingAffiliate && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-primary-contrast">
+                  Import Events from {getPlatformConfig(importingAffiliate.platform)?.displayName}
+                </h3>
+                <p className="text-sm text-secondary-contrast mt-1">
+                  Search for events and select which ones to display on your site
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowImportWizard(false)
+                  setFetchedEvents([])
+                  setSelectedEventIds(new Set())
+                }}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Search Filters */}
+            <div className="p-6 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-secondary-contrast mb-1">City</label>
+                  <input
+                    type="text"
+                    value={importSearch.city}
+                    onChange={(e) => setImportSearch({ ...importSearch, city: e.target.value })}
+                    placeholder="e.g., Dallas"
+                    className="form-control text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-secondary-contrast mb-1">State</label>
+                  <input
+                    type="text"
+                    value={importSearch.stateCode}
+                    onChange={(e) => setImportSearch({ ...importSearch, stateCode: e.target.value })}
+                    placeholder="e.g., TX"
+                    className="form-control text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-secondary-contrast mb-1">Keyword</label>
+                  <input
+                    type="text"
+                    value={importSearch.keyword}
+                    onChange={(e) => setImportSearch({ ...importSearch, keyword: e.target.value })}
+                    placeholder="e.g., concert"
+                    className="form-control text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-secondary-contrast mb-1">From Date</label>
+                  <input
+                    type="date"
+                    value={importSearch.startDate}
+                    onChange={(e) => setImportSearch({ ...importSearch, startDate: e.target.value })}
+                    className="form-control text-sm"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <button
+                    onClick={fetchTicketmasterEvents}
+                    disabled={fetchingEvents}
+                    className="btn-primary w-full px-4 py-2 rounded-lg text-sm flex items-center justify-center gap-2"
+                  >
+                    {fetchingEvents ? (
+                      <>
+                        <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        Searching...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        Search
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Events Grid */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {fetchedEvents.length === 0 ? (
+                <div className="text-center py-12">
+                  <svg className="w-16 h-16 mx-auto text-slate-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <p className="text-secondary-contrast">
+                    Enter search criteria and click "Search" to find events
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {/* Select All Header */}
+                  <div className="flex items-center justify-between mb-4">
+                    <button
+                      onClick={toggleSelectAll}
+                      className="text-sm text-blue-600 hover:underline flex items-center gap-2"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedEventIds.size === fetchedEvents.length}
+                        onChange={toggleSelectAll}
+                        className="rounded border-slate-300"
+                      />
+                      {selectedEventIds.size === fetchedEvents.length ? 'Deselect All' : 'Select All'}
+                    </button>
+                    <span className="text-sm text-secondary-contrast">
+                      {selectedEventIds.size} of {fetchedEvents.length} selected
+                    </span>
+                  </div>
+
+                  {/* Events Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {fetchedEvents.map(event => {
+                      const venue = event._embedded?.venues?.[0]
+                      const image = event.images?.find(img => img.width >= 300) || event.images?.[0]
+                      const isSelected = selectedEventIds.has(event.id)
+                      const priceRange = event.priceRanges?.[0]
+                      const eventDate = event.dates?.start?.localDate
+                        ? new Date(event.dates.start.localDate).toLocaleDateString('en-US', {
+                            weekday: 'short',
+                            month: 'short',
+                            day: 'numeric',
+                          })
+                        : 'TBA'
+
+                      return (
+                        <div
+                          key={event.id}
+                          onClick={() => toggleEventSelection(event.id)}
+                          className={`cursor-pointer rounded-lg border-2 overflow-hidden transition-all ${
+                            isSelected
+                              ? 'border-blue-500 ring-2 ring-blue-500/20'
+                              : 'border-slate-200 dark:border-slate-600 hover:border-slate-300'
+                          }`}
+                        >
+                          {/* Event Image */}
+                          <div className="relative h-32 bg-slate-100 dark:bg-slate-700">
+                            {image && (
+                              <img
+                                src={image.url}
+                                alt={event.name}
+                                className="w-full h-full object-cover"
+                              />
+                            )}
+                            <div className="absolute top-2 left-2">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleEventSelection(event.id)}
+                                className="w-5 h-5 rounded border-2 border-white shadow-lg"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            </div>
+                            {priceRange && (
+                              <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                                ${priceRange.min} - ${priceRange.max}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Event Info */}
+                          <div className="p-3">
+                            <h4 className="font-semibold text-primary-contrast text-sm line-clamp-2 mb-1">
+                              {event.name}
+                            </h4>
+                            <p className="text-xs text-secondary-contrast mb-1">
+                              {eventDate}
+                            </p>
+                            {venue && (
+                              <p className="text-xs text-secondary-contrast line-clamp-1">
+                                {venue.name} • {venue.city?.name}, {venue.state?.stateCode}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between bg-white dark:bg-slate-800">
+              <p className="text-sm text-secondary-contrast">
+                {fetchedEvents.length > 0 && `Found ${fetchedEvents.length} events`}
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowImportWizard(false)
+                    setFetchedEvents([])
+                    setSelectedEventIds(new Set())
+                  }}
+                  className="btn-secondary px-4 py-2 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleImportEvents}
+                  disabled={selectedEventIds.size === 0 || importingEvents}
+                  className="btn-primary px-6 py-2 rounded-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {importingEvents ? (
+                    <>
+                      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      Importing...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                      </svg>
+                      Import {selectedEventIds.size} Event{selectedEventIds.size !== 1 ? 's' : ''}
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
