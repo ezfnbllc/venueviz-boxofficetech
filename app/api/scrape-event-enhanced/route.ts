@@ -363,7 +363,7 @@ async function fetchAndParseSulekhaHTML(url: string): Promise<{
 
     // Extract venue from common HTML patterns - Sulekha specific
     if (!result.venueName) {
-      // Sulekha-specific venue patterns
+      // Sulekha-specific venue patterns - enhanced for hotels and all venue types
       const venuePatterns = [
         // Common Sulekha patterns
         /Venue\s*:?\s*<[^>]*>([^<]+)</i,
@@ -372,12 +372,16 @@ async function fetchAndParseSulekhaHTML(url: string): Promise<{
         /<[^>]*class="[^"]*location[^"]*"[^>]*>([^<]+)</i,
         /<[^>]*itemprop="location"[^>]*>([^<]+)</i,
         /data-venue="([^"]+)"/i,
-        // Look for "at [Venue]" pattern
-        /\bat\s+([A-Z][A-Za-z\s]+(?:Center|Hall|Arena|Theatre|Theater|Auditorium|Convention|Ballroom|Hotel|Resort))/i,
-        // Look for venue names ending with common suffixes
-        />([^<]*(?:Center|Hall|Arena|Theatre|Theater|Auditorium|Convention|Ballroom))\s*</i,
-        // Sulekha event detail patterns
-        /<span[^>]*>([^<]*(?:Center|Hall|Arena|Theatre|Theater|Auditorium|Convention|Ballroom)[^<]*)<\/span>/i
+        // Look for "at [Venue]" pattern - expanded with hotels
+        /\bat\s+([A-Z][A-Za-z\s]+(?:Center|Hall|Arena|Theatre|Theater|Auditorium|Convention|Ballroom|Hotel|Resort|Inn|Hilton|Marriott|Sheraton|Westin|Hyatt|DoubleTree|Embassy|Hampton|Radisson|Crowne|InterContinental))/i,
+        // Look for venue names with common suffixes - expanded
+        />([^<]*(?:Center|Hall|Arena|Theatre|Theater|Auditorium|Convention|Ballroom|Hotel|Resort|Inn))\s*</i,
+        // Hotel chain names with city/location (e.g., "Hilton Richardson Dallas")
+        />([^<]*(?:Hilton|Marriott|Sheraton|Westin|Hyatt|DoubleTree|Embassy Suites|Hampton Inn|Radisson|Crowne Plaza|InterContinental|Omni|Fairmont|Four Seasons|W Hotel|Waldorf)[^<]{0,40})</i,
+        // Sulekha event detail patterns - expanded
+        /<span[^>]*>([^<]*(?:Center|Hall|Arena|Theatre|Theater|Auditorium|Convention|Ballroom|Hotel|Resort)[^<]*)<\/span>/i,
+        // Venue with city pattern (e.g., "Grand Ballroom Dallas")
+        />([A-Z][A-Za-z\s]+(?:Ballroom|Room|Hall|Center)[^<]*)</i
       ]
       for (const pattern of venuePatterns) {
         const match = html.match(pattern)
@@ -398,13 +402,36 @@ async function fetchAndParseSulekhaHTML(url: string): Promise<{
       const venueTextPatterns = [
         /Venue\s*:?\s*([A-Z][A-Za-z0-9\s,]+?)(?:\s*[,\n<]|$)/i,
         /Location\s*:?\s*([A-Z][A-Za-z0-9\s,]+?)(?:\s*[,\n<]|$)/i,
-        /held\s+at\s+([A-Z][A-Za-z0-9\s]+?)(?:\s*[,\n<]|$)/i
+        /held\s+at\s+([A-Z][A-Za-z0-9\s]+?)(?:\s*[,\n<]|$)/i,
+        // Hotel name patterns in text
+        /((?:Hilton|Marriott|Sheraton|Westin|Hyatt|DoubleTree|Embassy|Hampton|Radisson|Crowne|InterContinental|Omni)[A-Za-z\s]+(?:Dallas|Houston|Austin|Richardson|Plano|Frisco|Irving|Arlington)?)/i
       ]
       for (const pattern of venueTextPatterns) {
         const match = html.match(pattern)
         if (match && match[1]) {
           const venueName = match[1].trim()
           if (venueName.length > 3 && venueName.length < 80) {
+            result.venueName = venueName
+            break
+          }
+        }
+      }
+    }
+
+    // Additional pattern: Look for venue in map/address sections
+    if (!result.venueName) {
+      const mapVenuePatterns = [
+        /data-name="([^"]+)"/i,
+        /place-name[^>]*>([^<]+)</i,
+        /address[^>]*title="([^"]+)"/i,
+        // Google Maps embedded venue
+        /maps\.google\.com[^"]*\+([A-Za-z%20+]+(?:Hotel|Center|Hall|Arena))/i
+      ]
+      for (const pattern of mapVenuePatterns) {
+        const match = html.match(pattern)
+        if (match && match[1]) {
+          const venueName = decodeURIComponent(match[1].replace(/\+/g, ' ')).trim()
+          if (venueName.length > 3 && venueName.length < 100) {
             result.venueName = venueName
             break
           }
@@ -690,6 +717,216 @@ async function fetchAndParseSulekhaHTML(url: string): Promise<{
     return result
   } catch (error) {
     console.error('Error fetching/parsing Sulekha HTML:', error)
+    return {}
+  }
+}
+
+// Fetch and parse Eventbrite event page
+async function fetchAndParseEventbriteHTML(url: string): Promise<{
+  eventName?: string
+  description?: string
+  venueName?: string
+  venueAddress?: string
+  venueCity?: string
+  venueState?: string
+  eventDate?: string
+  eventTime?: string
+  imageUrls?: string[]
+  ticketLevels?: Array<{
+    level: string
+    price: number
+    serviceFee: number
+    tax: number
+    sections: string[]
+    description: string
+  }>
+}> {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Cache-Control': 'no-cache'
+      }
+    })
+
+    if (!response.ok) {
+      console.log('Failed to fetch Eventbrite URL:', response.status)
+      return {}
+    }
+
+    const html = await response.text()
+    const result: any = {}
+
+    // Extract from JSON-LD structured data (most reliable source)
+    const jsonLdMatch = html.match(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi)
+    if (jsonLdMatch) {
+      for (const match of jsonLdMatch) {
+        try {
+          const jsonContent = match.replace(/<script[^>]*>|<\/script>/gi, '')
+          const data = JSON.parse(jsonContent)
+
+          // Handle array of schemas (common in Eventbrite)
+          const schemas = Array.isArray(data) ? data : [data]
+
+          for (const schema of schemas) {
+            if (schema['@type'] === 'Event' || schema['@type'] === 'SocialEvent' ||
+                schema['@type'] === 'MusicEvent' || schema['@type'] === 'Party') {
+              if (schema.name && !result.eventName) result.eventName = schema.name
+              if (schema.description && !result.description) {
+                // Clean HTML tags from description
+                result.description = schema.description.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+              }
+
+              if (schema.location) {
+                const location = schema.location
+                if (location.name && !result.venueName) result.venueName = location.name
+                if (location.address) {
+                  if (typeof location.address === 'string') {
+                    result.venueAddress = location.address
+                  } else {
+                    if (location.address.streetAddress) result.venueAddress = location.address.streetAddress
+                    if (location.address.addressLocality) result.venueCity = location.address.addressLocality
+                    if (location.address.addressRegion) result.venueState = location.address.addressRegion
+                  }
+                }
+              }
+
+              if (schema.startDate) {
+                const date = new Date(schema.startDate)
+                if (!isNaN(date.getTime())) {
+                  result.eventDate = date.toISOString().split('T')[0]
+                  const hours = date.getHours().toString().padStart(2, '0')
+                  const minutes = date.getMinutes().toString().padStart(2, '0')
+                  result.eventTime = `${hours}:${minutes}`
+                }
+              }
+
+              if (schema.image) {
+                const images = Array.isArray(schema.image) ? schema.image : [schema.image]
+                result.imageUrls = images.filter((img: string) => typeof img === 'string' && img.startsWith('http'))
+              }
+
+              // Extract offers/pricing
+              if (schema.offers) {
+                const offers = Array.isArray(schema.offers) ? schema.offers : [schema.offers]
+                const ticketLevels: any[] = []
+
+                for (const offer of offers) {
+                  if (offer.price && offer.price > 0) {
+                    ticketLevels.push({
+                      level: offer.name || 'General Admission',
+                      price: parseFloat(offer.price),
+                      serviceFee: parseFloat(offer.price) * 0.1,
+                      tax: 8,
+                      sections: [],
+                      description: offer.description || ''
+                    })
+                  }
+                }
+
+                if (ticketLevels.length > 0) {
+                  result.ticketLevels = ticketLevels.sort((a, b) => b.price - a.price)
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.log('JSON-LD parse error:', e)
+        }
+      }
+    }
+
+    // Fallback: Extract event name from title tag
+    if (!result.eventName) {
+      const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i)
+      if (titleMatch) {
+        // Clean up title (remove " | Eventbrite" or similar suffixes)
+        result.eventName = titleMatch[1]
+          .replace(/\s*[\|\-]\s*Eventbrite.*$/i, '')
+          .replace(/\s*Tickets.*$/i, '')
+          .trim()
+      }
+    }
+
+    // Fallback: Extract from meta tags
+    if (!result.description) {
+      const descMatch = html.match(/property="og:description"[^>]*content="([^"]+)"/i) ||
+                       html.match(/name="description"[^>]*content="([^"]+)"/i)
+      if (descMatch) {
+        result.description = descMatch[1]
+      }
+    }
+
+    // Extract images from og:image
+    if (!result.imageUrls || result.imageUrls.length === 0) {
+      const images: string[] = []
+      const ogImageMatches = html.matchAll(/property="og:image"[^>]*content="([^"]+)"/gi)
+      for (const match of ogImageMatches) {
+        if (match[1] && match[1].startsWith('http') && !images.includes(match[1])) {
+          images.push(match[1])
+        }
+      }
+      if (images.length > 0) {
+        result.imageUrls = images
+      }
+    }
+
+    // Extract ticket levels from HTML patterns if not found in JSON-LD
+    if (!result.ticketLevels || result.ticketLevels.length === 0) {
+      const ticketLevels: any[] = []
+
+      // Eventbrite ticket card patterns
+      const ticketPatterns = [
+        // Pattern: ticket name with price
+        /data-testid="[^"]*ticket[^"]*"[\s\S]*?([A-Za-z][A-Za-z\s\-]+?)[\s\S]*?\$\s*(\d+(?:\.\d{2})?)/gi,
+        // Pattern: class contains ticket with nearby price
+        /class="[^"]*ticket[^"]*"[^>]*>[\s\S]*?>([^<]+)<[\s\S]*?\$\s*(\d+(?:\.\d{2})?)/gi,
+        // General pattern: ticket type names followed by price
+        /(General\s*Admission|VIP|Early\s*Bird|Regular|Premium|Standard|Gold|Silver|Platinum)[^\$]*\$\s*(\d+(?:\.\d{2})?)/gi
+      ]
+
+      for (const pattern of ticketPatterns) {
+        const matches = html.matchAll(pattern)
+        for (const match of matches) {
+          const levelName = match[1].trim()
+          const price = parseFloat(match[2])
+
+          if (levelName.length > 2 && levelName.length < 60 && price > 0) {
+            if (!ticketLevels.some(t => t.level.toLowerCase() === levelName.toLowerCase())) {
+              ticketLevels.push({
+                level: levelName,
+                price,
+                serviceFee: price * 0.1,
+                tax: 8,
+                sections: [],
+                description: ''
+              })
+            }
+          }
+        }
+
+        if (ticketLevels.length > 0) break
+      }
+
+      if (ticketLevels.length > 0) {
+        result.ticketLevels = ticketLevels.sort((a, b) => b.price - a.price)
+      }
+    }
+
+    console.log('Eventbrite scrape result:', {
+      eventName: result.eventName,
+      venueName: result.venueName,
+      venueCity: result.venueCity,
+      eventDate: result.eventDate,
+      imageCount: result.imageUrls?.length || 0,
+      ticketLevels: result.ticketLevels?.length || 0
+    })
+
+    return result
+  } catch (error) {
+    console.error('Error fetching/parsing Eventbrite HTML:', error)
     return {}
   }
 }
@@ -1141,24 +1378,77 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // EVENTBRITE PARSER
+    // EVENTBRITE PARSER - Enhanced with HTML scraping
     else if (domain.includes('eventbrite.com')) {
+      // Fetch and parse actual HTML from Eventbrite
+      const eventbriteData = await fetchAndParseEventbriteHTML(url)
+
+      // Extract city/state from URL or scraped data
+      // URL pattern: /e/event-name-city-tickets-ID
+      const pathParts = url.split('/')
+      const eventSlug = pathParts.find((p: string) => p.startsWith('e/'))?.replace('e/', '') || ''
+
+      let city = eventbriteData.venueCity || 'Dallas'
+      let state = eventbriteData.venueState || 'TX'
+
+      // Try to extract city from URL if not in scraped data
+      if (!eventbriteData.venueCity && eventSlug) {
+        // Look for common city patterns in the slug
+        const cityPatterns = [
+          /-(dallas|houston|austin|san-antonio|fort-worth|plano|irving|frisco|richardson|arlington)-/i,
+          /-(new-york|los-angeles|chicago|phoenix|philadelphia|san-diego|seattle|denver|boston|atlanta)-/i
+        ]
+        for (const pattern of cityPatterns) {
+          const match = eventSlug.match(pattern)
+          if (match) {
+            city = match[1].replace(/-/g, ' ').split(' ')
+              .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+              .join(' ')
+            break
+          }
+        }
+      }
+
+      // Detect event type
+      const eventName = eventbriteData.eventName || 'Eventbrite Event'
+      const isNewYear = eventName.toLowerCase().includes('new year') ||
+                       eventName.toLowerCase().includes('nye') ||
+                       eventName.toLowerCase().includes('newyear')
+      const eventType = eventName.toLowerCase().includes('gala') ? 'gala' :
+                       eventName.toLowerCase().includes('concert') ? 'concert' :
+                       eventName.toLowerCase().includes('comedy') ? 'comedy' :
+                       eventName.toLowerCase().includes('party') ? 'party' : 'event'
+
+      // Use scraped ticket levels or generate defaults
+      const ticketLevels = eventbriteData.ticketLevels && eventbriteData.ticketLevels.length > 0
+        ? eventbriteData.ticketLevels
+        : [
+            { level: 'VIP', price: 150, serviceFee: 15, tax: 8, sections: [], description: '' },
+            { level: 'General Admission', price: 75, serviceFee: 7.5, tax: 8, sections: [], description: '' }
+          ]
+
+      // Generate description if not scraped
+      const description = eventbriteData.description ||
+        (isNewYear
+          ? `Ring in the New Year with ${eventName}! Join us for an unforgettable celebration featuring live entertainment, great food, and festive atmosphere.`
+          : `Don't miss ${eventName}! This exciting ${eventType} event promises an incredible experience you won't forget.`)
+
       eventData = {
-        title: 'Imported Event from Eventbrite',
-        description: 'Event imported from Eventbrite. Please update the details as needed.',
-        date: '2025-12-01',
-        time: '19:00',
-        venueName: 'Event Venue',
-        venueAddress: '123 Event Street',
-        venueCity: 'Dallas',
-        venueState: 'TX',
-        venueCapacity: 1000,
-        pricing: [
-          { level: 'General Admission', price: 50, serviceFee: 5, tax: 8, sections: [] },
-          { level: 'VIP', price: 150, serviceFee: 15, tax: 8, sections: [] }
-        ],
-        type: 'event',
-        capacity: 1000
+        title: eventName,
+        description,
+        date: eventbriteData.eventDate || new Date().toISOString().split('T')[0],
+        time: eventbriteData.eventTime || (isNewYear ? '21:00' : '19:00'),
+        venueName: eventbriteData.venueName || '',
+        venueAddress: eventbriteData.venueAddress || '',
+        venueCity: city,
+        venueState: state,
+        venueCapacity: 2000,
+        pricing: ticketLevels,
+        performers: [eventName.split(' ').slice(0, 4).join(' ')],
+        type: eventType === 'comedy' ? 'comedy' : eventType === 'concert' ? 'concert' : 'event',
+        capacity: 2000,
+        imageUrls: eventbriteData.imageUrls || [],
+        scrapedTicketLevels: eventbriteData.ticketLevels || []
       }
     }
 

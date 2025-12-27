@@ -210,20 +210,25 @@ export default function Step2Venue() {
     const scrapedVenue = (formData.basics as any)?.scrapedVenue
     if (scrapedVenue?.name || scrapedVenue?.city) {
       initializedRef.current = true
-      setSearchQuery(scrapedVenue.name || '')
+      setSearchQuery(scrapedVenue.name || scrapedVenue.city || '')
 
-      // Try to find a matching venue (fuzzy match on name OR city match)
+      // Try to find a matching venue (fuzzy match on name ONLY)
+      // We should only auto-select if we have a strong name match
       let matchedVenue = null
       if (scrapedVenue.name) {
+        // First try exact/high confidence match on name
         matchedVenue = venues.find(v => fuzzyMatch(v.name, scrapedVenue.name) > 0.7)
+
+        // If no high confidence match, try name + city combination for better matching
+        if (!matchedVenue && scrapedVenue.city) {
+          matchedVenue = venues.find(v =>
+            v.city?.toLowerCase() === scrapedVenue.city?.toLowerCase() &&
+            fuzzyMatch(v.name, scrapedVenue.name) > 0.5
+          )
+        }
       }
-      // If no name match, try city + type matching
-      if (!matchedVenue && scrapedVenue.city) {
-        matchedVenue = venues.find(v =>
-          v.city?.toLowerCase() === scrapedVenue.city?.toLowerCase() &&
-          fuzzyMatch(v.name, scrapedVenue.name || scrapedVenue.city) > 0.4
-        )
-      }
+      // NOTE: We do NOT auto-select based on city alone - that leads to wrong matches
+      // If user scraped a venue but we can't match it, we should create it or let them search
 
       if (matchedVenue) {
         // Found a match - select it
@@ -246,6 +251,7 @@ export default function Step2Venue() {
         // No match found - show confirmation dialog before creating
         setPendingVenueCreate(scrapedVenue)
       }
+      // If only city is available (no venue name scraped), let the user search/select manually
     }
   }, [venues, formData.basics, formData.venue.venueId])
 
