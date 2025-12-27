@@ -22,7 +22,7 @@
   }
 
   .form-control {
-    @apply w-full px-4 py-3 text-sm border border-gray-100 rounded-lg bg-white transition-colors;
+    @apply w-full px-4 py-3 text-sm border border-gray-100 rounded-lg bg-white text-[#1d1d1d] transition-colors;
   }
 
   .form-control:focus {
