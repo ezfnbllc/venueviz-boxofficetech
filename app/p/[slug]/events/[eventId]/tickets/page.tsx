@@ -327,7 +327,7 @@ export default function TicketSelectionPage() {
       <Layout promoterSlug={slug}>
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Event Not Found</h2>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Event Not Found</h2>
             <Link href={`/p/${slug}/events`} className="text-[#6ac045] hover:underline">
               Browse Events
             </Link>
@@ -340,29 +340,29 @@ export default function TicketSelectionPage() {
   return (
     <Layout promoterSlug={slug}>
       {/* Breadcrumb */}
-      <div className="bg-gray-50 border-b border-gray-200">
+      <div className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
         <div className="container mx-auto px-4 py-4">
           <nav aria-label="breadcrumb">
             <ol className="flex items-center space-x-2 text-sm">
               <li>
-                <Link href={`/p/${slug}`} className="text-gray-600 hover:text-[#6ac045]">
+                <Link href={`/p/${slug}`} className="text-gray-600 dark:text-gray-300 hover:text-[#6ac045]">
                   Home
                 </Link>
               </li>
               <li className="text-gray-400">/</li>
               <li>
-                <Link href={`/p/${slug}/events`} className="text-gray-600 hover:text-[#6ac045]">
+                <Link href={`/p/${slug}/events`} className="text-gray-600 dark:text-gray-300 hover:text-[#6ac045]">
                   Events
                 </Link>
               </li>
               <li className="text-gray-400">/</li>
               <li>
-                <Link href={`/p/${slug}/events/${eventId}`} className="text-gray-600 hover:text-[#6ac045] truncate max-w-[150px]">
+                <Link href={`/p/${slug}/events/${eventId}`} className="text-gray-600 dark:text-gray-300 hover:text-[#6ac045] truncate max-w-[150px]">
                   {event.name}
                 </Link>
               </li>
               <li className="text-gray-400">/</li>
-              <li className="text-gray-900 font-medium">Select Tickets</li>
+              <li className="text-gray-900 dark:text-white font-medium">Select Tickets</li>
             </ol>
           </nav>
         </div>
@@ -414,7 +414,7 @@ export default function TicketSelectionPage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Left Column - Ticket Selection */}
             <div className="lg:col-span-2">
-              <h2 className="text-xl font-bold text-gray-900 mb-6">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">
                 {isReservedSeating ? 'Select Your Seats' : 'Select Tickets'}
               </h2>
 
@@ -423,22 +423,22 @@ export default function TicketSelectionPage() {
                   <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <h2 className="text-xl font-semibold text-gray-900 mb-2">Sold Out</h2>
-                  <p className="text-gray-600">Sorry, tickets for this event are no longer available.</p>
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Sold Out</h2>
+                  <p className="text-gray-600 dark:text-gray-300">Sorry, tickets for this event are no longer available.</p>
                 </div>
               ) : isReservedSeating && event.layout ? (
                 /* Interactive Seating Chart for Reserved Seating */
                 <div className="main-card overflow-hidden">
                   {/* Timer banner */}
                   {timeRemaining && (
-                    <div className="p-3 bg-amber-50 border-b border-amber-200 flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-amber-800">
+                    <div className="p-3 bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-700 flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-amber-800 dark:text-amber-200">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         <span className="font-medium">Your seats are reserved for</span>
                       </div>
-                      <span className="text-xl font-bold text-amber-900">{timeRemaining}</span>
+                      <span className="text-xl font-bold text-amber-900 dark:text-amber-100">{timeRemaining}</span>
                     </div>
                   )}
                   <InteractiveSeatingChart
@@ -452,23 +452,23 @@ export default function TicketSelectionPage() {
 
                   {/* Selected Seats Summary */}
                   {selectedSeats.length > 0 && (
-                    <div className="p-4 bg-gray-50 border-t border-gray-200">
-                      <h3 className="font-semibold text-gray-900 mb-3">Your Selected Seats</h3>
+                    <div className="p-4 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+                      <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Your Selected Seats</h3>
                       <div className="flex flex-wrap gap-2">
                         {selectedSeats.map(seat => (
                           <div
                             key={seat.id}
-                            className="px-3 py-2 bg-green-100 border border-green-300 rounded-lg text-sm"
+                            className="px-3 py-2 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-lg text-sm"
                           >
-                            <span className="font-medium text-gray-900">
+                            <span className="font-medium text-gray-900 dark:text-white">
                               {seat.sectionName}
                             </span>
-                            <span className="text-gray-600 mx-1">•</span>
-                            <span className="text-gray-700">
+                            <span className="text-gray-600 dark:text-gray-400 mx-1">•</span>
+                            <span className="text-gray-700 dark:text-gray-300">
                               Row {seat.row}, Seat {seat.number}
                             </span>
-                            <span className="text-gray-600 mx-1">•</span>
-                            <span className="font-semibold text-green-700">
+                            <span className="text-gray-600 dark:text-gray-400 mx-1">•</span>
+                            <span className="font-semibold text-green-700 dark:text-green-400">
                               ${seat.price}
                             </span>
                           </div>
@@ -486,9 +486,9 @@ export default function TicketSelectionPage() {
                       className="main-card p-6 flex items-center justify-between"
                     >
                       <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-gray-900">{ticketType.name}</h3>
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{ticketType.name}</h3>
                         {ticketType.description && (
-                          <p className="text-sm text-gray-600 mt-1">{ticketType.description}</p>
+                          <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">{ticketType.description}</p>
                         )}
                         <p className="text-lg font-bold text-[#6ac045] mt-2">
                           ${ticketType.price.toFixed(2)}
@@ -504,21 +504,21 @@ export default function TicketSelectionPage() {
                         <button
                           onClick={() => updateQuantity(ticketType.id, -1)}
                           disabled={quantities[ticketType.id] === 0}
-                          className="w-10 h-10 flex items-center justify-center rounded-full border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          className="w-10 h-10 flex items-center justify-center rounded-full border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
                           </svg>
                         </button>
 
-                        <span className="w-12 text-center text-lg font-semibold">
+                        <span className="w-12 text-center text-lg font-semibold text-gray-900 dark:text-white">
                           {quantities[ticketType.id] || 0}
                         </span>
 
                         <button
                           onClick={() => updateQuantity(ticketType.id, 1)}
                           disabled={quantities[ticketType.id] >= ticketType.maxPerOrder}
-                          className="w-10 h-10 flex items-center justify-center rounded-full border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          className="w-10 h-10 flex items-center justify-center rounded-full border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

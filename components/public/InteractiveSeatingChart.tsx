@@ -689,22 +689,22 @@ export default function InteractiveSeatingChart({
   return (
     <div className={`flex flex-col ${className}`}>
       {/* Controls Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-white border-b border-gray-200">
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         {/* Zoom Controls */}
         <div className="flex items-center gap-2">
           <button
             onClick={() => handleZoom(-0.2)}
-            className="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700"
+            className="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
             title="Zoom out"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
             </svg>
           </button>
-          <span className="text-sm text-gray-600 min-w-[4rem] text-center">{Math.round(zoom * 100)}%</span>
+          <span className="text-sm text-gray-600 dark:text-gray-300 min-w-[4rem] text-center">{Math.round(zoom * 100)}%</span>
           <button
             onClick={() => handleZoom(0.2)}
-            className="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700"
+            className="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
             title="Zoom in"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -713,7 +713,7 @@ export default function InteractiveSeatingChart({
           </button>
           <button
             onClick={resetView}
-            className="px-3 h-8 flex items-center justify-center rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm"
+            className="px-3 h-8 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 text-sm"
             title="Reset view"
           >
             Reset
@@ -751,31 +751,31 @@ export default function InteractiveSeatingChart({
       )}
 
       {/* Legend */}
-      <div className="flex flex-wrap items-center gap-4 p-3 bg-gray-50 border-b border-gray-200 text-xs">
+      <div className="flex flex-wrap items-center gap-4 p-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-xs">
         <div className="flex items-center gap-4">
           {layout.priceCategories.map(cat => (
             <div key={cat.id} className="flex items-center gap-1.5">
               <div className="w-4 h-4 rounded" style={{ backgroundColor: cat.color }} />
-              <span className="text-gray-700">{cat.name} - ${cat.price}</span>
+              <span className="text-gray-700 dark:text-gray-300">{cat.name} - ${cat.price}</span>
             </div>
           ))}
         </div>
         <div className="flex items-center gap-4 ml-auto">
           <div className="flex items-center gap-1.5">
             <div className="w-4 h-4 rounded bg-green-500" />
-            <span className="text-gray-700">Selected</span>
+            <span className="text-gray-700 dark:text-gray-300">Selected</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-4 h-4 rounded bg-gray-700" />
-            <span className="text-gray-700">Sold</span>
+            <div className="w-4 h-4 rounded bg-gray-700 dark:bg-gray-500" />
+            <span className="text-gray-700 dark:text-gray-300">Sold</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-4 h-4 rounded bg-gray-500" />
-            <span className="text-gray-700">Reserved</span>
+            <div className="w-4 h-4 rounded bg-gray-500 dark:bg-gray-600" />
+            <span className="text-gray-700 dark:text-gray-300">Reserved</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="w-4 h-4 rounded bg-amber-500" />
-            <span className="text-gray-700">AI Pick</span>
+            <span className="text-gray-700 dark:text-gray-300">AI Pick</span>
           </div>
         </div>
       </div>
@@ -906,7 +906,7 @@ export default function InteractiveSeatingChart({
 
         {/* Hovered seat tooltip */}
         {hoveredSeat && (
-          <div className="absolute bottom-4 left-4 bg-white rounded-lg shadow-lg p-3 text-sm">
+          <div className="absolute bottom-4 left-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-3 text-sm border border-gray-200 dark:border-gray-700">
             {(() => {
               for (const section of processedSections) {
                 const seat = section.seats.find(s => s.id === hoveredSeat)
@@ -916,9 +916,9 @@ export default function InteractiveSeatingChart({
                   const seatPrice = seat.price || priceCategory?.price || 0
                   return (
                     <>
-                      <div className="font-semibold text-gray-900">{section.name}</div>
-                      <div className="text-gray-600">Row {seat.row}, Seat {seat.number}</div>
-                      <div className="text-green-600 font-medium">${seatPrice.toFixed(2)}</div>
+                      <div className="font-semibold text-gray-900 dark:text-white">{section.name}</div>
+                      <div className="text-gray-600 dark:text-gray-300">Row {seat.row}, Seat {seat.number}</div>
+                      <div className="text-green-600 dark:text-green-400 font-medium">${seatPrice.toFixed(2)}</div>
                     </>
                   )
                 }
@@ -930,7 +930,7 @@ export default function InteractiveSeatingChart({
       </div>
 
       {/* Mobile instructions */}
-      <div className="p-2 bg-gray-100 text-center text-xs text-gray-600 md:hidden">
+      <div className="p-2 bg-gray-100 dark:bg-gray-800 text-center text-xs text-gray-600 dark:text-gray-400 md:hidden">
         Pinch to zoom • Drag to pan • Tap to select
       </div>
     </div>
