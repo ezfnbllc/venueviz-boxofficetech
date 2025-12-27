@@ -193,35 +193,42 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
     setSelectedPlatform(null)
   }
 
+  // Helper to remove undefined values (Firestore doesn't accept undefined)
+  const removeUndefined = (obj: Record<string, any>): Record<string, any> => {
+    return Object.fromEntries(
+      Object.entries(obj).filter(([_, value]) => value !== undefined)
+    )
+  }
+
   const handleAddAffiliate = async () => {
     if (!formData.platform) return
 
     setSaving(true)
     try {
       const now = new Date().toISOString()
-      const newAffiliate: Omit<PromoterAffiliate, 'id'> = {
+      const newAffiliate = removeUndefined({
         promoterId,
         platform: formData.platform,
         enabled: formData.enabled,
-        apiKey: formData.apiKey || undefined,
-        apiSecret: formData.apiSecret || undefined,
+        apiKey: formData.apiKey || null,
+        apiSecret: formData.apiSecret || null,
         affiliateNetwork: formData.affiliateNetwork,
-        publisherId: formData.publisherId || undefined,
-        affiliateId: formData.affiliateId || undefined,
-        trackingId: formData.trackingId || undefined,
+        publisherId: formData.publisherId || null,
+        affiliateId: formData.affiliateId || null,
+        trackingId: formData.trackingId || null,
         autoImportEvents: formData.autoImportEvents,
-        importCategories: formData.importCategories.length > 0 ? formData.importCategories : undefined,
+        importCategories: formData.importCategories.length > 0 ? formData.importCategories : null,
         importRadius: formData.importRadius,
-        importKeywords: formData.importKeywords ? formData.importKeywords.split(',').map(k => k.trim()) : undefined,
+        importKeywords: formData.importKeywords ? formData.importKeywords.split(',').map(k => k.trim()) : null,
         totalClicks: 0,
         totalConversions: 0,
         totalRevenue: 0,
         createdAt: now,
         updatedAt: now,
-      }
+      })
 
       const docRef = await addDoc(collection(db, 'promoterAffiliates'), newAffiliate)
-      setAffiliates([...affiliates, { id: docRef.id, ...newAffiliate }])
+      setAffiliates([...affiliates, { id: docRef.id, ...newAffiliate } as PromoterAffiliate])
       setShowAddModal(false)
       resetForm()
     } catch (error) {
@@ -237,24 +244,24 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
 
     setSaving(true)
     try {
-      const updates = {
+      const updates = removeUndefined({
         enabled: formData.enabled,
-        apiKey: formData.apiKey || undefined,
-        apiSecret: formData.apiSecret || undefined,
+        apiKey: formData.apiKey || null,
+        apiSecret: formData.apiSecret || null,
         affiliateNetwork: formData.affiliateNetwork,
-        publisherId: formData.publisherId || undefined,
-        affiliateId: formData.affiliateId || undefined,
-        trackingId: formData.trackingId || undefined,
+        publisherId: formData.publisherId || null,
+        affiliateId: formData.affiliateId || null,
+        trackingId: formData.trackingId || null,
         autoImportEvents: formData.autoImportEvents,
-        importCategories: formData.importCategories.length > 0 ? formData.importCategories : undefined,
+        importCategories: formData.importCategories.length > 0 ? formData.importCategories : null,
         importRadius: formData.importRadius,
-        importKeywords: formData.importKeywords ? formData.importKeywords.split(',').map(k => k.trim()) : undefined,
+        importKeywords: formData.importKeywords ? formData.importKeywords.split(',').map(k => k.trim()) : null,
         updatedAt: new Date().toISOString(),
-      }
+      })
 
       await updateDoc(doc(db, 'promoterAffiliates', editingAffiliate.id), updates)
       setAffiliates(affiliates.map(a =>
-        a.id === editingAffiliate.id ? { ...a, ...updates } : a
+        a.id === editingAffiliate.id ? { ...a, ...updates } as PromoterAffiliate : a
       ))
       setShowEditModal(false)
       setEditingAffiliate(null)
