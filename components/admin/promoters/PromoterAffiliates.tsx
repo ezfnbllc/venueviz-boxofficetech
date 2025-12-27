@@ -169,6 +169,21 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
   const [importingEvents, setImportingEvents] = useState(false)
   const [importedEvents, setImportedEvents] = useState<AffiliateEvent[]>([])
 
+  // Event management state
+  const [showEventEditModal, setShowEventEditModal] = useState(false)
+  const [editingEvent, setEditingEvent] = useState<AffiliateEvent | null>(null)
+  const [eventFormData, setEventFormData] = useState({
+    name: '',
+    venueName: '',
+    venueCity: '',
+    venueState: '',
+    startDate: '',
+    minPrice: '',
+    maxPrice: '',
+    affiliateUrl: '',
+    isActive: true,
+  })
+
   // Form state
   const [formData, setFormData] = useState({
     platform: '' as AffiliatePlatform | '',
@@ -552,17 +567,112 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
   const loadImportedEvents = async () => {
     const q = query(
       collection(db, 'affiliateEvents'),
-      where('promoterId', '==', promoterId),
-      where('isActive', '==', true)
+      where('promoterId', '==', promoterId)
     )
     const snapshot = await getDocs(q)
     const events = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as AffiliateEvent[]
+    // Sort by date
+    events.sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
     setImportedEvents(events)
   }
 
   useEffect(() => {
     loadImportedEvents()
   }, [promoterId])
+
+  // Open event edit modal
+  const openEventEditModal = (event: AffiliateEvent) => {
+    setEditingEvent(event)
+    setEventFormData({
+      name: event.name,
+      venueName: event.venueName,
+      venueCity: event.venueCity,
+      venueState: event.venueState || '',
+      startDate: event.startDate ? event.startDate.split('T')[0] : '',
+      minPrice: event.minPrice?.toString() || '',
+      maxPrice: event.maxPrice?.toString() || '',
+      affiliateUrl: event.affiliateUrl,
+      isActive: event.isActive,
+    })
+    setShowEventEditModal(true)
+  }
+
+  // Update affiliate event
+  const handleUpdateEvent = async () => {
+    if (!editingEvent) return
+
+    setSaving(true)
+    try {
+      const updates = {
+        name: eventFormData.name,
+        venueName: eventFormData.venueName,
+        venueCity: eventFormData.venueCity,
+        venueState: eventFormData.venueState || null,
+        startDate: eventFormData.startDate ? `${eventFormData.startDate}T00:00:00Z` : editingEvent.startDate,
+        minPrice: eventFormData.minPrice ? parseFloat(eventFormData.minPrice) : null,
+        maxPrice: eventFormData.maxPrice ? parseFloat(eventFormData.maxPrice) : null,
+        affiliateUrl: eventFormData.affiliateUrl,
+        isActive: eventFormData.isActive,
+        updatedAt: new Date().toISOString(),
+      }
+
+      await updateDoc(doc(db, 'affiliateEvents', editingEvent.id), updates)
+      setImportedEvents(importedEvents.map(e =>
+        e.id === editingEvent.id ? { ...e, ...updates } as AffiliateEvent : e
+      ))
+      setShowEventEditModal(false)
+      setEditingEvent(null)
+    } catch (error) {
+      console.error('Error updating event:', error)
+      alert('Failed to update event. Please try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Delete affiliate event
+  const handleDeleteEvent = async (eventId: string) => {
+    if (!confirm('Are you sure you want to delete this event?')) return
+
+    try {
+      await deleteDoc(doc(db, 'affiliateEvents', eventId))
+      setImportedEvents(importedEvents.filter(e => e.id !== eventId))
+    } catch (error) {
+      console.error('Error deleting event:', error)
+      alert('Failed to delete event. Please try again.')
+    }
+  }
+
+  // Toggle event active status
+  const handleToggleEventActive = async (event: AffiliateEvent) => {
+    try {
+      const newActive = !event.isActive
+      await updateDoc(doc(db, 'affiliateEvents', event.id), {
+        isActive: newActive,
+        updatedAt: new Date().toISOString(),
+      })
+      setImportedEvents(importedEvents.map(e =>
+        e.id === event.id ? { ...e, isActive: newActive } : e
+      ))
+    } catch (error) {
+      console.error('Error toggling event:', error)
+    }
+  }
+
+  // Format event date for display
+  const formatEventDate = (dateStr: string) => {
+    if (!dateStr) return 'TBA'
+    try {
+      return new Date(dateStr).toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    } catch {
+      return dateStr
+    }
+  }
 
   if (loading) {
     return <div className="animate-pulse text-secondary-contrast">Loading affiliates...</div>
@@ -732,6 +842,120 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Imported Affiliate Events Section */}
+      {importedEvents.length > 0 && (
+        <div className="mt-8">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-primary-contrast">
+              Imported Events ({importedEvents.length})
+            </h3>
+          </div>
+
+          <div className="stat-card rounded-xl overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-600">
+                  <th className="text-left p-4 text-sm font-medium text-secondary-contrast">Event</th>
+                  <th className="text-left p-4 text-sm font-medium text-secondary-contrast hidden md:table-cell">Venue</th>
+                  <th className="text-left p-4 text-sm font-medium text-secondary-contrast hidden lg:table-cell">Date</th>
+                  <th className="text-left p-4 text-sm font-medium text-secondary-contrast hidden lg:table-cell">Price</th>
+                  <th className="text-center p-4 text-sm font-medium text-secondary-contrast">Active</th>
+                  <th className="text-right p-4 text-sm font-medium text-secondary-contrast">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {importedEvents.map(event => (
+                  <tr key={event.id} className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30">
+                    <td className="p-4">
+                      <div className="flex items-center gap-3">
+                        {event.imageUrl && (
+                          <img
+                            src={event.imageUrl}
+                            alt={event.name}
+                            className="w-12 h-12 rounded-lg object-cover hidden sm:block"
+                          />
+                        )}
+                        <div>
+                          <p className="font-medium text-primary-contrast line-clamp-1">{event.name}</p>
+                          <p className="text-xs text-secondary-contrast md:hidden">
+                            {event.venueName} • {formatEventDate(event.startDate)}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-4 hidden md:table-cell">
+                      <p className="text-sm text-primary-contrast">{event.venueName}</p>
+                      <p className="text-xs text-secondary-contrast">{event.venueCity}{event.venueState ? `, ${event.venueState}` : ''}</p>
+                    </td>
+                    <td className="p-4 hidden lg:table-cell">
+                      <p className="text-sm text-primary-contrast">{formatEventDate(event.startDate)}</p>
+                    </td>
+                    <td className="p-4 hidden lg:table-cell">
+                      {event.minPrice && event.maxPrice ? (
+                        <p className="text-sm text-primary-contrast">
+                          ${event.minPrice} - ${event.maxPrice}
+                        </p>
+                      ) : event.minPrice ? (
+                        <p className="text-sm text-primary-contrast">From ${event.minPrice}</p>
+                      ) : (
+                        <p className="text-sm text-secondary-contrast">-</p>
+                      )}
+                    </td>
+                    <td className="p-4 text-center">
+                      <button
+                        onClick={() => handleToggleEventActive(event)}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                          event.isActive ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                            event.isActive ? 'translate-x-5' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </td>
+                    <td className="p-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => openEventEditModal(event)}
+                          className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
+                          title="Edit"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <a
+                          href={event.affiliateUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"
+                          title="View on Ticketmaster"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                        <button
+                          onClick={() => handleDeleteEvent(event.id)}
+                          className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                          title="Delete"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -1306,6 +1530,170 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
                   )}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Event Edit Modal */}
+      {showEventEditModal && editingEvent && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-slate-200 dark:border-slate-700">
+              <h3 className="text-lg font-bold text-primary-contrast">Edit Affiliate Event</h3>
+              <p className="text-sm text-secondary-contrast mt-1">
+                Modify event details for display on your site
+              </p>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Event Name */}
+              <div>
+                <label className="block text-sm font-medium text-primary-contrast mb-2">
+                  Event Name
+                </label>
+                <input
+                  type="text"
+                  value={eventFormData.name}
+                  onChange={(e) => setEventFormData({ ...eventFormData, name: e.target.value })}
+                  className="form-control"
+                />
+              </div>
+
+              {/* Venue */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-primary-contrast mb-2">
+                    Venue Name
+                  </label>
+                  <input
+                    type="text"
+                    value={eventFormData.venueName}
+                    onChange={(e) => setEventFormData({ ...eventFormData, venueName: e.target.value })}
+                    className="form-control"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-primary-contrast mb-2">
+                    City
+                  </label>
+                  <input
+                    type="text"
+                    value={eventFormData.venueCity}
+                    onChange={(e) => setEventFormData({ ...eventFormData, venueCity: e.target.value })}
+                    className="form-control"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-primary-contrast mb-2">
+                    State
+                  </label>
+                  <input
+                    type="text"
+                    value={eventFormData.venueState}
+                    onChange={(e) => setEventFormData({ ...eventFormData, venueState: e.target.value })}
+                    placeholder="e.g., TX"
+                    className="form-control"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-primary-contrast mb-2">
+                    Event Date
+                  </label>
+                  <input
+                    type="date"
+                    value={eventFormData.startDate}
+                    onChange={(e) => setEventFormData({ ...eventFormData, startDate: e.target.value })}
+                    className="form-control"
+                  />
+                </div>
+              </div>
+
+              {/* Pricing */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-primary-contrast mb-2">
+                    Min Price ($)
+                  </label>
+                  <input
+                    type="number"
+                    value={eventFormData.minPrice}
+                    onChange={(e) => setEventFormData({ ...eventFormData, minPrice: e.target.value })}
+                    placeholder="0"
+                    className="form-control"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-primary-contrast mb-2">
+                    Max Price ($)
+                  </label>
+                  <input
+                    type="number"
+                    value={eventFormData.maxPrice}
+                    onChange={(e) => setEventFormData({ ...eventFormData, maxPrice: e.target.value })}
+                    placeholder="0"
+                    className="form-control"
+                  />
+                </div>
+              </div>
+
+              {/* Affiliate URL */}
+              <div>
+                <label className="block text-sm font-medium text-primary-contrast mb-2">
+                  Affiliate URL
+                </label>
+                <input
+                  type="url"
+                  value={eventFormData.affiliateUrl}
+                  onChange={(e) => setEventFormData({ ...eventFormData, affiliateUrl: e.target.value })}
+                  className="form-control"
+                />
+                <p className="text-xs text-secondary-contrast mt-1">
+                  This is the tracked affiliate link users will click
+                </p>
+              </div>
+
+              {/* Active Toggle */}
+              <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700">
+                <div>
+                  <p className="font-medium text-primary-contrast">Active</p>
+                  <p className="text-sm text-secondary-contrast">Show this event on your site</p>
+                </div>
+                <button
+                  onClick={() => setEventFormData({ ...eventFormData, isActive: !eventFormData.isActive })}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    eventFormData.isActive ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      eventFormData.isActive ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowEventEditModal(false)
+                  setEditingEvent(null)
+                }}
+                className="btn-secondary px-4 py-2 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdateEvent}
+                disabled={saving}
+                className="btn-primary px-4 py-2 rounded-lg"
+              >
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
             </div>
           </div>
         </div>
