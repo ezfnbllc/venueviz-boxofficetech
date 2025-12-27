@@ -429,6 +429,48 @@ export default function Step4Pricing() {
           </button>
         </div>
       </div>
+
+      {/* Sales Tax Section */}
+      <div className="mb-6">
+        <h4 className="font-semibold mb-4">Sales Tax</h4>
+        <div className="flex items-center gap-3 p-4 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+          <label className="w-32 text-sm font-medium">Sales Tax Rate</label>
+          <input
+            type="number"
+            value={formData.pricing?.fees?.salesTax ?? 8.25}
+            onChange={(e) => updateFees('salesTax', parseFloat(e.target.value) || 0)}
+            onWheel={(e) => e.currentTarget.blur()}
+            className="w-24 px-3 py-2 bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg text-center"
+            placeholder="8.25"
+            step="0.01"
+            min="0"
+          />
+          <span className="text-slate-500 dark:text-slate-400">%</span>
+          <span className="text-xs text-slate-400 ml-2">(Applied to discounted ticket price only, not fees)</span>
+        </div>
+      </div>
+
+      {/* Fee Calculation Options */}
+      <div className="mb-6">
+        <h4 className="font-semibold mb-4">Fee Calculation Options</h4>
+        <div className="p-4 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={formData.pricing?.fees?.applyPercentFeesOnDiscountedPrice ?? false}
+              onChange={(e) => updateFees('applyPercentFeesOnDiscountedPrice', e.target.checked)}
+              className="mt-1 w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-purple-600 focus:ring-purple-500"
+            />
+            <div>
+              <p className="font-medium text-sm">Apply percentage fees on discounted price</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                When checked, percentage-based per-ticket fees will be calculated on the discounted ticket price.
+                When unchecked (default), percentage fees are calculated on the original ticket price.
+              </p>
+            </div>
+          </label>
+        </div>
+      </div>
     </div>
   )
 }

@@ -477,7 +477,7 @@ function OrderSummary({
         </div>
 
         <p className="text-xs text-gray-500 mt-6 text-center">
-          {fees.salesTax > 0 ? 'Prices include applicable taxes and fees' : 'Price is inclusive of all applicable fees'}
+          {fees.salesTax > 0 ? 'Sales tax applied to ticket price only' : 'Price is inclusive of all applicable fees'}
         </p>
       </div>
     </div>

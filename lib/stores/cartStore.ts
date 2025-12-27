@@ -37,6 +37,8 @@ interface FeeConfig {
   venueFeeType?: 'percentage' | 'fixed'
   venueFeeScope?: 'per_ticket' | 'per_transaction'
   salesTax?: number
+  // When true, percentage fees are calculated on discounted price; when false (default), on original price
+  applyPercentFeesOnDiscountedPrice?: boolean
   customFees?: Array<{
     name: string
     type: 'percentage' | 'fixed'
@@ -188,9 +190,27 @@ export const useCartStore = create<CartState>()(
 
       calculateAllFees: () => {
         const state = get()
-        const subtotal = state.calculateSubtotal()
+        const subtotal = state.calculateSubtotal() // Original ticket subtotal
         const ticketCount = state.getItemCount()
         const feeConfig = state.currentEvent?.fees
+        const coupon = state.appliedCoupon
+
+        // Step 1: Calculate discount on ticket subtotal
+        let discount = 0
+        if (coupon) {
+          if (coupon.type === 'percentage') {
+            discount = Math.round(subtotal * (coupon.value / 100) * 100) / 100
+          } else {
+            discount = Math.min(coupon.value, subtotal) // Don't discount more than subtotal
+          }
+        }
+
+        // Step 2: Discounted subtotal
+        const discountedSubtotal = subtotal - discount
+
+        // Determine base for percentage fees
+        const applyOnDiscounted = feeConfig?.applyPercentFeesOnDiscountedPrice ?? false
+        const percentFeeBase = applyOnDiscounted ? discountedSubtotal : subtotal
 
         // Helper to calculate a single fee
         const calcFee = (
@@ -203,8 +223,13 @@ export const useCartStore = create<CartState>()(
           const isPerTicket = scope !== 'per_transaction'
 
           if (isPercentage) {
-            // Percentage of subtotal
-            return Math.round(subtotal * (amount / 100) * 100) / 100
+            if (isPerTicket) {
+              // Per-ticket percentage: use the configured base (original or discounted)
+              return Math.round(percentFeeBase * (amount / 100) * 100) / 100
+            } else {
+              // Per-transaction percentage: on ticket subtotal (original, before discount)
+              return Math.round(subtotal * (amount / 100) * 100) / 100
+            }
           } else {
             // Fixed amount
             if (isPerTicket) {
@@ -214,7 +239,8 @@ export const useCartStore = create<CartState>()(
           }
         }
 
-        // Calculate each fee
+        // Step 3 & 4: Calculate per-ticket fees (% based on flag, fixed on count)
+        // Step 5 & 6: Calculate per-transaction fees
         const convenienceFee = calcFee(
           feeConfig?.serviceFee,
           feeConfig?.serviceFeeType,
@@ -239,23 +265,12 @@ export const useCartStore = create<CartState>()(
 
         const customFeesTotal = customFees.reduce((sum, cf) => sum + cf.amount, 0)
 
-        // Calculate discount
-        const coupon = state.appliedCoupon
-        let discount = 0
-        if (coupon) {
-          if (coupon.type === 'percentage') {
-            discount = Math.round(subtotal * (coupon.value / 100) * 100) / 100
-          } else {
-            discount = Math.min(coupon.value, subtotal) // Don't discount more than subtotal
-          }
-        }
-
-        // Calculate tax on (subtotal - discount + all fees)
-        const taxableAmount = subtotal - discount + convenienceFee + parkingFee + venueFee + customFeesTotal
-        const salesTax = feeConfig?.salesTax && taxableAmount > 0
-          ? Math.round(taxableAmount * (feeConfig.salesTax / 100) * 100) / 100
+        // Step 7: Sales tax on discounted ticket price ONLY (not on fees)
+        const salesTax = feeConfig?.salesTax && discountedSubtotal > 0
+          ? Math.round(discountedSubtotal * (feeConfig.salesTax / 100) * 100) / 100
           : 0
 
+        // Total fees = all fees + tax - discount
         const totalFees = convenienceFee + parkingFee + venueFee + customFeesTotal + salesTax - discount
 
         return {
