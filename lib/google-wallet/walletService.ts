@@ -2,6 +2,10 @@
  * Google Wallet Service
  * Handles creation and management of digital event tickets in Google Wallet
  *
+ * Supports both:
+ * - Platform-level configuration (environment variables)
+ * - Per-tenant configuration (stored in Firestore promoters collection)
+ *
  * Documentation: https://developers.google.com/wallet/tickets/events
  */
 
@@ -18,14 +22,20 @@ import {
 const WALLET_API_BASE = 'https://walletobjects.googleapis.com/walletobjects/v1'
 const SAVE_LINK_BASE = 'https://pay.google.com/gp/v/save'
 
-// Default configuration from environment
-function getConfig(): GoogleWalletConfig {
+// Cache for tenant configs to avoid repeated Firestore reads
+const configCache: Map<string, { config: GoogleWalletConfig | null; expires: number }> = new Map()
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
+/**
+ * Get platform-level (default) configuration from environment variables
+ */
+function getPlatformConfig(): GoogleWalletConfig | null {
   const issuerId = process.env.GOOGLE_WALLET_ISSUER_ID
   const serviceAccountEmail = process.env.GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL
   const privateKey = process.env.GOOGLE_WALLET_PRIVATE_KEY?.replace(/\\n/g, '\n')
 
   if (!issuerId || !serviceAccountEmail || !privateKey) {
-    throw new Error('Google Wallet configuration missing. Required env vars: GOOGLE_WALLET_ISSUER_ID, GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL, GOOGLE_WALLET_PRIVATE_KEY')
+    return null
   }
 
   return {
@@ -33,6 +43,85 @@ function getConfig(): GoogleWalletConfig {
     serviceAccountEmail,
     privateKey,
     origins: process.env.GOOGLE_WALLET_ORIGINS?.split(','),
+  }
+}
+
+/**
+ * Get tenant-specific configuration from Firestore
+ * Falls back to platform config if tenant doesn't have their own
+ */
+export async function getTenantConfig(promoterId?: string): Promise<GoogleWalletConfig | null> {
+  // If no promoterId, use platform config
+  if (!promoterId) {
+    return getPlatformConfig()
+  }
+
+  // Check cache
+  const cacheKey = `tenant_${promoterId}`
+  const cached = configCache.get(cacheKey)
+  if (cached && cached.expires > Date.now()) {
+    return cached.config
+  }
+
+  try {
+    // Dynamic import to avoid circular dependencies
+    const { getAdminFirestore } = await import('@/lib/firebase-admin')
+    const db = getAdminFirestore()
+
+    const promoterDoc = await db.collection('promoters').doc(promoterId).get()
+    if (!promoterDoc.exists) {
+      const platformConfig = getPlatformConfig()
+      configCache.set(cacheKey, { config: platformConfig, expires: Date.now() + CACHE_TTL })
+      return platformConfig
+    }
+
+    const promoter = promoterDoc.data()
+    const walletConfig = promoter?.googleWallet
+
+    // Check if tenant has their own Google Wallet configuration
+    if (walletConfig?.issuerId && walletConfig?.serviceAccountEmail && walletConfig?.privateKey) {
+      const tenantConfig: GoogleWalletConfig = {
+        issuerId: walletConfig.issuerId,
+        serviceAccountEmail: walletConfig.serviceAccountEmail,
+        privateKey: walletConfig.privateKey.replace(/\\n/g, '\n'),
+        origins: walletConfig.origins || process.env.GOOGLE_WALLET_ORIGINS?.split(','),
+      }
+      configCache.set(cacheKey, { config: tenantConfig, expires: Date.now() + CACHE_TTL })
+      return tenantConfig
+    }
+
+    // Fall back to platform config
+    const platformConfig = getPlatformConfig()
+    configCache.set(cacheKey, { config: platformConfig, expires: Date.now() + CACHE_TTL })
+    return platformConfig
+  } catch (error) {
+    console.error('Error fetching tenant wallet config:', error)
+    return getPlatformConfig()
+  }
+}
+
+/**
+ * Get configuration - supports both tenant-specific and platform-level
+ * @param promoterId - Optional promoter ID for tenant-specific config
+ */
+async function getConfig(promoterId?: string): Promise<GoogleWalletConfig> {
+  const config = await getTenantConfig(promoterId)
+
+  if (!config) {
+    throw new Error('Google Wallet configuration missing. Set up platform-level env vars or configure per-tenant in Firestore.')
+  }
+
+  return config
+}
+
+/**
+ * Clear config cache (useful after updating tenant settings)
+ */
+export function clearConfigCache(promoterId?: string): void {
+  if (promoterId) {
+    configCache.delete(`tenant_${promoterId}`)
+  } else {
+    configCache.clear()
   }
 }
 
@@ -72,6 +161,7 @@ async function getAccessToken(config: GoogleWalletConfig): Promise<string> {
 /**
  * Create an Event Ticket Class (template) for an event
  * Should be called once per event
+ * @param promoterId - Optional promoter ID for tenant-specific Google Wallet config
  */
 export async function createEventTicketClass(
   eventId: string,
@@ -84,8 +174,9 @@ export async function createEventTicketClass(
   promoterLogo?: string,
   heroImage?: string,
   hexBackgroundColor?: string,
+  promoterId?: string,
 ): Promise<EventTicketClass> {
-  const config = getConfig()
+  const config = await getConfig(promoterId)
   const classId = `${config.issuerId}.event_${eventId}`
 
   // Format date/time for Google Wallet
@@ -300,9 +391,10 @@ export function generateSaveUrl(signedJwt: string): string {
 
 /**
  * Main function to create a pass and get the save URL
+ * Uses tenant-specific Google Wallet config if available, falls back to platform config
  */
 export async function createEventTicketPass(request: CreatePassRequest): Promise<CreatePassResponse> {
-  const config = getConfig()
+  const config = await getConfig(request.promoterId)
 
   // Create or update the ticket class for this event
   const ticketClass = await createEventTicketClass(
@@ -316,6 +408,7 @@ export async function createEventTicketPass(request: CreatePassRequest): Promise
     request.promoterLogo,
     undefined, // heroImage
     '#1d1d1d', // hexBackgroundColor
+    request.promoterId,
   )
 
   // Create the ticket object (individual ticket)
@@ -340,6 +433,8 @@ export async function createEventTicketPass(request: CreatePassRequest): Promise
 
 /**
  * Create passes for all tickets in an order
+ * @param promoterId - For tenant-specific Google Wallet configuration
+ * @param promoterSlug - For building URLs in the pass
  */
 export async function createPassesForOrder(
   orderId: string,
@@ -363,6 +458,8 @@ export async function createPassesForOrder(
   currency: string,
   holderName?: string,
   holderEmail?: string,
+  promoterId?: string,
+  promoterSlug?: string,
 ): Promise<CreatePassResponse[]> {
   const passes: CreatePassResponse[] = []
 
@@ -387,6 +484,8 @@ export async function createPassesForOrder(
         holderEmail,
         promoterName,
         promoterLogo,
+        promoterId,
+        promoterSlug,
         qrCode: ticket.qrCode,
       })
       passes.push(pass)
@@ -400,7 +499,7 @@ export async function createPassesForOrder(
 }
 
 /**
- * Check if Google Wallet is configured
+ * Check if Google Wallet is configured (platform-level)
  */
 export function isGoogleWalletConfigured(): boolean {
   return !!(
@@ -408,4 +507,13 @@ export function isGoogleWalletConfigured(): boolean {
     process.env.GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL &&
     process.env.GOOGLE_WALLET_PRIVATE_KEY
   )
+}
+
+/**
+ * Check if Google Wallet is configured for a specific tenant or platform
+ * @param promoterId - Optional promoter ID to check tenant-specific config
+ */
+export async function isGoogleWalletAvailable(promoterId?: string): Promise<boolean> {
+  const config = await getTenantConfig(promoterId)
+  return config !== null
 }

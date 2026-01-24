@@ -196,6 +196,8 @@ export interface CreatePassRequest {
   holderEmail?: string
   promoterName: string
   promoterLogo?: string
+  promoterId?: string // For tenant-specific Google Wallet config
+  promoterSlug?: string // For building URLs
   qrCode?: string
 }
 

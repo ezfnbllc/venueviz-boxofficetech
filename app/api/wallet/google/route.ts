@@ -26,18 +26,11 @@ import { getAdminFirestore } from '@/lib/firebase-admin'
 import {
   createPassesForOrder,
   isGoogleWalletConfigured,
+  isGoogleWalletAvailable,
 } from '@/lib/google-wallet'
 
 export async function POST(request: NextRequest) {
   try {
-    // Check if Google Wallet is configured
-    if (!isGoogleWalletConfigured()) {
-      return NextResponse.json(
-        { error: 'Google Wallet is not configured' },
-        { status: 503 }
-      )
-    }
-
     const body = await request.json()
     const { orderId, ticketIds } = body
 
@@ -122,6 +115,8 @@ export async function POST(request: NextRequest) {
     // Get promoter details
     let promoterName = 'BoxOfficeTech'
     let promoterLogo: string | undefined
+    let promoterId: string | undefined
+    let promoterSlug = order.promoterSlug
 
     if (order.promoterSlug) {
       const promoterSnapshot = await db.collection('promoters')
@@ -130,10 +125,21 @@ export async function POST(request: NextRequest) {
         .get()
 
       if (!promoterSnapshot.empty) {
-        const promoter = promoterSnapshot.docs[0].data()
+        const promoterDoc = promoterSnapshot.docs[0]
+        const promoter = promoterDoc.data()
+        promoterId = promoterDoc.id
         promoterName = promoter.name || promoterName
         promoterLogo = promoter.logo
       }
+    }
+
+    // Check if Google Wallet is configured (platform or tenant-specific)
+    const walletAvailable = await isGoogleWalletAvailable(promoterId)
+    if (!walletAvailable) {
+      return NextResponse.json(
+        { error: 'Google Wallet is not configured for this tenant' },
+        { status: 503 }
+      )
     }
 
     // Generate passes for all tickets
@@ -169,6 +175,8 @@ export async function POST(request: NextRequest) {
       order.currency || 'USD',
       order.customerName,
       order.customerEmail,
+      promoterId,
+      promoterSlug,
     )
 
     // Store pass info in order for future reference
