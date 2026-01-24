@@ -198,6 +198,7 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
     minPrice: '',
     maxPrice: '',
     affiliateUrl: '',
+    imageUrl: '',
     isActive: true,
   })
 
@@ -775,6 +776,7 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
       minPrice: event.minPrice?.toString() || '',
       maxPrice: event.maxPrice?.toString() || '',
       affiliateUrl: event.affiliateUrl,
+      imageUrl: event.imageUrl || '',
       isActive: event.isActive,
     })
     setShowEventEditModal(true)
@@ -795,6 +797,7 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
         minPrice: eventFormData.minPrice ? parseFloat(eventFormData.minPrice) : null,
         maxPrice: eventFormData.maxPrice ? parseFloat(eventFormData.maxPrice) : null,
         affiliateUrl: eventFormData.affiliateUrl,
+        imageUrl: eventFormData.imageUrl || null,
         isActive: eventFormData.isActive,
         updatedAt: new Date().toISOString(),
       }
@@ -1793,6 +1796,43 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
             </div>
 
             <div className="p-6 space-y-4">
+              {/* Event Image */}
+              <div>
+                <label className="block text-sm font-medium text-primary-contrast mb-2">
+                  Event Image
+                </label>
+                <div className="flex gap-3">
+                  <div className="w-24 h-16 bg-slate-100 dark:bg-slate-700 rounded-lg overflow-hidden flex-shrink-0">
+                    {eventFormData.imageUrl ? (
+                      <img
+                        src={eventFormData.imageUrl}
+                        alt="Event preview"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none'
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <svg className="w-8 h-8 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                  <input
+                    type="url"
+                    value={eventFormData.imageUrl}
+                    onChange={(e) => setEventFormData({ ...eventFormData, imageUrl: e.target.value })}
+                    placeholder="https://example.com/event-image.jpg"
+                    className="form-control flex-1"
+                  />
+                </div>
+                <p className="text-xs text-secondary-contrast mt-1">
+                  Paste any image URL or leave blank for default
+                </p>
+              </div>
+
               {/* Event Name */}
               <div>
                 <label className="block text-sm font-medium text-primary-contrast mb-2">
@@ -1992,13 +2032,37 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
                     <p className="text-sm font-medium text-primary-contrast">Event Preview</p>
                   </div>
                   <div className="p-4 space-y-3">
-                    {urlEventPreview.imageUrl && (
-                      <img
-                        src={urlEventPreview.imageUrl}
-                        alt={urlEventPreview.name}
-                        className="w-full h-32 object-cover rounded-lg"
+                    {/* Editable Image */}
+                    <div>
+                      <div className="relative w-full h-32 bg-slate-100 dark:bg-slate-700 rounded-lg overflow-hidden mb-2">
+                        {urlEventPreview.imageUrl ? (
+                          <img
+                            src={urlEventPreview.imageUrl}
+                            alt={urlEventPreview.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              // Hide broken image
+                              (e.target as HTMLImageElement).style.display = 'none'
+                            }}
+                          />
+                        ) : null}
+                        <div className="absolute inset-0 flex items-center justify-center bg-slate-100 dark:bg-slate-700" style={{ zIndex: urlEventPreview.imageUrl ? -1 : 1 }}>
+                          <svg className="w-10 h-10 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                        </div>
+                      </div>
+                      <label className="block text-xs font-medium text-secondary-contrast mb-1">
+                        Image URL (paste any image URL)
+                      </label>
+                      <input
+                        type="url"
+                        value={urlEventPreview.imageUrl || ''}
+                        onChange={(e) => setUrlEventPreview({ ...urlEventPreview, imageUrl: e.target.value })}
+                        placeholder="https://example.com/event-image.jpg"
+                        className="form-control text-sm"
                       />
-                    )}
+                    </div>
                     <div>
                       <p className="font-semibold text-primary-contrast">{urlEventPreview.name}</p>
                       {urlEventPreview.venueName && (
