@@ -367,14 +367,23 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
     }
   }
 
-  // Regenerate affiliate URLs for all imported events
+  // Fix/regenerate affiliate URLs for all imported events
+  // If affiliate tracking is set up properly, uses tracking URLs
+  // Otherwise, converts to direct Ticketmaster URLs
   const handleRegenerateUrls = async (affiliate: PromoterAffiliate) => {
-    if (!affiliate.publisherId || !affiliate.affiliateId) {
-      alert('Please set both Publisher ID and Campaign/Program ID first.')
-      return
-    }
+    const eventsCount = importedEvents.filter(e => e.affiliateId === affiliate.id).length
 
-    if (!confirm(`This will update all ${importedEvents.filter(e => e.affiliateId === affiliate.id).length} event URLs to use the new Campaign/Program ID. Continue?`)) {
+    // Check if affiliate tracking is properly configured
+    const hasValidAffiliateSetup = affiliate.affiliateNetwork === 'impact' &&
+      affiliate.publisherId &&
+      affiliate.affiliateId &&
+      affiliate.affiliateId !== affiliate.publisherId
+
+    const message = hasValidAffiliateSetup
+      ? `This will update all ${eventsCount} event URLs to use affiliate tracking. Continue?`
+      : `This will fix all ${eventsCount} event URLs to use direct Ticketmaster links (no affiliate tracking). Continue?`
+
+    if (!confirm(message)) {
       return
     }
 
@@ -398,9 +407,9 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
           originalUrl = event.affiliateUrl
         }
 
-        // Build new affiliate URL
+        // Build new URL - use affiliate tracking only if properly configured
         let newAffiliateUrl = originalUrl
-        if (affiliate.affiliateNetwork === 'impact' && affiliate.publisherId && affiliate.affiliateId) {
+        if (hasValidAffiliateSetup) {
           newAffiliateUrl = `https://ticketmaster.evyy.net/c/${affiliate.publisherId}/${affiliate.affiliateId}/4272?subId1=${affiliate.trackingId || 'bot'}&u=${encodeURIComponent(originalUrl)}`
         }
 
@@ -568,10 +577,15 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
         const image = event.images?.find(img => img.width >= 500) || event.images?.[0]
         const priceRange = event.priceRanges?.[0]
 
-        // Build affiliate URL
+        // Build affiliate URL - only use Impact tracking if both publisher ID and campaign ID are set
+        // Otherwise use direct Ticketmaster URL (affiliate tracking not yet set up)
         let affiliateUrl = event.url
-        if (importingAffiliate.affiliateNetwork === 'impact' && importingAffiliate.publisherId) {
-          affiliateUrl = `https://ticketmaster.evyy.net/c/${importingAffiliate.publisherId}/${importingAffiliate.affiliateId || 'ticketmaster'}/4272?subId1=${importingAffiliate.trackingId || 'bot'}&u=${encodeURIComponent(event.url)}`
+        if (importingAffiliate.affiliateNetwork === 'impact' &&
+            importingAffiliate.publisherId &&
+            importingAffiliate.affiliateId &&
+            importingAffiliate.affiliateId !== importingAffiliate.publisherId) {
+          // Only create Impact tracking URL if campaign ID is different from publisher ID
+          affiliateUrl = `https://ticketmaster.evyy.net/c/${importingAffiliate.publisherId}/${importingAffiliate.affiliateId}/4272?subId1=${importingAffiliate.trackingId || 'bot'}&u=${encodeURIComponent(event.url)}`
         }
 
         const affiliateEvent = removeUndefined({
@@ -937,7 +951,7 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
-                    Regenerate URLs
+                    Fix URLs
                   </>
                 )}
               </button>
