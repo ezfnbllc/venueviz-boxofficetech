@@ -207,33 +207,34 @@ function extractEventData(html: string, url: string) {
   return data
 }
 
-// Static fallback images for different event types (reliable CDN-hosted images)
+// Static fallback images for different event types
+// Using picsum.photos with specific seeds for consistent, reliable images
 const FALLBACK_IMAGES: Record<string, string> = {
-  // Soccer/Football
-  soccer: 'https://images.unsplash.com/photo-1489944440615-453fc2b6a9a9?w=800&h=450&fit=crop',
-  fifa: 'https://images.unsplash.com/photo-1489944440615-453fc2b6a9a9?w=800&h=450&fit=crop',
-  'world cup': 'https://images.unsplash.com/photo-1489944440615-453fc2b6a9a9?w=800&h=450&fit=crop',
+  // Soccer/Football - green field
+  soccer: 'https://picsum.photos/seed/soccer/800/450',
+  fifa: 'https://picsum.photos/seed/soccer/800/450',
+  'world cup': 'https://picsum.photos/seed/soccer/800/450',
   // American Football
-  nfl: 'https://images.unsplash.com/photo-1566577739112-5180d4bf9390?w=800&h=450&fit=crop',
-  football: 'https://images.unsplash.com/photo-1566577739112-5180d4bf9390?w=800&h=450&fit=crop',
+  nfl: 'https://picsum.photos/seed/stadium/800/450',
+  football: 'https://picsum.photos/seed/stadium/800/450',
   // Basketball
-  nba: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&h=450&fit=crop',
-  basketball: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&h=450&fit=crop',
+  nba: 'https://picsum.photos/seed/basketball/800/450',
+  basketball: 'https://picsum.photos/seed/basketball/800/450',
   // Baseball
-  mlb: 'https://images.unsplash.com/photo-1566479179817-c0067b6d2c6e?w=800&h=450&fit=crop',
-  baseball: 'https://images.unsplash.com/photo-1566479179817-c0067b6d2c6e?w=800&h=450&fit=crop',
+  mlb: 'https://picsum.photos/seed/baseball/800/450',
+  baseball: 'https://picsum.photos/seed/baseball/800/450',
   // Hockey
-  nhl: 'https://images.unsplash.com/photo-1515703407324-5f753afd8be8?w=800&h=450&fit=crop',
-  hockey: 'https://images.unsplash.com/photo-1515703407324-5f753afd8be8?w=800&h=450&fit=crop',
+  nhl: 'https://picsum.photos/seed/hockey/800/450',
+  hockey: 'https://picsum.photos/seed/hockey/800/450',
   // Concert/Music
-  concert: 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=800&h=450&fit=crop',
-  music: 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=800&h=450&fit=crop',
-  tour: 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=800&h=450&fit=crop',
+  concert: 'https://picsum.photos/seed/concert/800/450',
+  music: 'https://picsum.photos/seed/concert/800/450',
+  tour: 'https://picsum.photos/seed/concert/800/450',
   // Theater/Comedy
-  theater: 'https://images.unsplash.com/photo-1503095396549-807759245b35?w=800&h=450&fit=crop',
-  comedy: 'https://images.unsplash.com/photo-1585699324551-f6c309eedeca?w=800&h=450&fit=crop',
+  theater: 'https://picsum.photos/seed/theater/800/450',
+  comedy: 'https://picsum.photos/seed/comedy/800/450',
   // Default event image
-  default: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&h=450&fit=crop',
+  default: 'https://picsum.photos/seed/event/800/450',
 }
 
 // Find a fallback image based on event name keywords
