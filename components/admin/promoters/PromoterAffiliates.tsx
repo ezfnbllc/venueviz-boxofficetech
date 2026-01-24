@@ -170,6 +170,22 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
   const [importedEvents, setImportedEvents] = useState<AffiliateEvent[]>([])
   const [regeneratingUrls, setRegeneratingUrls] = useState(false)
 
+  // URL import state (for platforms without API like TicketNetwork)
+  const [showUrlImportModal, setShowUrlImportModal] = useState(false)
+  const [urlImportAffiliate, setUrlImportAffiliate] = useState<PromoterAffiliate | null>(null)
+  const [urlToImport, setUrlToImport] = useState('')
+  const [fetchingUrlEvent, setFetchingUrlEvent] = useState(false)
+  const [urlEventPreview, setUrlEventPreview] = useState<{
+    name: string
+    venueName: string
+    venueCity: string
+    venueState: string
+    startDate: string
+    imageUrl: string
+    minPrice: number | null
+    url: string
+  } | null>(null)
+
   // Event management state
   const [showEventEditModal, setShowEventEditModal] = useState(false)
   const [editingEvent, setEditingEvent] = useState<AffiliateEvent | null>(null)
@@ -264,6 +280,101 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
     return Object.fromEntries(
       Object.entries(obj).filter(([_, value]) => value !== undefined)
     )
+  }
+
+  // Open URL import modal for a specific affiliate
+  const openUrlImportModal = (affiliate: PromoterAffiliate) => {
+    setUrlImportAffiliate(affiliate)
+    setUrlToImport('')
+    setUrlEventPreview(null)
+    setShowUrlImportModal(true)
+  }
+
+  // Fetch event details from URL
+  const handleFetchUrlEvent = async () => {
+    if (!urlToImport || !urlImportAffiliate) return
+
+    setFetchingUrlEvent(true)
+    setUrlEventPreview(null)
+
+    try {
+      const response = await fetch('/api/affiliates/ticketnetwork/event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: urlToImport }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        alert(data.error || 'Failed to fetch event details')
+        return
+      }
+
+      setUrlEventPreview(data)
+    } catch (error) {
+      console.error('Error fetching event:', error)
+      alert('Failed to fetch event details. Please check the URL and try again.')
+    } finally {
+      setFetchingUrlEvent(false)
+    }
+  }
+
+  // Import event from URL preview
+  const handleImportUrlEvent = async () => {
+    if (!urlEventPreview || !urlImportAffiliate) return
+
+    setImportingEvents(true)
+    try {
+      const now = new Date().toISOString()
+
+      // Build affiliate tracking URL based on network
+      let affiliateUrl = urlEventPreview.url
+      if (urlImportAffiliate.affiliateNetwork === 'impact' &&
+          urlImportAffiliate.publisherId &&
+          urlImportAffiliate.affiliateId) {
+        // TicketNetwork Impact URL format: https://ticketnetwork.lusg.net/c/{publisherId}/{campaignId}/{actionId}?u={url}
+        affiliateUrl = `https://ticketnetwork.lusg.net/c/${urlImportAffiliate.publisherId}/${urlImportAffiliate.affiliateId}/2322?u=${encodeURIComponent(urlEventPreview.url)}`
+      }
+
+      const affiliateEvent = removeUndefined({
+        promoterId,
+        affiliateId: urlImportAffiliate.id,
+        platform: urlImportAffiliate.platform,
+        externalEventId: `url-${Date.now()}`,
+        name: urlEventPreview.name,
+        description: null,
+        imageUrl: urlEventPreview.imageUrl || null,
+        startDate: urlEventPreview.startDate || now,
+        venueName: urlEventPreview.venueName || 'TBA',
+        venueCity: urlEventPreview.venueCity || '',
+        venueState: urlEventPreview.venueState || null,
+        venueCountry: 'US',
+        minPrice: urlEventPreview.minPrice || null,
+        maxPrice: null,
+        currency: 'USD',
+        affiliateUrl,
+        clicks: 0,
+        conversions: 0,
+        revenue: 0,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
+      })
+
+      await addDoc(collection(db, 'affiliateEvents'), affiliateEvent)
+      await loadImportedEvents()
+
+      alert('Event imported successfully!')
+      setShowUrlImportModal(false)
+      setUrlToImport('')
+      setUrlEventPreview(null)
+    } catch (error) {
+      console.error('Error importing event:', error)
+      alert('Failed to import event. Please try again.')
+    } finally {
+      setImportingEvents(false)
+    }
   }
 
   const handleAddAffiliate = async () => {
@@ -887,7 +998,8 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
 
                 {/* Actions */}
                 <div className="flex gap-2">
-                  {affiliate.apiKey && config?.supportsApi && (
+                  {/* API Import (for Ticketmaster with API key) */}
+                  {affiliate.apiKey && config?.supportsApi && affiliate.platform === 'ticketmaster' && (
                     <button
                       onClick={() => openImportWizard(affiliate)}
                       className="flex-1 btn-primary px-3 py-2 rounded-lg text-sm flex items-center justify-center gap-1"
@@ -896,6 +1008,18 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                       </svg>
                       Import
+                    </button>
+                  )}
+                  {/* URL Import (for platforms without API like TicketNetwork) */}
+                  {affiliate.platform !== 'ticketmaster' && (
+                    <button
+                      onClick={() => openUrlImportModal(affiliate)}
+                      className="flex-1 btn-primary px-3 py-2 rounded-lg text-sm flex items-center justify-center gap-1"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                      </svg>
+                      Add Event
                     </button>
                   )}
                   <button
@@ -1815,6 +1939,119 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
                 className="btn-primary px-4 py-2 rounded-lg"
               >
                 {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* URL Import Modal (for TicketNetwork and other non-API platforms) */}
+      {showUrlImportModal && urlImportAffiliate && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-slate-200 dark:border-slate-700">
+              <h3 className="text-lg font-bold text-primary-contrast">
+                Add Event from {getPlatformConfig(urlImportAffiliate.platform)?.displayName}
+              </h3>
+              <p className="text-sm text-secondary-contrast mt-1">
+                Paste an event URL to import it with affiliate tracking
+              </p>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* URL Input */}
+              <div>
+                <label className="block text-sm font-medium text-primary-contrast mb-2">
+                  Event URL
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={urlToImport}
+                    onChange={(e) => setUrlToImport(e.target.value)}
+                    placeholder={`https://www.${urlImportAffiliate.platform}.com/event/...`}
+                    className="form-control flex-1"
+                  />
+                  <button
+                    onClick={handleFetchUrlEvent}
+                    disabled={!urlToImport || fetchingUrlEvent}
+                    className="btn-primary px-4 py-2 rounded-lg whitespace-nowrap"
+                  >
+                    {fetchingUrlEvent ? 'Fetching...' : 'Fetch'}
+                  </button>
+                </div>
+                <p className="text-xs text-secondary-contrast mt-1">
+                  Go to {getPlatformConfig(urlImportAffiliate.platform)?.displayName}, find an event, and paste the URL here
+                </p>
+              </div>
+
+              {/* Event Preview */}
+              {urlEventPreview && (
+                <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                  <div className="bg-slate-50 dark:bg-slate-700/50 px-4 py-2 border-b border-slate-200 dark:border-slate-700">
+                    <p className="text-sm font-medium text-primary-contrast">Event Preview</p>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    {urlEventPreview.imageUrl && (
+                      <img
+                        src={urlEventPreview.imageUrl}
+                        alt={urlEventPreview.name}
+                        className="w-full h-32 object-cover rounded-lg"
+                      />
+                    )}
+                    <div>
+                      <p className="font-semibold text-primary-contrast">{urlEventPreview.name}</p>
+                      {urlEventPreview.venueName && (
+                        <p className="text-sm text-secondary-contrast mt-1">
+                          {urlEventPreview.venueName}
+                          {urlEventPreview.venueCity && `, ${urlEventPreview.venueCity}`}
+                          {urlEventPreview.venueState && `, ${urlEventPreview.venueState}`}
+                        </p>
+                      )}
+                      {urlEventPreview.startDate && (
+                        <p className="text-sm text-secondary-contrast">
+                          {new Date(urlEventPreview.startDate).toLocaleDateString('en-US', {
+                            weekday: 'long',
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                          })}
+                        </p>
+                      )}
+                      {urlEventPreview.minPrice && (
+                        <p className="text-sm font-medium text-green-600 mt-2">
+                          From ${urlEventPreview.minPrice.toFixed(2)}
+                        </p>
+                      )}
+                    </div>
+                    <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
+                      <p className="text-xs text-secondary-contrast">
+                        Affiliate tracking will be added automatically ({urlImportAffiliate.affiliateNetwork === 'impact' ? '12.5% commission' : 'tracked link'})
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowUrlImportModal(false)
+                  setUrlImportAffiliate(null)
+                  setUrlToImport('')
+                  setUrlEventPreview(null)
+                }}
+                className="btn-secondary px-4 py-2 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleImportUrlEvent}
+                disabled={!urlEventPreview || importingEvents}
+                className="btn-primary px-4 py-2 rounded-lg"
+              >
+                {importingEvents ? 'Importing...' : 'Import Event'}
               </button>
             </div>
           </div>
