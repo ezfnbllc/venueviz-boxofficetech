@@ -39,6 +39,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Could not extract event details from this page' }, { status: 400 })
     }
 
+    // Skip TicketNetwork CDN images - they're often broken (NoSuchKey errors)
+    // Check for their CloudFront CDN patterns
+    if (eventData.imageUrl && isUnreliableImageUrl(eventData.imageUrl)) {
+      eventData.imageUrl = ''
+    }
+
     // If no image found, use a fallback based on event type
     if (!eventData.imageUrl) {
       eventData.imageUrl = findEventImage(eventData.name, eventData.venueName)
@@ -205,6 +211,22 @@ function extractEventData(html: string, url: string) {
   }
 
   return data
+}
+
+// Check if an image URL is from TicketNetwork's unreliable CDN
+// These CloudFront URLs often return NoSuchKey errors
+function isUnreliableImageUrl(url: string): boolean {
+  if (!url) return true
+
+  const unreliablePatterns = [
+    'dtr2k13nvgx2o.cloudfront.net',  // TicketNetwork's broken CDN
+    'cloudfront.net/auto-resized',    // Their auto-resized images are often missing
+    'ticketnetwork.com/images',       // Their direct image paths
+    'tn-static.net',                  // Another TN CDN
+  ]
+
+  const lowerUrl = url.toLowerCase()
+  return unreliablePatterns.some(pattern => lowerUrl.includes(pattern))
 }
 
 // Static fallback images for different event types
