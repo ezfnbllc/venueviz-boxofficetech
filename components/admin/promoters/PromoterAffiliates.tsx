@@ -73,7 +73,7 @@ const PLATFORM_CONFIGS: AffiliatePlatformConfig[] = [
     affiliateSignupUrl: 'https://www.ticketnetwork.com/partners',
     supportsApi: true,
     supportsAffiliateLinks: true,
-    networks: ['direct'],
+    networks: ['impact', 'direct'],
   },
   {
     platform: 'fever',
