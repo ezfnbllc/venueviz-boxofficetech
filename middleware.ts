@@ -43,8 +43,17 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const hostname = request.headers.get('host') || ''
 
+  // Debug logging
+  console.log('[Middleware] =====================')
+  console.log('[Middleware] Request:', {
+    hostname,
+    pathname,
+    url: request.url,
+  })
+
   // Don't process API routes, static files, or admin routes in middleware
   if (pathname.startsWith('/admin') || pathname.startsWith('/api')) {
+    console.log('[Middleware] Skipping - admin/api route')
     return NextResponse.next()
   }
 
@@ -59,39 +68,47 @@ export async function middleware(request: NextRequest) {
     const subdomain = hostname.split('.')[0]
     const url = request.nextUrl.clone()
     url.pathname = `/p/${subdomain}${pathname === '/' ? '' : pathname}`
+    console.log('[Middleware] Subdomain routing:', subdomain, '->', url.pathname)
     return NextResponse.rewrite(url)
   }
 
   // Check for custom domain routing (new behavior)
-  if (!isPlatformDomain(hostname)) {
+  const isPlatform = isPlatformDomain(hostname)
+  console.log('[Middleware] isPlatformDomain:', isPlatform, 'hostname:', hostname)
+
+  if (!isPlatform) {
     const slug = getDomainSlug(hostname)
+    console.log('[Middleware] Custom domain check - slug:', slug)
 
     if (slug) {
       const url = request.nextUrl.clone()
 
       // Don't double-rewrite if already on /p/[slug] path
       if (pathname.startsWith(`/p/${slug}`)) {
+        console.log('[Middleware] Already on /p/slug path, skipping')
         return NextResponse.next()
       }
 
       // Rewrite root and other paths to /p/[slug]/[path]
-      // e.g., myticketplatform.com/events -> /p/bot/events
-      // e.g., myticketplatform.com/ -> /p/bot
       if (pathname === '/') {
         url.pathname = `/p/${slug}`
       } else {
         url.pathname = `/p/${slug}${pathname}`
       }
 
-      // Set headers to indicate custom domain routing
-      // This allows pages to generate correct URLs (without /p/[slug] prefix)
+      console.log('[Middleware] REWRITING to:', url.pathname)
+
       const response = NextResponse.rewrite(url)
       response.headers.set('x-custom-domain', 'true')
       response.headers.set('x-promoter-slug', slug)
+      response.headers.set('x-debug-original-host', hostname)
       return response
+    } else {
+      console.log('[Middleware] No slug mapping found for:', hostname)
     }
   }
 
+  console.log('[Middleware] No routing applied, passing through')
   return NextResponse.next()
 }
 
