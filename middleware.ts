@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+// Hardcoded domain mappings (fallback when API is unavailable)
+// Format: domain (without protocol/www) -> promoter slug
+const HARDCODED_DOMAIN_MAPPINGS: Record<string, string> = {
+  'myticketplatform.com': 'bot',
+}
+
 // In-memory cache for domain mappings (refreshed periodically)
-let domainCache: Record<string, string> = {}
+let domainCache: Record<string, string> = { ...HARDCODED_DOMAIN_MAPPINGS }
 let lastCacheUpdate = 0
 const CACHE_TTL = 60 * 1000 // 60 seconds
 
@@ -17,36 +23,19 @@ function isPlatformDomain(hostname: string): boolean {
   return PLATFORM_DOMAINS.some(domain => hostname.includes(domain))
 }
 
-async function getDomainSlug(hostname: string, request: NextRequest): Promise<string | null> {
+function getDomainSlug(hostname: string): string | null {
   // Normalize hostname
   const normalizedHost = hostname
     .toLowerCase()
     .replace(/:\d+$/, '') // Remove port
     .replace(/^www\./, '')
 
-  // Check cache first
-  const now = Date.now()
-  if (domainCache[normalizedHost] && (now - lastCacheUpdate) < CACHE_TTL) {
-    return domainCache[normalizedHost]
+  // Check hardcoded mappings first (always available)
+  if (HARDCODED_DOMAIN_MAPPINGS[normalizedHost]) {
+    return HARDCODED_DOMAIN_MAPPINGS[normalizedHost]
   }
 
-  // Fetch fresh mappings from API
-  try {
-    const protocol = request.nextUrl.protocol
-    const baseUrl = `${protocol}//${request.headers.get('host')}`
-    const response = await fetch(`${baseUrl}/api/domains`, {
-      headers: { 'x-middleware-request': '1' },
-    })
-
-    if (response.ok) {
-      domainCache = await response.json()
-      lastCacheUpdate = now
-    }
-  } catch (error) {
-    console.error('Error fetching domain mappings:', error)
-    // Continue with potentially stale cache
-  }
-
+  // Check cache
   return domainCache[normalizedHost] || null
 }
 
@@ -75,7 +64,7 @@ export async function middleware(request: NextRequest) {
 
   // Check for custom domain routing (new behavior)
   if (!isPlatformDomain(hostname)) {
-    const slug = await getDomainSlug(hostname, request)
+    const slug = getDomainSlug(hostname)
 
     if (slug) {
       const url = request.nextUrl.clone()
