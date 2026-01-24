@@ -12,6 +12,7 @@ import {
   getPromoterAffiliateEvents,
   PublicAffiliateEvent,
 } from '@/lib/public/publicService'
+import { getPromoterBasePath } from '@/lib/public/getPromoterBasePath'
 import { Layout } from '@/components/public/Layout'
 import { EventGrid } from '@/components/public/EventGrid'
 import { FilterTabs } from '@/components/public/FilterTabs'
@@ -62,6 +63,9 @@ export default async function EventsPage({ params, searchParams }: PageProps) {
   if (!promoter) {
     notFound()
   }
+
+  // Get base path for URLs (empty on custom domains, /p/[slug] on platform)
+  const basePath = await getPromoterBasePath(slug)
 
   const [events, categories, affiliateEvents] = await Promise.all([
     getPromoterEvents(promoter.id, { category, upcoming: true }),
@@ -114,7 +118,7 @@ export default async function EventsPage({ params, searchParams }: PageProps) {
         '@type': 'Event',
         'name': event.name,
         'startDate': event.startDate.toISOString(),
-        'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}/p/${slug}/events/${event.slug || event.id}`,
+        'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}${basePath}/events/${event.slug || event.id}`,
         'image': event.thumbnail || event.bannerImage,
         'description': event.shortDescription || event.description?.substring(0, 160),
         'location': event.venue?.name ? {
@@ -125,7 +129,7 @@ export default async function EventsPage({ params, searchParams }: PageProps) {
             : undefined,
         } : {
           '@type': 'VirtualLocation',
-          'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}/p/${slug}/events/${event.slug || event.id}`,
+          'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}${basePath}/events/${event.slug || event.id}`,
         },
         'offers': {
           '@type': 'Offer',
@@ -158,10 +162,10 @@ export default async function EventsPage({ params, searchParams }: PageProps) {
         logo: promoter.logo,
         logoText: promoter.name,
         navItems: [
-          { label: 'Home', href: `/p/${slug}` },
-          { label: 'Events', href: `/p/${slug}/events` },
-          { label: 'About', href: `/p/${slug}/about` },
-          { label: 'Contact', href: `/p/${slug}/contact` },
+          { label: 'Home', href: basePath || '/' },
+          { label: 'Events', href: `${basePath}/events` },
+          { label: 'About', href: `${basePath}/about` },
+          { label: 'Contact', href: `${basePath}/contact` },
         ],
       }}
       footer={{
@@ -190,7 +194,7 @@ export default async function EventsPage({ params, searchParams }: PageProps) {
               <EventFilterTabs
                 options={filterOptions}
                 currentCategory={category || ''}
-                promoterSlug={slug}
+                basePath={basePath}
               />
             </div>
           )}
@@ -247,6 +251,7 @@ export default async function EventsPage({ params, searchParams }: PageProps) {
             columns={4}
             gap="md"
             promoterSlug={slug}
+            basePath={basePath}
             emptyMessage="No events found matching your criteria"
           />
         </div>
@@ -349,19 +354,19 @@ export default async function EventsPage({ params, searchParams }: PageProps) {
 function EventFilterTabs({
   options,
   currentCategory,
-  promoterSlug,
+  basePath,
 }: {
   options: { value: string; label: string; count?: number }[]
   currentCategory: string
-  promoterSlug: string
+  basePath: string
 }) {
   return (
     <div className="flex flex-wrap gap-2">
       {options.map((option) => {
         const isActive = option.value === currentCategory
         const href = option.value
-          ? `/p/${promoterSlug}/events?category=${encodeURIComponent(option.value)}`
-          : `/p/${promoterSlug}/events`
+          ? `${basePath}/events?category=${encodeURIComponent(option.value)}`
+          : `${basePath}/events`
 
         return (
           <a

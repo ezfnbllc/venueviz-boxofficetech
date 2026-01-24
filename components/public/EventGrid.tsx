@@ -13,6 +13,7 @@ export interface EventGridProps {
   columns?: 2 | 3 | 4
   gap?: 'sm' | 'md' | 'lg'
   promoterSlug?: string
+  basePath?: string  // Base path for URLs (empty on custom domains)
   emptyMessage?: string
   className?: string
 }
@@ -22,6 +23,7 @@ export function EventGrid({
   columns = 4,
   gap = 'md',
   promoterSlug,
+  basePath,
   emptyMessage = 'No events found',
   className,
 }: EventGridProps) {
@@ -72,6 +74,7 @@ export function EventGrid({
           key={event.id}
           {...event}
           promoterSlug={promoterSlug || event.promoterSlug}
+          basePath={basePath}
         />
       ))}
     </div>

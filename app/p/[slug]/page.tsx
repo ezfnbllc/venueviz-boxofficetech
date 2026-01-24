@@ -12,6 +12,7 @@ import {
   getPromoterAffiliateEvents,
   PublicAffiliateEvent,
 } from '@/lib/public/publicService'
+import { getPromoterBasePath } from '@/lib/public/getPromoterBasePath'
 import { Layout } from '@/components/public/Layout'
 import { HeroBanner } from '@/components/public/HeroBanner'
 import { EventGrid } from '@/components/public/EventGrid'
@@ -62,6 +63,9 @@ export default async function PromoterHomePage({ params }: PageProps) {
     notFound()
   }
 
+  // Get base path for URLs (empty on custom domains, /p/[slug] on platform)
+  const basePath = await getPromoterBasePath(slug)
+
   const [featuredEvents, upcomingEvents, affiliateEvents] = await Promise.all([
     getPromoterEvents(promoter.id, { featured: true, upcoming: true, limit: 4 }),
     getPromoterEvents(promoter.id, { upcoming: true, limit: 8 }),
@@ -98,7 +102,7 @@ export default async function PromoterHomePage({ params }: PageProps) {
     '@type': 'Organization',
     'name': promoter.name,
     'description': promoter.description,
-    'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}/p/${slug}`,
+    'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}${basePath || '/'}`,
     'logo': promoter.logo,
     'image': promoter.banner || promoter.logo,
     ...(promoter.contactEmail && { 'email': promoter.contactEmail }),
@@ -124,14 +128,14 @@ export default async function PromoterHomePage({ params }: PageProps) {
         '@type': 'Event',
         'name': event.name,
         'startDate': event.startDate.toISOString(),
-        'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}/p/${slug}/events/${event.slug || event.id}`,
+        'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}${basePath}/events/${event.slug || event.id}`,
         'image': event.thumbnail || event.bannerImage,
         'location': event.venue?.name ? {
           '@type': 'Place',
           'name': event.venue.name,
         } : {
           '@type': 'VirtualLocation',
-          'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}/p/${slug}/events/${event.slug || event.id}`,
+          'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}${basePath}/events/${event.slug || event.id}`,
         },
       },
     })),
@@ -156,10 +160,10 @@ export default async function PromoterHomePage({ params }: PageProps) {
         logo: promoter.logo,
         logoText: promoter.name,
         navItems: [
-          { label: 'Home', href: `/p/${slug}` },
-          { label: 'Events', href: `/p/${slug}/events` },
-          { label: 'About', href: `/p/${slug}/about` },
-          { label: 'Contact', href: `/p/${slug}/contact` },
+          { label: 'Home', href: basePath || '/' },
+          { label: 'Events', href: `${basePath}/events` },
+          { label: 'About', href: `${basePath}/about` },
+          { label: 'Contact', href: `${basePath}/contact` },
         ],
       }}
       footer={{
@@ -178,7 +182,7 @@ export default async function PromoterHomePage({ params }: PageProps) {
         title={`Welcome to ${promoter.name}`}
         subtitle={promoter.description || 'Discover amazing events and get your tickets today'}
         ctaText="Browse Events"
-        ctaHref={`/p/${slug}/events`}
+        ctaHref={`${basePath}/events`}
         backgroundImage={promoter.banner}
         size="lg"
       />
@@ -196,7 +200,7 @@ export default async function PromoterHomePage({ params }: PageProps) {
                   Don't miss these highlighted experiences
                 </p>
               </div>
-              <Link href={`/p/${slug}/events`}>
+              <Link href={`${basePath}/events`}>
                 <Button variant="outline" size="sm">
                   View All
                 </Button>
@@ -207,6 +211,7 @@ export default async function PromoterHomePage({ params }: PageProps) {
               columns={4}
               gap="md"
               promoterSlug={slug}
+              basePath={basePath}
             />
           </div>
         </section>
@@ -225,7 +230,7 @@ export default async function PromoterHomePage({ params }: PageProps) {
                   Explore what's happening next
                 </p>
               </div>
-              <Link href={`/p/${slug}/events`}>
+              <Link href={`${basePath}/events`}>
                 <Button variant="outline" size="sm">
                   View All
                 </Button>
@@ -236,6 +241,7 @@ export default async function PromoterHomePage({ params }: PageProps) {
               columns={4}
               gap="md"
               promoterSlug={slug}
+              basePath={basePath}
               emptyMessage="No upcoming events at this time"
             />
           </div>

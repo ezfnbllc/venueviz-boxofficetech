@@ -152,6 +152,65 @@ export async function getPromoterBySlug(slug: string): Promise<PublicPromoter | 
 }
 
 /**
+ * Get promoter by custom domain (server-side)
+ * Matches domains like "myticketplatform.com" or "https://myticketplatform.com"
+ */
+export async function getPromoterByDomain(domain: string): Promise<PublicPromoter | null> {
+  try {
+    const db = getAdminDb()
+    const promotersRef = db.collection('promoters')
+
+    // Normalize the domain (remove protocol, www, trailing slashes)
+    const normalizedDomain = domain
+      .toLowerCase()
+      .replace(/^https?:\/\//, '')
+      .replace(/^www\./, '')
+      .replace(/\/$/, '')
+
+    console.log(`[PublicService] Looking for promoter with domain: ${normalizedDomain}`)
+
+    // Get all active promoters and check their website field
+    // We need to check multiple formats (with/without protocol, with/without www)
+    const snapshot = await promotersRef
+      .where('active', '==', true)
+      .get()
+
+    for (const doc of snapshot.docs) {
+      const data = doc.data()
+      if (data.website) {
+        const promoterDomain = data.website
+          .toLowerCase()
+          .replace(/^https?:\/\//, '')
+          .replace(/^www\./, '')
+          .replace(/\/$/, '')
+
+        if (promoterDomain === normalizedDomain) {
+          console.log(`[PublicService] Found promoter by domain: id=${doc.id}, name=${data.name}`)
+          return {
+            id: doc.id,
+            name: data.name || '',
+            slug: data.slug || '',
+            logo: data.logo,
+            banner: data.banner,
+            description: data.description,
+            website: data.website,
+            socialLinks: data.socialLinks,
+            contactEmail: data.contactEmail,
+            active: data.active,
+          }
+        }
+      }
+    }
+
+    console.log(`[PublicService] No promoter found with domain: ${normalizedDomain}`)
+    return null
+  } catch (error) {
+    console.error('Error fetching promoter by domain:', error)
+    return null
+  }
+}
+
+/**
  * Get public events for a promoter
  */
 export async function getPromoterEvents(

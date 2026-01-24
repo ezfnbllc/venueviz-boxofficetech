@@ -36,6 +36,7 @@ export interface EventCardProps {
   isSoldOut?: boolean
   // Links
   promoterSlug?: string
+  basePath?: string  // Base path for URLs (empty on custom domains)
   className?: string
 }
 
@@ -145,11 +146,14 @@ export function EventCard({
   isOnline = false,
   isSoldOut = false,
   promoterSlug,
+  basePath,
   className,
 }: EventCardProps) {
-  const eventUrl = promoterSlug
-    ? `/p/${promoterSlug}/events/${slug || id}`
-    : `/events/${slug || id}`
+  // Build event URL - use basePath if provided, otherwise fall back to /p/[slug] pattern
+  const effectiveBasePath = basePath !== undefined
+    ? basePath
+    : (promoterSlug ? `/p/${promoterSlug}` : '')
+  const eventUrl = `${effectiveBasePath}/events/${slug || id}`
 
   // Format display values
   const displayDate = startDate ? formatDateShort(startDate) : date || 'TBA'
