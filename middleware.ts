@@ -41,11 +41,18 @@ function getDomainSlug(hostname: string): string | null {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
-  const hostname = request.headers.get('host') || ''
+
+  // Use x-forwarded-host (original host from custom domain) if available,
+  // otherwise fall back to host header
+  const xForwardedHost = request.headers.get('x-forwarded-host')
+  const hostHeader = request.headers.get('host') || ''
+  const hostname = xForwardedHost || hostHeader
 
   // Debug logging
   console.log('[Middleware] =====================')
   console.log('[Middleware] Request:', {
+    xForwardedHost,
+    hostHeader,
     hostname,
     pathname,
     url: request.url,
