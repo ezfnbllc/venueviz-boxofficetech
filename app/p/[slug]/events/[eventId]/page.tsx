@@ -39,14 +39,57 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   // Use SEO data from database if available, fallback to generated values
   const seo = event.seo
-  const metaTitle = seo?.metaTitle || `${event.name} | ${promoter.name}`
-  const metaDescription = seo?.metaDescription || event.shortDescription || event.description?.substring(0, 160)
+
+  // Build location string from localSeo fields for better local search visibility
+  const localSeo = seo?.localSeo
+  const locationParts: string[] = []
+  if (localSeo?.neighborhood) locationParts.push(localSeo.neighborhood)
+  if (localSeo?.city) locationParts.push(localSeo.city)
+  if (localSeo?.state) locationParts.push(localSeo.state)
+  const locationString = locationParts.length > 0 ? locationParts.join(', ') : null
+
+  // Fallback to venue location if localSeo not available
+  const venueLocation = event.venue?.city && event.venue?.state
+    ? `${event.venue.city}, ${event.venue.state}`
+    : event.venue?.city || null
+  const displayLocation = locationString || venueLocation
+
+  // Build meta title - include location for local SEO
+  const metaTitle = seo?.metaTitle || (displayLocation
+    ? `${event.name} in ${displayLocation} | ${promoter.name}`
+    : `${event.name} | ${promoter.name}`)
+
+  // Build meta description - include location and date for better CTR
+  let metaDescription = seo?.metaDescription
+  if (!metaDescription) {
+    const dateStr = event.startDate
+      ? event.startDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+      : null
+    const descParts: string[] = []
+    if (event.shortDescription) {
+      descParts.push(event.shortDescription)
+    } else if (event.description) {
+      descParts.push(event.description.substring(0, 100))
+    }
+    if (displayLocation) descParts.push(`Location: ${displayLocation}`)
+    if (dateStr) descParts.push(`Date: ${dateStr}`)
+    metaDescription = descParts.join('. ').substring(0, 160)
+  }
+
   const ogImage = seo?.socialMediaImage || event.bannerImage || event.thumbnail
+
+  // Combine keywords from seo.keywords and seo.semanticKeywords
+  const allKeywords: string[] = []
+  if (seo?.keywords) allKeywords.push(...seo.keywords)
+  if (seo?.semanticKeywords) allKeywords.push(...seo.semanticKeywords)
+  // Add location-based keywords for local SEO
+  if (localSeo?.city) allKeywords.push(`events in ${localSeo.city}`)
+  if (localSeo?.neighborhood) allKeywords.push(`${localSeo.neighborhood} events`)
 
   return {
     title: metaTitle,
     description: metaDescription,
-    keywords: seo?.keywords?.join(', '),
+    keywords: allKeywords.length > 0 ? allKeywords.join(', ') : undefined,
     openGraph: {
       title: seo?.metaTitle || event.name,
       description: metaDescription,
@@ -205,23 +248,82 @@ export default async function EventDetailPage({ params }: PageProps) {
     })),
   } : null
 
+  // Build BreadcrumbList structured data for SEO
+  const breadcrumbStructuredData = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    'itemListElement': [
+      {
+        '@type': 'ListItem',
+        'position': 1,
+        'name': 'Home',
+        'item': `${process.env.NEXT_PUBLIC_BASE_URL || ''}${basePath || '/'}`,
+      },
+      {
+        '@type': 'ListItem',
+        'position': 2,
+        'name': 'Events',
+        'item': `${process.env.NEXT_PUBLIC_BASE_URL || ''}${basePath}/events`,
+      },
+      {
+        '@type': 'ListItem',
+        'position': 3,
+        'name': event.name,
+        'item': `${process.env.NEXT_PUBLIC_BASE_URL || ''}${basePath}/events/${event.slug || event.id}`,
+      },
+    ],
+  }
+
   // Build Event structured data for SEO
+  // Determine offer type - use AggregateOffer if there's a price range
+  const hasMultiplePrices = event.pricing?.minPrice !== event.pricing?.maxPrice && event.pricing?.maxPrice
+  const offerData = hasMultiplePrices
+    ? {
+        '@type': 'AggregateOffer',
+        'lowPrice': event.pricing?.minPrice || 0,
+        'highPrice': event.pricing?.maxPrice,
+        'priceCurrency': event.pricing?.currency || 'USD',
+        'availability': event.isSoldOut
+          ? 'https://schema.org/SoldOut'
+          : 'https://schema.org/InStock',
+        'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}${basePath}/events/${event.slug || event.id}/tickets`,
+      }
+    : {
+        '@type': 'Offer',
+        'price': event.pricing?.minPrice || 0,
+        'priceCurrency': event.pricing?.currency || 'USD',
+        'availability': event.isSoldOut
+          ? 'https://schema.org/SoldOut'
+          : 'https://schema.org/InStock',
+        'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}${basePath}/events/${event.slug || event.id}/tickets`,
+      }
+
+  // Build event URL for schema
+  const eventUrl = `${process.env.NEXT_PUBLIC_BASE_URL || ''}${basePath}/events/${event.slug || event.id}`
+
   const eventStructuredData = {
     '@context': 'https://schema.org',
     '@type': 'Event',
+    '@id': eventUrl,
+    'url': eventUrl,
     'name': event.name,
     'description': event.description || event.shortDescription,
     'startDate': event.startDate.toISOString(),
     'endDate': event.endDate?.toISOString(),
-    'eventStatus': event.isSoldOut ? 'https://schema.org/EventPostponed' : 'https://schema.org/EventScheduled',
+    'doorTime': event.startTime ? `${event.startDate.toISOString().split('T')[0]}T${event.startTime}:00` : undefined,
+    // EventScheduled is correct for both available and sold out events
+    // EventPostponed/EventCancelled are only for actual postponements/cancellations
+    'eventStatus': 'https://schema.org/EventScheduled',
     'eventAttendanceMode': isOnlineEvent
       ? 'https://schema.org/OnlineEventAttendanceMode'
       : 'https://schema.org/OfflineEventAttendanceMode',
-    'image': event.bannerImage || event.thumbnail,
+    'image': event.bannerImage || event.thumbnail ? [
+      event.bannerImage || event.thumbnail,
+    ] : undefined,
     'location': isOnlineEvent
       ? {
           '@type': 'VirtualLocation',
-          'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}${basePath}/events/${event.slug || event.id}`,
+          'url': eventUrl,
         }
       : {
           '@type': 'Place',
@@ -240,16 +342,24 @@ export default async function EventDetailPage({ params }: PageProps) {
       '@type': 'Organization',
       'name': promoter.name,
       'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}${basePath || '/'}`,
+      ...(promoter.logo && { 'logo': promoter.logo }),
     },
-    'offers': {
-      '@type': 'Offer',
-      'price': event.pricing?.minPrice || 0,
-      'priceCurrency': event.pricing?.currency || 'USD',
-      'availability': event.isSoldOut
-        ? 'https://schema.org/SoldOut'
-        : 'https://schema.org/InStock',
-      'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}${basePath}/events/${event.slug || event.id}/checkout`,
-    },
+    'offers': offerData,
+    // Add performer if available (artists, speakers, etc.)
+    ...(event.performers && event.performers.length > 0 && {
+      'performer': event.performers.map((performer: { name: string; type?: string }) => ({
+        '@type': performer.type === 'organization' ? 'Organization' : 'Person',
+        'name': performer.name,
+      })),
+    }),
+    // Add keywords from SEO for better AI understanding
+    ...(event.seo?.keywords && event.seo.keywords.length > 0 && {
+      'keywords': event.seo.keywords.join(', '),
+    }),
+    // Add language specification
+    'inLanguage': 'en-US',
+    // Add typical age range if specified
+    ...(event.ageRestriction && { 'typicalAgeRange': event.ageRestriction }),
   }
 
   return (
@@ -258,6 +368,10 @@ export default async function EventDetailPage({ params }: PageProps) {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(eventStructuredData) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbStructuredData) }}
       />
       {faqStructuredData && (
         <script

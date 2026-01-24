@@ -2,6 +2,9 @@
  * Dynamic Sitemap Generator
  *
  * Generates sitemap.xml with all public pages and events
+ * - Includes event detail pages and tickets pages
+ * - Prioritizes upcoming events over past events
+ * - Excludes checkout pages (noindex)
  */
 
 import { MetadataRoute } from 'next'
@@ -12,6 +15,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const db = getAdminFirestore()
 
   const sitemapEntries: MetadataRoute.Sitemap = []
+  const now = new Date()
 
   try {
     // Get all promoters (tenants)
@@ -54,12 +58,29 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         const eventSlug = event.slug || eventDoc.id
         const lastModified = event.updatedAt?.toDate?.() || event.createdAt?.toDate?.() || new Date()
 
+        // Check if event is upcoming or past
+        const eventDate = event.startDate?.toDate?.() || event.startDate
+        const isUpcoming = eventDate && eventDate > now
+        const isPast = eventDate && eventDate < now
+
+        // Event detail page - higher priority for upcoming events
         sitemapEntries.push({
           url: `${baseUrl}/p/${slug}/events/${eventSlug}`,
           lastModified,
-          changeFrequency: 'daily',
-          priority: 0.8,
+          changeFrequency: isUpcoming ? 'daily' : 'monthly',
+          priority: isUpcoming ? 0.8 : 0.4,
         })
+
+        // Tickets page - only for upcoming events that aren't sold out
+        // Skip past events and sold out events for tickets page
+        if (isUpcoming && !event.isSoldOut) {
+          sitemapEntries.push({
+            url: `${baseUrl}/p/${slug}/events/${eventSlug}/tickets`,
+            lastModified,
+            changeFrequency: 'daily',
+            priority: 0.7,
+          })
+        }
       }
     }
   } catch (error) {
