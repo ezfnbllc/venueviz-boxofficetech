@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 // Hardcoded domain mappings (fallback when API is unavailable)
-// Format: domain (without protocol/www) -> promoter slug
+// These are loaded automatically from Firestore, but kept as emergency fallback
 const HARDCODED_DOMAIN_MAPPINGS: Record<string, string> = {
   'myticketplatform.com': 'bot',
 }
@@ -9,7 +9,7 @@ const HARDCODED_DOMAIN_MAPPINGS: Record<string, string> = {
 // In-memory cache for domain mappings (refreshed periodically)
 let domainCache: Record<string, string> = { ...HARDCODED_DOMAIN_MAPPINGS }
 let lastCacheUpdate = 0
-const CACHE_TTL = 60 * 1000 // 60 seconds
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
 // Known platform domains that should NOT be treated as custom domains
 const PLATFORM_DOMAINS = [
@@ -23,6 +23,32 @@ function isPlatformDomain(hostname: string): boolean {
   return PLATFORM_DOMAINS.some(domain => hostname.includes(domain))
 }
 
+async function refreshDomainCache(vercelHost: string): Promise<void> {
+  const now = Date.now()
+  if (now - lastCacheUpdate < CACHE_TTL) return
+
+  try {
+    // Use the Vercel host (not custom domain) to avoid loops
+    const url = `https://${vercelHost}/api/domains`
+    console.log('[Middleware] Refreshing domain cache from:', url)
+
+    const response = await fetch(url, {
+      headers: { 'x-middleware-request': '1' },
+      next: { revalidate: 300 }, // Cache for 5 minutes
+    })
+
+    if (response.ok) {
+      const mappings = await response.json()
+      domainCache = { ...HARDCODED_DOMAIN_MAPPINGS, ...mappings }
+      lastCacheUpdate = now
+      console.log('[Middleware] Domain cache refreshed:', Object.keys(domainCache))
+    }
+  } catch (error) {
+    console.error('[Middleware] Failed to refresh domain cache:', error)
+    // Keep using existing cache
+  }
+}
+
 function getDomainSlug(hostname: string): string | null {
   // Normalize hostname
   const normalizedHost = hostname
@@ -30,12 +56,7 @@ function getDomainSlug(hostname: string): string | null {
     .replace(/:\d+$/, '') // Remove port
     .replace(/^www\./, '')
 
-  // Check hardcoded mappings first (always available)
-  if (HARDCODED_DOMAIN_MAPPINGS[normalizedHost]) {
-    return HARDCODED_DOMAIN_MAPPINGS[normalizedHost]
-  }
-
-  // Check cache
+  // Check cache (includes both hardcoded and dynamic mappings)
   return domainCache[normalizedHost] || null
 }
 
@@ -84,6 +105,11 @@ export async function middleware(request: NextRequest) {
   console.log('[Middleware] isPlatformDomain:', isPlatform, 'hostname:', hostname)
 
   if (!isPlatform) {
+    // Try to refresh domain cache using Vercel host (not custom domain to avoid loops)
+    if (hostHeader && hostHeader.includes('vercel.app')) {
+      await refreshDomainCache(hostHeader)
+    }
+
     const slug = getDomainSlug(hostname)
     console.log('[Middleware] Custom domain check - slug:', slug)
 
