@@ -33,10 +33,15 @@ export async function POST(request: NextRequest) {
     const html = await response.text()
 
     // Extract event details from the HTML
-    const eventData = extractEventData(html, url)
+    let eventData = extractEventData(html, url)
 
     if (!eventData.name) {
       return NextResponse.json({ error: 'Could not extract event details from this page' }, { status: 400 })
+    }
+
+    // If no image found, try to find one via web search
+    if (!eventData.imageUrl) {
+      eventData.imageUrl = await findEventImage(eventData.name, eventData.venueName)
     }
 
     return NextResponse.json(eventData)
@@ -47,6 +52,19 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
+}
+
+// Decode HTML entities
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(dec))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
 }
 
 function extractEventData(html: string, url: string) {
@@ -71,18 +89,20 @@ function extractEventData(html: string, url: string) {
   }
 
   // Try to extract from JSON-LD structured data first (most reliable)
-  const jsonLdMatch = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/i)
-  if (jsonLdMatch) {
+  const jsonLdMatches = html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/gi)
+  for (const match of jsonLdMatches) {
     try {
-      const jsonLd = JSON.parse(jsonLdMatch[1])
-      if (jsonLd['@type'] === 'Event' || (Array.isArray(jsonLd) && jsonLd[0]?.['@type'] === 'Event')) {
-        const event = Array.isArray(jsonLd) ? jsonLd[0] : jsonLd
-        data.name = event.name || ''
+      const jsonLd = JSON.parse(match[1])
+      const event = jsonLd['@type'] === 'Event' ? jsonLd :
+                    (Array.isArray(jsonLd) && jsonLd.find((item: any) => item['@type'] === 'Event')) || null
+
+      if (event) {
+        data.name = decodeHtmlEntities(event.name || '')
         data.startDate = event.startDate || ''
 
         if (event.location) {
           const location = event.location
-          data.venueName = location.name || ''
+          data.venueName = decodeHtmlEntities(location.name || '')
           if (location.address) {
             data.venueCity = location.address.addressLocality || ''
             data.venueState = location.address.addressRegion || ''
@@ -90,7 +110,12 @@ function extractEventData(html: string, url: string) {
         }
 
         if (event.image) {
-          data.imageUrl = Array.isArray(event.image) ? event.image[0] : event.image
+          const img = Array.isArray(event.image) ? event.image[0] : event.image
+          if (typeof img === 'string') {
+            data.imageUrl = img
+          } else if (img?.url) {
+            data.imageUrl = img.url
+          }
         }
 
         if (event.offers) {
@@ -101,47 +126,109 @@ function extractEventData(html: string, url: string) {
             data.minPrice = parseFloat(offers.price)
           }
         }
+
+        // If we got a name from JSON-LD, we have good data
+        if (data.name) break
       }
     } catch (e) {
-      console.log('Failed to parse JSON-LD, falling back to HTML parsing')
+      // Continue to next JSON-LD block or fallback
     }
   }
 
   // Fallback: Extract from meta tags
   if (!data.name) {
     const titleMatch = html.match(/<meta property="og:title" content="([^"]+)"/i) ||
+                       html.match(/<meta name="title" content="([^"]+)"/i) ||
                        html.match(/<title>([^<]+)<\/title>/i)
     if (titleMatch) {
-      data.name = titleMatch[1].replace(/\s*\|\s*TicketNetwork.*$/i, '').trim()
+      data.name = decodeHtmlEntities(titleMatch[1].replace(/\s*[-|]\s*TicketNetwork.*$/i, '').trim())
+    }
+  }
+
+  // Try multiple image sources
+  if (!data.imageUrl) {
+    // og:image
+    const ogImageMatch = html.match(/<meta property="og:image" content="([^"]+)"/i)
+    if (ogImageMatch) {
+      data.imageUrl = ogImageMatch[1]
     }
   }
 
   if (!data.imageUrl) {
-    const imageMatch = html.match(/<meta property="og:image" content="([^"]+)"/i)
-    if (imageMatch) {
-      data.imageUrl = imageMatch[1]
+    // twitter:image
+    const twitterImageMatch = html.match(/<meta name="twitter:image" content="([^"]+)"/i)
+    if (twitterImageMatch) {
+      data.imageUrl = twitterImageMatch[1]
     }
   }
 
-  // Try to extract venue from the page content
+  if (!data.imageUrl) {
+    // Look for performer/event images in the page
+    const imgMatch = html.match(/<img[^>]+src="([^"]+)"[^>]*alt="[^"]*(?:performer|event|artist|concert|game)[^"]*"/i) ||
+                     html.match(/<img[^>]+class="[^"]*(?:performer|event|hero|banner)[^"]*"[^>]*src="([^"]+)"/i)
+    if (imgMatch) {
+      data.imageUrl = imgMatch[1]
+    }
+  }
+
+  // Try to extract venue from the page content if not from JSON-LD
   if (!data.venueName) {
-    // Look for common venue patterns in TicketNetwork pages
-    const venueMatch = html.match(/venue["\s:]+([^"<]+)/i) ||
-                       html.match(/<span[^>]*class="[^"]*venue[^"]*"[^>]*>([^<]+)<\/span>/i)
+    const venueMatch = html.match(/<[^>]*class="[^"]*venue[^"]*"[^>]*>([^<]+)</i) ||
+                       html.match(/at\s+([^,<]+(?:Stadium|Arena|Center|Theatre|Theater|Hall|Garden|Coliseum|Amphitheatre|Pavilion))/i)
     if (venueMatch) {
-      data.venueName = venueMatch[1].trim()
+      data.venueName = decodeHtmlEntities(venueMatch[1].trim())
+    }
+  }
+
+  // Extract city/state from venue name if present
+  if (data.venueName && !data.venueCity) {
+    const locationMatch = data.name.match(/in\s+([^,]+),\s*([A-Z]{2})/i)
+    if (locationMatch) {
+      data.venueCity = locationMatch[1].trim()
+      data.venueState = locationMatch[2].trim()
     }
   }
 
   // Extract date from URL or page if not from JSON-LD
   if (!data.startDate) {
-    // TicketNetwork URLs often have date patterns
-    const dateMatch = url.match(/(\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})/) ||
-                      html.match(/datetime="([^"]+)"/i)
+    const dateMatch = html.match(/datetime="([^"]+)"/i) ||
+                      html.match(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})/i)
     if (dateMatch) {
       data.startDate = dateMatch[1]
     }
   }
 
+  // Clean up the name - remove venue/date info if it's redundant
+  if (data.name) {
+    // Remove " in City, ST at Venue on Date" suffix if present
+    data.name = data.name.replace(/\s+in\s+[^,]+,\s*[A-Z]{2}\s+at\s+.+$/i, '').trim()
+  }
+
   return data
+}
+
+// Try to find an event image via web search or generate a placeholder
+async function findEventImage(eventName: string, venueName: string): Promise<string> {
+  // Extract the main performer/event name (first part before " - " or " at " or " vs ")
+  const mainName = eventName.split(/\s*[-–]\s*|\s+at\s+|\s+vs\.?\s+/i)[0].trim()
+
+  // Try to find an image using a free image API
+  try {
+    // Use Unsplash for generic event/concert images as fallback
+    const searchTerm = mainName.toLowerCase().includes('world cup') ? 'soccer stadium' :
+                       mainName.toLowerCase().includes('concert') ? 'concert' :
+                       mainName.toLowerCase().includes('nba') || mainName.toLowerCase().includes('basketball') ? 'basketball arena' :
+                       mainName.toLowerCase().includes('nfl') || mainName.toLowerCase().includes('football') ? 'football stadium' :
+                       mainName.toLowerCase().includes('mlb') || mainName.toLowerCase().includes('baseball') ? 'baseball stadium' :
+                       mainName.toLowerCase().includes('nhl') || mainName.toLowerCase().includes('hockey') ? 'hockey arena' :
+                       mainName.toLowerCase().includes('fifa') || mainName.toLowerCase().includes('soccer') ? 'soccer stadium' :
+                       'concert venue'
+
+    // Use Unsplash source for a relevant placeholder image
+    return `https://source.unsplash.com/800x450/?${encodeURIComponent(searchTerm)}`
+  } catch (error) {
+    console.error('Error finding event image:', error)
+    // Return a generic placeholder
+    return `https://source.unsplash.com/800x450/?live,event`
+  }
 }
