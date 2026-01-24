@@ -25,8 +25,10 @@ export interface HeaderProps {
   logoAlt?: string
   darkLogo?: string
   siteName?: string
+  logoText?: string
   navItems?: NavItem[]
   promoterSlug?: string
+  basePath?: string  // Base path for URLs (empty on custom domains)
   showAuth?: boolean
   isLoggedIn?: boolean
   userName?: string
@@ -40,8 +42,10 @@ export function Header({
   logoAlt = 'Logo',
   darkLogo,
   siteName = 'BoxOfficeTech',
+  logoText,
   navItems = [],
   promoterSlug,
+  basePath,
   showAuth = true,
   isLoggedIn = false,
   userName,
@@ -79,9 +83,10 @@ export function Header({
 
   // Use prop logo first, then fetched promoter logo (only after mount to prevent hydration issues)
   const logo = propLogo || (isMounted && promoterData?.logo) || '/images/logo.svg'
-  const displayName = siteName !== 'BoxOfficeTech' ? siteName : (isMounted && promoterData?.name) || siteName
+  const displayName = logoText || (siteName !== 'BoxOfficeTech' ? siteName : (isMounted && promoterData?.name) || siteName)
 
-  const baseUrl = promoterSlug ? `/p/${promoterSlug}` : ''
+  // Use basePath if provided (for custom domains), otherwise fall back to /p/[slug]
+  const baseUrl = basePath !== undefined ? basePath : (promoterSlug ? `/p/${promoterSlug}` : '')
 
   const defaultNavItems: NavItem[] = [
     { label: 'Home', href: `${baseUrl}/` },
