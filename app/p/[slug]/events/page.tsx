@@ -9,7 +9,10 @@ import {
   getPromoterBySlug,
   getPromoterEvents,
   getPromoterCategories,
+  getPromoterAffiliateEvents,
+  PublicAffiliateEvent,
 } from '@/lib/public/publicService'
+import { getPromoterBasePath } from '@/lib/public/getPromoterBasePath'
 import { Layout } from '@/components/public/Layout'
 import { EventGrid } from '@/components/public/EventGrid'
 import { FilterTabs } from '@/components/public/FilterTabs'
@@ -61,9 +64,13 @@ export default async function EventsPage({ params, searchParams }: PageProps) {
     notFound()
   }
 
-  const [events, categories] = await Promise.all([
+  // Get base path for URLs (empty on custom domains, /p/[slug] on platform)
+  const basePath = await getPromoterBasePath(slug)
+
+  const [events, categories, affiliateEvents] = await Promise.all([
     getPromoterEvents(promoter.id, { category, upcoming: true }),
     getPromoterCategories(promoter.id),
+    getPromoterAffiliateEvents(promoter.id, { upcoming: true }),
   ])
 
   // Transform events to EventCardProps with full schedule/venue/pricing data
@@ -111,7 +118,7 @@ export default async function EventsPage({ params, searchParams }: PageProps) {
         '@type': 'Event',
         'name': event.name,
         'startDate': event.startDate.toISOString(),
-        'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}/p/${slug}/events/${event.slug || event.id}`,
+        'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}${basePath}/events/${event.slug || event.id}`,
         'image': event.thumbnail || event.bannerImage,
         'description': event.shortDescription || event.description?.substring(0, 160),
         'location': event.venue?.name ? {
@@ -122,7 +129,7 @@ export default async function EventsPage({ params, searchParams }: PageProps) {
             : undefined,
         } : {
           '@type': 'VirtualLocation',
-          'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}/p/${slug}/events/${event.slug || event.id}`,
+          'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}${basePath}/events/${event.slug || event.id}`,
         },
         'offers': {
           '@type': 'Offer',
@@ -155,10 +162,10 @@ export default async function EventsPage({ params, searchParams }: PageProps) {
         logo: promoter.logo,
         logoText: promoter.name,
         navItems: [
-          { label: 'Home', href: `/p/${slug}` },
-          { label: 'Events', href: `/p/${slug}/events` },
-          { label: 'About', href: `/p/${slug}/about` },
-          { label: 'Contact', href: `/p/${slug}/contact` },
+          { label: 'Home', href: basePath || '/' },
+          { label: 'Events', href: `${basePath}/events` },
+          { label: 'About', href: `${basePath}/about` },
+          { label: 'Contact', href: `${basePath}/contact` },
         ],
       }}
       footer={{
@@ -187,7 +194,7 @@ export default async function EventsPage({ params, searchParams }: PageProps) {
               <EventFilterTabs
                 options={filterOptions}
                 currentCategory={category || ''}
-                promoterSlug={slug}
+                basePath={basePath}
               />
             </div>
           )}
@@ -244,10 +251,100 @@ export default async function EventsPage({ params, searchParams }: PageProps) {
             columns={4}
             gap="md"
             promoterSlug={slug}
+            basePath={basePath}
             emptyMessage="No events found matching your criteria"
           />
         </div>
       </section>
+
+      {/* Partner/Affiliate Events */}
+      {affiliateEvents.length > 0 && (
+        <section className="py-16 bg-[#f9fafb]">
+          <div className="container mx-auto px-4">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h2 className="text-2xl md:text-3xl font-bold text-[#1d1d1d]">
+                  More Events You'll Love
+                </h2>
+                <p className="text-[#717171] mt-2">
+                  Tickets available from our partners
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {affiliateEvents.map((event) => (
+                <a
+                  key={event.id}
+                  href={event.affiliateUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 border border-slate-100"
+                >
+                  {/* Event Image */}
+                  <div className="relative aspect-[16/9] overflow-hidden bg-slate-100">
+                    {event.imageUrl ? (
+                      <img
+                        src={event.imageUrl}
+                        alt={event.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200">
+                        <svg className="w-12 h-12 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                    )}
+                    {/* Partner badge */}
+                    <div className="absolute top-2 right-2 px-2 py-1 bg-white/90 backdrop-blur-sm rounded-full text-xs font-medium text-[#717171] flex items-center gap-1">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                      {event.platform === 'ticketmaster' ? 'Ticketmaster' : event.platform === 'ticketnetwork' ? 'TicketNetwork' : event.platform}
+                    </div>
+                  </div>
+
+                  {/* Event Details */}
+                  <div className="p-4">
+                    <h3 className="font-semibold text-[#1d1d1d] line-clamp-2 group-hover:text-[#6ac045] transition-colors">
+                      {event.name}
+                    </h3>
+                    <div className="mt-2 space-y-1 text-sm text-[#717171]">
+                      <p className="flex items-center gap-1.5">
+                        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        {!isNaN(event.startDate.getTime()) ? (
+                          new Intl.DateTimeFormat('en-US', {
+                            weekday: 'short',
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          }).format(event.startDate)
+                        ) : (
+                          'Date TBA'
+                        )}
+                      </p>
+                      <p className="flex items-center gap-1.5">
+                        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span className="truncate">{event.venueName}, {event.venueCity}</span>
+                      </p>
+                    </div>
+                    {event.minPrice && (
+                      <p className="mt-3 text-sm font-semibold text-[#1d1d1d]">
+                        From {new Intl.NumberFormat('en-US', { style: 'currency', currency: event.currency || 'USD' }).format(event.minPrice)}
+                      </p>
+                    )}
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
     </Layout>
     </>
   )
@@ -257,19 +354,19 @@ export default async function EventsPage({ params, searchParams }: PageProps) {
 function EventFilterTabs({
   options,
   currentCategory,
-  promoterSlug,
+  basePath,
 }: {
   options: { value: string; label: string; count?: number }[]
   currentCategory: string
-  promoterSlug: string
+  basePath: string
 }) {
   return (
     <div className="flex flex-wrap gap-2">
       {options.map((option) => {
         const isActive = option.value === currentCategory
         const href = option.value
-          ? `/p/${promoterSlug}/events?category=${encodeURIComponent(option.value)}`
-          : `/p/${promoterSlug}/events`
+          ? `${basePath}/events?category=${encodeURIComponent(option.value)}`
+          : `${basePath}/events`
 
         return (
           <a

@@ -13,6 +13,7 @@ import {
   getVenueById,
   getPromoterEvents,
 } from '@/lib/public/publicService'
+import { getPromoterBasePath } from '@/lib/public/getPromoterBasePath'
 import { Layout } from '@/components/public/Layout'
 import { Button } from '@/components/public/Button'
 import { Card, CardContent } from '@/components/public/Card'
@@ -154,6 +155,9 @@ export default async function EventDetailPage({ params }: PageProps) {
     notFound()
   }
 
+  // Get base path for URLs (empty on custom domains, /p/[slug] on platform)
+  const basePath = await getPromoterBasePath(slug)
+
   // Fetch full venue details if we have a venue ID
   let venueDetails = null
   if (event.venue?.id) {
@@ -217,7 +221,7 @@ export default async function EventDetailPage({ params }: PageProps) {
     'location': isOnlineEvent
       ? {
           '@type': 'VirtualLocation',
-          'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}/p/${slug}/events/${event.slug || event.id}`,
+          'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}${basePath}/events/${event.slug || event.id}`,
         }
       : {
           '@type': 'Place',
@@ -235,7 +239,7 @@ export default async function EventDetailPage({ params }: PageProps) {
     'organizer': {
       '@type': 'Organization',
       'name': promoter.name,
-      'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}/p/${slug}`,
+      'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}${basePath || '/'}`,
     },
     'offers': {
       '@type': 'Offer',
@@ -244,7 +248,7 @@ export default async function EventDetailPage({ params }: PageProps) {
       'availability': event.isSoldOut
         ? 'https://schema.org/SoldOut'
         : 'https://schema.org/InStock',
-      'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}/p/${slug}/events/${event.slug || event.id}/checkout`,
+      'url': `${process.env.NEXT_PUBLIC_BASE_URL || ''}${basePath}/events/${event.slug || event.id}/checkout`,
     },
   }
 
@@ -267,10 +271,10 @@ export default async function EventDetailPage({ params }: PageProps) {
         logo: promoter.logo,
         logoText: promoter.name,
         navItems: [
-          { label: 'Home', href: `/p/${slug}` },
-          { label: 'Events', href: `/p/${slug}/events` },
-          { label: 'About', href: `/p/${slug}/about` },
-          { label: 'Contact', href: `/p/${slug}/contact` },
+          { label: 'Home', href: basePath || '/' },
+          { label: 'Events', href: `${basePath}/events` },
+          { label: 'About', href: `${basePath}/about` },
+          { label: 'Contact', href: `${basePath}/contact` },
         ],
       }}
       footer={{
@@ -284,13 +288,13 @@ export default async function EventDetailPage({ params }: PageProps) {
           <nav aria-label="breadcrumb">
             <ol className="flex items-center space-x-2 text-sm">
               <li>
-                <Link href={`/p/${slug}`} className="text-[#717171] hover:text-[#6ac045] transition-colors">
+                <Link href={basePath || '/'} className="text-[#717171] hover:text-[#6ac045] transition-colors">
                   Home
                 </Link>
               </li>
               <li className="text-[#717171]">/</li>
               <li>
-                <Link href={`/p/${slug}/events`} className="text-[#717171] hover:text-[#6ac045] transition-colors">
+                <Link href={`${basePath}/events`} className="text-[#717171] hover:text-[#6ac045] transition-colors">
                   Events
                 </Link>
               </li>
@@ -588,7 +592,7 @@ export default async function EventDetailPage({ params }: PageProps) {
                         <p className="text-sm text-[#717171] mb-1">Organised by</p>
                         <p className="text-base font-medium text-[#1d1d1d] mb-1">{promoter.name}</p>
                         <Link
-                          href={`/p/${slug}`}
+                          href={basePath || '/'}
                           className="text-[#6ac045] text-sm font-medium hover:text-[#5aa038] transition-colors"
                         >
                           View Profile
@@ -712,7 +716,7 @@ export default async function EventDetailPage({ params }: PageProps) {
                         Sold Out
                       </div>
                     ) : (
-                      <Link href={`/p/${slug}/events/${event.slug || event.id}/tickets`} className="block">
+                      <Link href={`${basePath}/events/${event.slug || event.id}/tickets`} className="block">
                         <Button variant="primary" size="lg" className="w-full">
                           Book Now
                         </Button>
@@ -739,7 +743,7 @@ export default async function EventDetailPage({ params }: PageProps) {
             <div className="flex items-center justify-between mb-8">
               <h2 className="text-2xl font-bold text-[#1d1d1d]">More Events</h2>
               <Link
-                href={`/p/${slug}/events`}
+                href={`${basePath}/events`}
                 className="text-[#1d1d1d] font-medium hover:text-[#6ac045] transition-colors inline-flex items-center"
               >
                 Browse All
@@ -765,6 +769,7 @@ export default async function EventDetailPage({ params }: PageProps) {
                   isOnline={moreEvent.venue?.type === 'online'}
                   isSoldOut={moreEvent.isSoldOut}
                   promoterSlug={slug}
+                  basePath={basePath}
                 />
               ))}
             </div>
