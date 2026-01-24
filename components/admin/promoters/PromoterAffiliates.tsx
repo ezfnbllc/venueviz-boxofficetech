@@ -1167,16 +1167,16 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-primary-contrast mb-1">
-                        Campaign/Program ID <span className="text-red-500">*</span>
+                        Campaign/Program ID
                       </label>
                       <p className="text-xs text-[#717171] mb-2">
-                        From Impact.com → Brands → Ticketmaster → Program ID
+                        From your affiliate dashboard (leave blank if not required)
                       </p>
                       <input
                         type="text"
                         value={formData.affiliateId}
                         onChange={(e) => setFormData({ ...formData, affiliateId: e.target.value })}
-                        placeholder="e.g., 234264"
+                        placeholder="Optional for some platforms"
                         className="form-control"
                       />
                     </div>
@@ -1331,13 +1331,13 @@ export default function PromoterAffiliates({ promoterId }: PromoterAffiliatesPro
                     Campaign/Program ID
                   </label>
                   <p className="text-xs text-[#717171] mb-2">
-                    From Impact.com → Brands → Ticketmaster → Program ID
+                    From your affiliate dashboard (leave blank if not required)
                   </p>
                   <input
                     type="text"
                     value={formData.affiliateId}
                     onChange={(e) => setFormData({ ...formData, affiliateId: e.target.value })}
-                    placeholder="e.g., 234264"
+                    placeholder="Optional for some platforms"
                     className="form-control"
                   />
                 </div>
