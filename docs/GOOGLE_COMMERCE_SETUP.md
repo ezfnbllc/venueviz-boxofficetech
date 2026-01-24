@@ -15,40 +15,131 @@ This document describes how to set up Google's commerce integrations for the Box
 ### Overview
 The Google Wallet API allows users to save their event tickets directly to their Google Wallet app for easy access at the event venue.
 
-### Setup Steps
+### Configuration Options
 
-#### 1.1 Create a Google Cloud Project
+The platform supports **two configuration approaches**:
+
+| Approach | Use Case | Configuration Location |
+|----------|----------|----------------------|
+| **Platform-Level** | All tenants share one Google Wallet issuer | Vercel Environment Variables |
+| **Per-Tenant** | Each tenant has their own branding | Firestore `promoters` collection |
+
+**Priority**: Tenant-specific config → Platform config → Not available
+
+---
+
+### Option A: Platform-Level Configuration (Recommended for Most Cases)
+
+All tenants use the platform's Google Wallet issuer account. Tickets display:
+- **Issuer**: Platform name (e.g., "BoxOfficeTech")
+- **Event/Promoter**: Shows on the ticket itself
+
+#### Setup Steps
+
+##### 1. Create a Google Cloud Project
 1. Go to [Google Cloud Console](https://console.cloud.google.com)
 2. Create a new project or select an existing one
 3. Enable the "Google Wallet API"
 
-#### 1.2 Create a Service Account
-1. Go to IAM & Admin > Service Accounts
-2. Create a new service account
-3. Grant it the "Wallet Object Creator" role
-4. Create a JSON key and download it
+##### 2. Create a Service Account
+1. Go to **IAM & Admin** → **Service Accounts**
+2. Click **"+ CREATE SERVICE ACCOUNT"**
+3. Name it (e.g., `wallet-pass-generator`)
+4. Click **"CREATE AND CONTINUE"** → **"DONE"**
+5. Click on the service account → **"KEYS"** tab
+6. **"ADD KEY"** → **"Create new key"** → **JSON**
+7. Download and save the JSON file securely
 
-#### 1.3 Apply for Wallet Issuer Account
+##### 3. Get Wallet Issuer Account
 1. Go to [Google Pay & Wallet Console](https://pay.google.com/business/console)
-2. Apply for a Wallet Issuer account
-3. Wait for approval (typically 1-2 weeks)
+2. Navigate to **Google Wallet API**
+3. Note your **Issuer ID** (format: `3388000000023XXXXXX`)
+4. Click **"Register for access to the REST API"**
+5. Add your service account email
 
-#### 1.4 Configure Environment Variables
-Add these to your `.env.local` file:
+##### 4. Add to Vercel Environment Variables
+In Vercel Dashboard → Settings → Environment Variables:
 
 ```bash
-GOOGLE_WALLET_ISSUER_ID=your-issuer-id
-GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL=wallet-service@project.iam.gserviceaccount.com
-GOOGLE_WALLET_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
-GOOGLE_WALLET_ORIGINS=https://yourdomain.com
+GOOGLE_WALLET_ISSUER_ID=3388000000023075621
+GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL=wallet-pass-generator@yourproject.iam.gserviceaccount.com
+GOOGLE_WALLET_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBg...\n-----END PRIVATE KEY-----\n"
 ```
 
+**Note**: The private key must include `\n` characters for line breaks.
+
+---
+
+### Option B: Per-Tenant Configuration
+
+Each tenant can have their own Google Wallet issuer for custom branding on passes.
+
+#### When to Use
+- Tenant wants their company name as the pass issuer
+- Tenant has their own Google Pay & Wallet Console account
+- White-label requirement where platform branding should be hidden
+
+#### Setup Steps (Per Tenant)
+
+##### 1. Tenant Creates Their Own Google Wallet Issuer
+The tenant must:
+1. Create a Google Cloud project
+2. Enable Google Wallet API
+3. Create a service account with JSON key
+4. Apply for Wallet Issuer account at [pay.google.com/business/console](https://pay.google.com/business/console)
+
+##### 2. Add Configuration to Firestore
+Store the tenant's credentials in their promoter document:
+
+```
+Firestore Path: promoters/{promoterId}
+
+{
+  "name": "Tenant Name",
+  "slug": "tenant-slug",
+  ... other fields ...
+
+  "googleWallet": {
+    "issuerId": "3388000000023XXXXXX",
+    "serviceAccountEmail": "wallet@tenant-project.iam.gserviceaccount.com",
+    "privateKey": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",
+    "origins": ["https://tenant-domain.com"]  // Optional
+  }
+}
+```
+
+##### 3. Admin UI for Tenant Configuration
+You can add a settings page in the admin panel to allow tenants to input their Google Wallet credentials:
+
+```typescript
+// Example Firestore update
+await db.collection('promoters').doc(promoterId).update({
+  googleWallet: {
+    issuerId: formData.issuerId,
+    serviceAccountEmail: formData.serviceAccountEmail,
+    privateKey: formData.privateKey,
+  }
+})
+
+// Clear the config cache after update
+import { clearConfigCache } from '@/lib/google-wallet'
+clearConfigCache(promoterId)
+```
+
+---
+
 ### API Endpoints
-- `GET /api/wallet/google` - Check configuration status
-- `POST /api/wallet/google` - Generate passes for an order
+- `GET /api/wallet/google` - Check platform configuration status
+- `POST /api/wallet/google` - Generate passes for an order (auto-detects tenant config)
+
+### How It Works
+1. When generating a pass, the system checks the promoter's Firestore document for `googleWallet` config
+2. If found, uses tenant-specific credentials
+3. If not found, falls back to platform-level environment variables
+4. Config is cached for 5 minutes to reduce Firestore reads
 
 ### Usage
-The "Add to Google Wallet" button appears automatically on the order confirmation page when configured.
+The "Add to Google Wallet" button appears automatically on the order confirmation page when configured (either platform or tenant level).
 
 ---
 
@@ -230,15 +321,33 @@ Google verifies:
 
 ## Environment Variables Summary
 
+### Platform-Level (Vercel)
+
 ```bash
-# Google Wallet API
-GOOGLE_WALLET_ISSUER_ID=
-GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL=
-GOOGLE_WALLET_PRIVATE_KEY=
-GOOGLE_WALLET_ORIGINS=
+# Google Wallet API (Platform Default)
+GOOGLE_WALLET_ISSUER_ID=3388000000023075621
+GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL=wallet-pass-generator@yourproject.iam.gserviceaccount.com
+GOOGLE_WALLET_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 
 # Base URL (required for all integrations)
 NEXT_PUBLIC_BASE_URL=https://yourdomain.com
+```
+
+### Per-Tenant (Firestore)
+
+```
+Collection: promoters
+Document: {promoterId}
+Field: googleWallet
+
+{
+  "googleWallet": {
+    "issuerId": "3388000000023XXXXXX",
+    "serviceAccountEmail": "wallet@tenant.iam.gserviceaccount.com",
+    "privateKey": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",
+    "origins": ["https://tenant-domain.com"]
+  }
+}
 ```
 
 ---
@@ -246,13 +355,38 @@ NEXT_PUBLIC_BASE_URL=https://yourdomain.com
 ## Testing
 
 ### Google Wallet
-Use the test issuer ID provided during enrollment to test pass generation without actual wallet integration.
+
+#### Demo Mode Testing
+When you first set up Google Wallet, you're in **Demo Mode**:
+- Passes only work on accounts added as testers
+- Add test accounts in Google Pay & Wallet Console → Google Wallet API → Testers
+
+#### Request Publishing Access
+To go live:
+1. Create at least one Event Ticket Class in the console
+2. Complete your business profile
+3. Click "Request publishing access"
+4. Approval takes 1-2 weeks
+
+#### Test API Locally
+```bash
+# Check configuration
+curl http://localhost:3000/api/wallet/google
+
+# Generate pass (requires valid order)
+curl -X POST http://localhost:3000/api/wallet/google \
+  -H "Content-Type: application/json" \
+  -d '{"orderId":"ORD-1234567890-ABC123"}'
+```
 
 ### UCP
 Test the inventory and checkout APIs locally:
 ```bash
 # Test inventory
 curl http://localhost:3000/api/ucp/inventory
+
+# Test inventory for specific promoter
+curl "http://localhost:3000/api/ucp/inventory?promoterSlug=bot"
 
 # Test checkout
 curl -X POST http://localhost:3000/api/ucp/checkout \
@@ -261,7 +395,44 @@ curl -X POST http://localhost:3000/api/ucp/checkout \
 ```
 
 ### Merchant Feed
+```bash
+# Get XML feed
+curl http://localhost:3000/api/feeds/google-merchant
+
+# Get JSON feed
+curl "http://localhost:3000/api/feeds/google-merchant?format=json"
+
+# Get feed for specific promoter
+curl "http://localhost:3000/api/feeds/google-merchant?promoterSlug=bot"
+```
+
 Validate your feed using [Google's Feed Testing Tool](https://merchants.google.com/mc/feeds/feedtest).
+
+---
+
+## Troubleshooting
+
+### Google Wallet Issues
+
+| Issue | Solution |
+|-------|----------|
+| "Google Wallet is not configured" | Check environment variables are set correctly in Vercel |
+| "Failed to get access token" | Verify service account email and private key format |
+| Pass not appearing | Ensure you're testing with an account added as a tester (demo mode) |
+| "Class not found" | The API creates classes automatically; check for API errors in logs |
+
+### Cache Issues
+If you update a tenant's Google Wallet configuration and it's not taking effect:
+
+```typescript
+import { clearConfigCache } from '@/lib/google-wallet'
+
+// Clear specific tenant cache
+clearConfigCache(promoterId)
+
+// Or clear all cache
+clearConfigCache()
+```
 
 ---
 
