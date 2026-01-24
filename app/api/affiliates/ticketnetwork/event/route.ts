@@ -39,9 +39,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Could not extract event details from this page' }, { status: 400 })
     }
 
-    // If no image found, try to find one via web search
+    // If no image found, use a fallback based on event type
     if (!eventData.imageUrl) {
-      eventData.imageUrl = await findEventImage(eventData.name, eventData.venueName)
+      eventData.imageUrl = findEventImage(eventData.name, eventData.venueName)
     }
 
     return NextResponse.json(eventData)
@@ -207,28 +207,46 @@ function extractEventData(html: string, url: string) {
   return data
 }
 
-// Try to find an event image via web search or generate a placeholder
-async function findEventImage(eventName: string, venueName: string): Promise<string> {
-  // Extract the main performer/event name (first part before " - " or " at " or " vs ")
-  const mainName = eventName.split(/\s*[-–]\s*|\s+at\s+|\s+vs\.?\s+/i)[0].trim()
+// Static fallback images for different event types (reliable CDN-hosted images)
+const FALLBACK_IMAGES: Record<string, string> = {
+  // Soccer/Football
+  soccer: 'https://images.unsplash.com/photo-1489944440615-453fc2b6a9a9?w=800&h=450&fit=crop',
+  fifa: 'https://images.unsplash.com/photo-1489944440615-453fc2b6a9a9?w=800&h=450&fit=crop',
+  'world cup': 'https://images.unsplash.com/photo-1489944440615-453fc2b6a9a9?w=800&h=450&fit=crop',
+  // American Football
+  nfl: 'https://images.unsplash.com/photo-1566577739112-5180d4bf9390?w=800&h=450&fit=crop',
+  football: 'https://images.unsplash.com/photo-1566577739112-5180d4bf9390?w=800&h=450&fit=crop',
+  // Basketball
+  nba: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&h=450&fit=crop',
+  basketball: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&h=450&fit=crop',
+  // Baseball
+  mlb: 'https://images.unsplash.com/photo-1566479179817-c0067b6d2c6e?w=800&h=450&fit=crop',
+  baseball: 'https://images.unsplash.com/photo-1566479179817-c0067b6d2c6e?w=800&h=450&fit=crop',
+  // Hockey
+  nhl: 'https://images.unsplash.com/photo-1515703407324-5f753afd8be8?w=800&h=450&fit=crop',
+  hockey: 'https://images.unsplash.com/photo-1515703407324-5f753afd8be8?w=800&h=450&fit=crop',
+  // Concert/Music
+  concert: 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=800&h=450&fit=crop',
+  music: 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=800&h=450&fit=crop',
+  tour: 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=800&h=450&fit=crop',
+  // Theater/Comedy
+  theater: 'https://images.unsplash.com/photo-1503095396549-807759245b35?w=800&h=450&fit=crop',
+  comedy: 'https://images.unsplash.com/photo-1585699324551-f6c309eedeca?w=800&h=450&fit=crop',
+  // Default event image
+  default: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&h=450&fit=crop',
+}
 
-  // Try to find an image using a free image API
-  try {
-    // Use Unsplash for generic event/concert images as fallback
-    const searchTerm = mainName.toLowerCase().includes('world cup') ? 'soccer stadium' :
-                       mainName.toLowerCase().includes('concert') ? 'concert' :
-                       mainName.toLowerCase().includes('nba') || mainName.toLowerCase().includes('basketball') ? 'basketball arena' :
-                       mainName.toLowerCase().includes('nfl') || mainName.toLowerCase().includes('football') ? 'football stadium' :
-                       mainName.toLowerCase().includes('mlb') || mainName.toLowerCase().includes('baseball') ? 'baseball stadium' :
-                       mainName.toLowerCase().includes('nhl') || mainName.toLowerCase().includes('hockey') ? 'hockey arena' :
-                       mainName.toLowerCase().includes('fifa') || mainName.toLowerCase().includes('soccer') ? 'soccer stadium' :
-                       'concert venue'
+// Find a fallback image based on event name keywords
+function findEventImage(eventName: string, venueName: string): string {
+  const searchText = `${eventName} ${venueName}`.toLowerCase()
 
-    // Use Unsplash source for a relevant placeholder image
-    return `https://source.unsplash.com/800x450/?${encodeURIComponent(searchTerm)}`
-  } catch (error) {
-    console.error('Error finding event image:', error)
-    // Return a generic placeholder
-    return `https://source.unsplash.com/800x450/?live,event`
+  // Check for specific keywords
+  for (const [keyword, imageUrl] of Object.entries(FALLBACK_IMAGES)) {
+    if (keyword !== 'default' && searchText.includes(keyword)) {
+      return imageUrl
+    }
   }
+
+  // Return default event image
+  return FALLBACK_IMAGES.default
 }
