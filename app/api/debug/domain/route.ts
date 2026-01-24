@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
   const normalizedHost = hostname
     .toLowerCase()
     .replace(/:\d+$/, '')
-    .replace(/^www\./', '')
+    .replace(/^www\./, '')
 
   const isPlatform = PLATFORM_DOMAINS.some(domain => hostname.includes(domain))
   const mappedSlug = HARDCODED_DOMAIN_MAPPINGS[normalizedHost] || null
