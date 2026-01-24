@@ -267,6 +267,7 @@ export default async function EventDetailPage({ params }: PageProps) {
       )}
       <Layout
       promoterSlug={slug}
+      basePath={basePath}
       header={{
         logo: promoter.logo,
         logoText: promoter.name,

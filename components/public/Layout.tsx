@@ -21,6 +21,7 @@ export interface LayoutProps {
   className?: string
   contentClassName?: string
   promoterSlug?: string
+  basePath?: string  // Base path for URLs (empty on custom domains)
 }
 
 export function Layout({
@@ -32,12 +33,14 @@ export function Layout({
   className,
   contentClassName,
   promoterSlug,
+  basePath,
 }: LayoutProps) {
   return (
     <div className={cn('min-h-screen flex flex-col bg-white', className)}>
       {showHeader && (
         <Header
           promoterSlug={promoterSlug}
+          basePath={basePath}
           {...header}
         />
       )}

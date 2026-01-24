@@ -158,6 +158,7 @@ export default async function EventsPage({ params, searchParams }: PageProps) {
       )}
       <Layout
       promoterSlug={slug}
+      basePath={basePath}
       header={{
         logo: promoter.logo,
         logoText: promoter.name,
