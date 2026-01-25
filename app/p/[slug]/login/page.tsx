@@ -11,7 +11,7 @@ export default function LoginPage() {
   const router = useRouter()
   const slug = params.slug as string
 
-  const { signIn, signInWithGoogle, user } = useFirebaseAuth()
+  const { signInToTenant, signInWithGoogleToTenant, user, tenantCustomer, loadTenantCustomer } = useFirebaseAuth()
 
   const [formData, setFormData] = useState({
     email: '',
@@ -21,12 +21,24 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  // Redirect if already logged in
+  // Check for existing tenant customer and redirect if logged in
   useEffect(() => {
-    if (user) {
-      router.push(`/p/${slug}`)
+    const checkAndRedirect = async () => {
+      if (user) {
+        // Try to load tenant customer if not already loaded
+        if (!tenantCustomer) {
+          const customer = await loadTenantCustomer(slug)
+          if (customer) {
+            router.push(`/p/${slug}`)
+          }
+          // If no customer for this tenant, stay on login page
+        } else {
+          router.push(`/p/${slug}`)
+        }
+      }
     }
-  }, [user, router, slug])
+    checkAndRedirect()
+  }, [user, tenantCustomer, router, slug, loadTenantCustomer])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target
@@ -41,7 +53,7 @@ export default function LoginPage() {
     setError(null)
     setLoading(true)
 
-    const result = await signIn(formData.email, formData.password)
+    const result = await signInToTenant(formData.email, formData.password, slug)
 
     if (result.success) {
       router.push(`/p/${slug}`)
@@ -56,7 +68,7 @@ export default function LoginPage() {
     setError(null)
     setLoading(true)
 
-    const result = await signInWithGoogle()
+    const result = await signInWithGoogleToTenant(slug)
 
     if (result.success) {
       router.push(`/p/${slug}`)

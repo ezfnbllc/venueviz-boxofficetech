@@ -9,11 +9,20 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   onAuthStateChanged,
-  User
+  User,
+  fetchSignInMethodsForEmail,
 } from 'firebase/auth'
 import { auth, db } from '@/lib/firebase'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { useRouter } from 'next/navigation'
+import {
+  createTenantCustomer,
+  getTenantCustomer,
+  getTenantCustomerByUid,
+  updateCustomerLastLogin,
+  linkFirebaseUserToCustomer,
+  type TenantCustomer,
+} from '@/lib/services/tenantCustomerService'
 
 export interface UserData {
   email: string
@@ -30,10 +39,18 @@ export interface UserData {
 interface AuthContextType {
   user: User | null
   userData: UserData | null
+  tenantCustomer: TenantCustomer | null
   loading: boolean
+  // Legacy global auth methods (for admin/promoter)
   signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
   signUp: (email: string, password: string, userData: Partial<UserData>) => Promise<{ success: boolean; error?: string }>
   signInWithGoogle: () => Promise<{ success: boolean; error?: string }>
+  // Tenant-specific auth methods (for customers)
+  signUpForTenant: (email: string, password: string, promoterSlug: string, additionalData?: { firstName?: string; lastName?: string; phone?: string }) => Promise<{ success: boolean; error?: string }>
+  signInToTenant: (email: string, password: string, promoterSlug: string) => Promise<{ success: boolean; error?: string }>
+  signInWithGoogleToTenant: (promoterSlug: string) => Promise<{ success: boolean; error?: string }>
+  // Load tenant customer after login
+  loadTenantCustomer: (promoterSlug: string) => Promise<TenantCustomer | null>
   signOut: () => Promise<void>
   resetPassword: (email: string) => Promise<{ success: boolean; error?: string }>
   isAdmin: boolean
@@ -44,10 +61,15 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   user: null,
   userData: null,
+  tenantCustomer: null,
   loading: true,
   signIn: async () => ({ success: false }),
   signUp: async () => ({ success: false }),
   signInWithGoogle: async () => ({ success: false }),
+  signUpForTenant: async () => ({ success: false }),
+  signInToTenant: async () => ({ success: false }),
+  signInWithGoogleToTenant: async () => ({ success: false }),
+  loadTenantCustomer: async () => null,
   signOut: async () => {},
   resetPassword: async () => ({ success: false }),
   isAdmin: false,
@@ -60,6 +82,7 @@ const googleProvider = new GoogleAuthProvider()
 export function FirebaseAuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [userData, setUserData] = useState<any>(null)
+  const [tenantCustomer, setTenantCustomer] = useState<TenantCustomer | null>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
 
@@ -182,6 +205,180 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
     }
   }
 
+  // ============================================================================
+  // TENANT-SPECIFIC AUTH METHODS (for multi-tenant customer isolation)
+  // ============================================================================
+
+  /**
+   * Sign up a customer for a specific tenant
+   * Creates both Firebase auth user and tenant-specific customer record
+   */
+  const signUpForTenant = async (
+    email: string,
+    password: string,
+    promoterSlug: string,
+    additionalData?: { firstName?: string; lastName?: string; phone?: string }
+  ) => {
+    try {
+      // Check if customer already exists for this tenant
+      const existingCustomer = await getTenantCustomer(promoterSlug, email)
+      if (existingCustomer) {
+        return {
+          success: false,
+          error: 'An account with this email already exists. Please sign in instead.',
+        }
+      }
+
+      // Check if Firebase user exists (may have account on other tenant)
+      let firebaseUser: User
+      try {
+        // Try to create new Firebase user
+        const result = await createUserWithEmailAndPassword(auth, email, password)
+        firebaseUser = result.user
+
+        // Send email verification
+        await sendEmailVerification(result.user)
+      } catch (firebaseError: any) {
+        if (firebaseError.code === 'auth/email-already-in-use') {
+          // User exists in Firebase but not for this tenant
+          // They need to sign in with their existing password
+          return {
+            success: false,
+            error: 'This email is registered on another site. Please use your existing password to sign in, and we\'ll add you to this site.',
+          }
+        }
+        throw firebaseError
+      }
+
+      // Create tenant-specific customer record
+      const result = await createTenantCustomer({
+        promoterSlug,
+        email,
+        firebaseUid: firebaseUser.uid,
+        firstName: additionalData?.firstName,
+        lastName: additionalData?.lastName,
+        phone: additionalData?.phone,
+      })
+
+      if (!result.success) {
+        return { success: false, error: result.error }
+      }
+
+      setTenantCustomer(result.customer || null)
+      return { success: true }
+    } catch (error: any) {
+      console.error('Tenant signup error:', error.code, error.message)
+      return {
+        success: false,
+        error: getAuthErrorMessage(error.code),
+      }
+    }
+  }
+
+  /**
+   * Sign in a customer to a specific tenant
+   * Validates that customer exists for this tenant before allowing access
+   */
+  const signInToTenant = async (
+    email: string,
+    password: string,
+    promoterSlug: string
+  ) => {
+    try {
+      // First check if customer exists for this tenant
+      const customer = await getTenantCustomer(promoterSlug, email)
+
+      if (!customer) {
+        // Check if they have a Firebase account (registered elsewhere)
+        try {
+          const methods = await fetchSignInMethodsForEmail(auth, email)
+          if (methods.length > 0) {
+            return {
+              success: false,
+              error: 'No account found for this site. Would you like to register?',
+            }
+          }
+        } catch {
+          // Ignore errors from fetchSignInMethodsForEmail
+        }
+        return {
+          success: false,
+          error: 'No account found with this email. Please register first.',
+        }
+      }
+
+      // Sign in with Firebase
+      const result = await signInWithEmailAndPassword(auth, email, password)
+
+      // Update last login
+      await updateCustomerLastLogin(customer.id)
+      setTenantCustomer(customer)
+
+      return { success: true }
+    } catch (error: any) {
+      console.error('Tenant sign-in error:', error.code, error.message)
+      return {
+        success: false,
+        error: getAuthErrorMessage(error.code),
+      }
+    }
+  }
+
+  /**
+   * Sign in with Google to a specific tenant
+   * Creates tenant customer record if needed
+   */
+  const signInWithGoogleToTenant = async (promoterSlug: string) => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider)
+      const email = result.user.email || ''
+      const names = result.user.displayName?.split(' ') || []
+
+      // Check if customer exists for this tenant
+      let customer = await getTenantCustomer(promoterSlug, email)
+
+      if (!customer) {
+        // Create new tenant customer
+        const createResult = await createTenantCustomer({
+          promoterSlug,
+          email,
+          firebaseUid: result.user.uid,
+          firstName: names[0],
+          lastName: names.slice(1).join(' '),
+        })
+
+        if (!createResult.success) {
+          return { success: false, error: createResult.error }
+        }
+
+        customer = createResult.customer || null
+      } else {
+        // Update last login
+        await updateCustomerLastLogin(customer.id)
+      }
+
+      setTenantCustomer(customer)
+      return { success: true }
+    } catch (error: any) {
+      console.error('Google tenant sign-in error:', error.code, error.message)
+      return {
+        success: false,
+        error: getAuthErrorMessage(error.code),
+      }
+    }
+  }
+
+  /**
+   * Load tenant customer for current user (used after page refresh)
+   */
+  const loadTenantCustomer = async (promoterSlug: string): Promise<TenantCustomer | null> => {
+    if (!user) return null
+
+    const customer = await getTenantCustomerByUid(promoterSlug, user.uid)
+    setTenantCustomer(customer)
+    return customer
+  }
+
   const resetPassword = async (email: string) => {
     try {
       await sendPasswordResetEmail(auth, email)
@@ -198,6 +395,7 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
   const signOut = async () => {
     try {
       await firebaseSignOut(auth)
+      setTenantCustomer(null)
       router.push('/login')
     } catch (error) {
       console.error('Logout error:', error)
@@ -212,10 +410,15 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
     <AuthContext.Provider value={{
       user,
       userData,
+      tenantCustomer,
       loading,
       signIn,
       signUp,
       signInWithGoogle,
+      signUpForTenant,
+      signInToTenant,
+      signInWithGoogleToTenant,
+      loadTenantCustomer,
       signOut,
       resetPassword,
       isAdmin,

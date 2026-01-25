@@ -11,7 +11,7 @@ export default function RegisterPage() {
   const router = useRouter()
   const slug = params.slug as string
 
-  const { signUp, signInWithGoogle, user } = useFirebaseAuth()
+  const { signUpForTenant, signInWithGoogleToTenant, user, tenantCustomer } = useFirebaseAuth()
 
   const [formData, setFormData] = useState({
     firstName: '',
@@ -25,12 +25,12 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
 
-  // Redirect if already logged in
+  // Redirect if already logged in and has tenant customer
   useEffect(() => {
-    if (user) {
+    if (user && tenantCustomer) {
       router.push(`/p/${slug}`)
     }
-  }, [user, router, slug])
+  }, [user, tenantCustomer, router, slug])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target
@@ -76,7 +76,7 @@ export default function RegisterPage() {
 
     setLoading(true)
 
-    const result = await signUp(formData.email, formData.password, {
+    const result = await signUpForTenant(formData.email, formData.password, slug, {
       firstName: formData.firstName,
       lastName: formData.lastName,
     })
@@ -94,7 +94,7 @@ export default function RegisterPage() {
     setError(null)
     setLoading(true)
 
-    const result = await signInWithGoogle()
+    const result = await signInWithGoogleToTenant(slug)
 
     if (result.success) {
       router.push(`/p/${slug}`)
