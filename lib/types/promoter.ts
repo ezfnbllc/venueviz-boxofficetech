@@ -1,3 +1,24 @@
+/**
+ * Theme override colors - subset of ThemeColors for quick customization
+ * These are applied on top of the base theme
+ */
+export interface PromoterThemeOverrides {
+  colors?: {
+    primary?: string
+    secondary?: string
+    accent?: string
+    background?: string
+    surface?: string
+    text?: string
+    heading?: string
+  }
+  logoUrl?: string
+  faviconUrl?: string
+  // Typography overrides
+  headingFont?: string
+  bodyFont?: string
+}
+
 export interface PromoterProfile {
   id: string
   name: string
@@ -22,6 +43,10 @@ export interface PromoterProfile {
   setupStep?: 'profile' | 'payment' | 'documents'
   createdAt?: string
   updatedAt?: string
+
+  // Theme integration fields
+  themeId?: string                      // Link to TenantTheme document ID
+  themeOverrides?: PromoterThemeOverrides  // Quick customizations on top of base theme
 }
 
 export interface PaymentGateway {

@@ -1,10 +1,10 @@
 /**
  * Button Component
- * Based on Barren theme .main-btn styles
+ * Uses theme CSS variables for colors
  *
- * Primary: Green (#6ac045) background
- * Secondary: White background with green border
- * Outline: Transparent with border
+ * Primary: Uses --color-primary
+ * Secondary: White background with primary border
+ * Outline: Transparent with primary border
  */
 
 import { forwardRef, ButtonHTMLAttributes } from 'react'
@@ -43,30 +43,30 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 
     const variants = {
       primary: `
-        bg-[#6ac045] text-white border-2 border-[#6ac045]
-        hover:bg-[#7ad254] hover:border-[#7ad254]
-        focus:ring-[#6ac045]
+        bg-[var(--color-primary,#6ac045)] text-white border-2 border-[var(--color-primary,#6ac045)]
+        hover:brightness-110 hover:border-[var(--color-primary,#6ac045)]
+        focus:ring-[var(--color-primary,#6ac045)]
       `,
       secondary: `
-        bg-white text-[#1d1d1d] border-2 border-[#efefef]
-        hover:border-[#6ac045] hover:text-[#6ac045]
-        focus:ring-[#6ac045]
+        bg-white text-[var(--color-text,#1d1d1d)] border-2 border-[var(--color-border,#efefef)]
+        hover:border-[var(--color-primary,#6ac045)] hover:text-[var(--color-primary,#6ac045)]
+        focus:ring-[var(--color-primary,#6ac045)]
       `,
       outline: `
-        bg-transparent text-[#6ac045] border-2 border-[#6ac045]
-        hover:bg-[#6ac045] hover:text-white
-        focus:ring-[#6ac045]
+        bg-transparent text-[var(--color-primary,#6ac045)] border-2 border-[var(--color-primary,#6ac045)]
+        hover:bg-[var(--color-primary,#6ac045)] hover:text-white
+        focus:ring-[var(--color-primary,#6ac045)]
       `,
       ghost: `
-        bg-transparent text-[#717171]
-        hover:bg-[#f1f2f3] hover:text-[#000]
-        focus:ring-[#6ac045]
+        bg-transparent text-[var(--color-text-secondary,#717171)]
+        hover:bg-[var(--color-surface,#f1f2f3)] hover:text-[var(--color-text,#000)]
+        focus:ring-[var(--color-primary,#6ac045)]
         border-0
       `,
       danger: `
-        bg-[#EF4444] text-white border-2 border-[#EF4444]
-        hover:bg-[#DC2626] hover:border-[#DC2626]
-        focus:ring-[#EF4444]
+        bg-[var(--color-error,#EF4444)] text-white border-2 border-[var(--color-error,#EF4444)]
+        hover:brightness-90
+        focus:ring-[var(--color-error,#EF4444)]
       `,
     }
 

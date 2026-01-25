@@ -1,6 +1,6 @@
 /**
  * Header Component
- * Based on Barren theme .header and .navbar styles
+ * Uses theme CSS variables for colors
  *
  * Public site header with navigation, logo, auth buttons
  */
@@ -108,7 +108,7 @@ export function Header({
     <header
       className={cn(
         'fixed top-0 left-0 right-0 z-50',
-        'bg-white border-b border-[#efefef]',
+        'bg-[var(--color-background,#fff)] border-b border-[var(--color-border,#efefef)]',
         'shadow-[0px_2px_15px_-9px_rgba(0,0,0,0.05)]',
         className
       )}
@@ -134,7 +134,7 @@ export function Header({
                 priority
               />
             ) : (
-              <span className="text-xl font-bold text-[#000]">{displayName}</span>
+              <span className="text-xl font-bold text-[var(--color-heading,#000)]">{displayName}</span>
             )}
           </Link>
 
@@ -152,8 +152,8 @@ export function Header({
                   className={cn(
                     'px-4 py-2 text-base font-medium rounded-md transition-colors',
                     isActive(item.href)
-                      ? 'text-[#6ac045]'
-                      : 'text-[#000] hover:text-[#6ac045]'
+                      ? 'text-[var(--color-primary,#6ac045)]'
+                      : 'text-[var(--color-text,#000)] hover:text-[var(--color-primary,#6ac045)]'
                   )}
                 >
                   {item.label}
@@ -176,12 +176,12 @@ export function Header({
 
                 {/* Dropdown Menu */}
                 {item.children && activeDropdown === item.label && (
-                  <div className="absolute top-full left-0 mt-1 py-2 bg-white border border-[#efefef] rounded-lg shadow-lg min-w-[200px]">
+                  <div className="absolute top-full left-0 mt-1 py-2 bg-[var(--color-background,#fff)] border border-[var(--color-border,#efefef)] rounded-lg shadow-lg min-w-[200px]">
                     {item.children.map((child) => (
                       <Link
                         key={child.label}
                         href={child.href}
-                        className="block px-4 py-2 text-sm text-[#717171] hover:text-[#6ac045] hover:bg-[#f9f9f9]"
+                        className="block px-4 py-2 text-sm text-[var(--color-text-secondary,#717171)] hover:text-[var(--color-primary,#6ac045)] hover:bg-[var(--color-surface,#f9f9f9)]"
                       >
                         {child.label}
                       </Link>
@@ -198,7 +198,7 @@ export function Header({
               <>
                 {isLoggedIn ? (
                   <div className="flex items-center space-x-3">
-                    <span className="text-sm text-[#717171]">{userName}</span>
+                    <span className="text-sm text-[var(--color-text-secondary,#717171)]">{userName}</span>
                     <Button variant="ghost" size="sm" onClick={onSignOut}>
                       Sign Out
                     </Button>
@@ -221,7 +221,7 @@ export function Header({
 
           {/* Mobile Menu Button */}
           <button
-            className="lg:hidden p-2 text-[#717171] hover:text-[#000]"
+            className="lg:hidden p-2 text-[var(--color-text-secondary,#717171)] hover:text-[var(--color-text,#000)]"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           >
             {mobileMenuOpen ? (
@@ -248,7 +248,7 @@ export function Header({
 
         {/* Mobile Menu */}
         {mobileMenuOpen && (
-          <div className="lg:hidden py-4 border-t border-[#efefef]">
+          <div className="lg:hidden py-4 border-t border-[var(--color-border,#efefef)]">
             <div className="flex flex-col space-y-2">
               {navigation.map((item) => (
                 <div key={item.label}>
@@ -257,8 +257,8 @@ export function Header({
                     className={cn(
                       'block px-4 py-2 text-base font-medium rounded-md',
                       isActive(item.href)
-                        ? 'text-[#6ac045] bg-[#e8f7f7]'
-                        : 'text-[#000] hover:bg-[#f9f9f9]'
+                        ? 'text-[var(--color-primary,#6ac045)] bg-[var(--color-surface,#e8f7f7)]'
+                        : 'text-[var(--color-text,#000)] hover:bg-[var(--color-surface,#f9f9f9)]'
                     )}
                     onClick={() => setMobileMenuOpen(false)}
                   >
@@ -268,7 +268,7 @@ export function Header({
                     <Link
                       key={child.label}
                       href={child.href}
-                      className="block px-8 py-2 text-sm text-[#717171] hover:text-[#6ac045]"
+                      className="block px-8 py-2 text-sm text-[var(--color-text-secondary,#717171)] hover:text-[var(--color-primary,#6ac045)]"
                       onClick={() => setMobileMenuOpen(false)}
                     >
                       {child.label}
@@ -278,7 +278,7 @@ export function Header({
               ))}
 
               {showAuth && (
-                <div className="pt-4 mt-4 border-t border-[#efefef] px-4 space-y-2">
+                <div className="pt-4 mt-4 border-t border-[var(--color-border,#efefef)] px-4 space-y-2">
                   {isLoggedIn ? (
                     <Button variant="outline" className="w-full" onClick={onSignOut}>
                       Sign Out

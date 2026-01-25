@@ -1,6 +1,6 @@
 /**
  * Footer Component
- * Based on Barren theme .footer styles
+ * Uses theme CSS variables for colors
  *
  * Public site footer with links, social, newsletter
  */
@@ -138,7 +138,7 @@ export function Footer({
   const footerSections = sections || defaultSections
 
   return (
-    <footer className={cn('bg-[#1d1d1d] text-white', className)}>
+    <footer className={cn('bg-[var(--color-heading,#1d1d1d)] text-white', className)}>
       <div className="container mx-auto px-4 py-12">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
           {/* Brand Column */}
@@ -155,7 +155,7 @@ export function Footer({
                 <span className="text-xl font-bold">{displayName}</span>
               )}
             </Link>
-            <p className="text-[#a0a0a0] text-sm leading-relaxed mb-6 max-w-sm">
+            <p className="text-gray-400 text-sm leading-relaxed mb-6 max-w-sm">
               {description}
             </p>
 
@@ -168,8 +168,8 @@ export function Footer({
                     href={social.href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-10 h-10 bg-[#2d2d2d] rounded-full flex items-center justify-center
-                             text-[#a0a0a0] hover:bg-[#6ac045] hover:text-white transition-colors"
+                    className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center
+                             text-gray-400 hover:bg-[var(--color-primary,#6ac045)] hover:text-white transition-colors"
                   >
                     {socialIcons[social.platform]}
                   </a>
@@ -187,7 +187,7 @@ export function Footer({
                   <li key={link.label}>
                     <Link
                       href={link.href}
-                      className="text-[#a0a0a0] text-sm hover:text-[#6ac045] transition-colors"
+                      className="text-gray-400 text-sm hover:text-[var(--color-primary,#6ac045)] transition-colors"
                     >
                       {link.label}
                     </Link>
@@ -200,24 +200,24 @@ export function Footer({
 
         {/* Newsletter */}
         {showNewsletter && (
-          <div className="mt-12 pt-8 border-t border-[#2d2d2d]">
+          <div className="mt-12 pt-8 border-t border-gray-700">
             <div className="max-w-md">
               <h4 className="text-white font-semibold mb-2">Subscribe to our newsletter</h4>
-              <p className="text-[#a0a0a0] text-sm mb-4">
+              <p className="text-gray-400 text-sm mb-4">
                 Get the latest events and updates delivered to your inbox.
               </p>
               <form className="flex">
                 <input
                   type="email"
                   placeholder="Enter your email"
-                  className="flex-1 px-4 py-2.5 bg-[#2d2d2d] text-white rounded-l-md
-                           border-0 outline-none placeholder:text-[#717171]
-                           focus:ring-2 focus:ring-[#6ac045]"
+                  className="flex-1 px-4 py-2.5 bg-gray-700 text-white rounded-l-md
+                           border-0 outline-none placeholder:text-gray-500
+                           focus:ring-2 focus:ring-[var(--color-primary,#6ac045)]"
                 />
                 <button
                   type="submit"
-                  className="px-6 py-2.5 bg-[#6ac045] text-white font-medium rounded-r-md
-                           hover:bg-[#7ad254] transition-colors"
+                  className="px-6 py-2.5 bg-[var(--color-primary,#6ac045)] text-white font-medium rounded-r-md
+                           hover:brightness-110 transition-all"
                 >
                   Subscribe
                 </button>
@@ -227,8 +227,8 @@ export function Footer({
         )}
 
         {/* Copyright */}
-        <div className="mt-12 pt-8 border-t border-[#2d2d2d] text-center">
-          <p className="text-[#a0a0a0] text-sm">
+        <div className="mt-12 pt-8 border-t border-gray-700 text-center">
+          <p className="text-gray-400 text-sm">
             {copyright || `© ${currentYear} ${displayName}. All rights reserved.`}
           </p>
         </div>
