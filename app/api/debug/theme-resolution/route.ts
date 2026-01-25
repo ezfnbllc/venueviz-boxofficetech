@@ -12,13 +12,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAdminFirestore } from '@/lib/firebase-admin'
 import { getMasterTheme, getThemeForTenant, MASTER_TENANT_ID } from '@/lib/services/themeResolutionService'
-import { getPromoterBySlug, getThemeConfigForPromoter, generateThemeCSSBySlug } from '@/lib/services/promoterThemeService'
+import { getPromoterBySlug, getThemeConfigForPromoter, generateThemeCSSBySlug, clearPromoterThemeCache } from '@/lib/services/promoterThemeService'
+import { clearThemeCache } from '@/lib/services/themeResolutionService'
 import { DEFAULT_THEME_CONFIG } from '@/lib/types/cms'
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const promoterSlug = searchParams.get('slug') || 'bot'
+    const clearCache = searchParams.get('clearCache') === 'true'
+
+    // Clear caches if requested
+    if (clearCache) {
+      clearPromoterThemeCache()
+      clearThemeCache()
+      console.log('[Debug] Cleared all theme caches')
+    }
 
     const db = getAdminFirestore()
     const diagnostics: Record<string, unknown> = {}
@@ -174,6 +183,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       timestamp: new Date().toISOString(),
       promoterSlug,
+      cacheCleared: clearCache,
       diagnostics,
     }, { status: 200 })
 
