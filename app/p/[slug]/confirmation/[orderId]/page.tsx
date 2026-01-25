@@ -10,9 +10,11 @@ import { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
+import Stripe from 'stripe'
 import Layout from '@/components/public/Layout'
 import TicketCard from '@/components/shared/TicketCard'
 import WalletButtons from '@/components/wallet/WalletButtons'
+import { getAdminFirestore } from '@/lib/firebase-admin'
 import {
   getOrderById,
   getEventDetails,
@@ -25,6 +27,90 @@ import {
   type OrderData,
   type EventDetails,
 } from '@/lib/services/orderService'
+
+/**
+ * Fetch payment method details from Stripe
+ * Used when webhook hasn't processed yet but we need to show payment info
+ */
+async function getPaymentMethodFromStripe(
+  paymentIntentId: string,
+  promoterSlug: string
+): Promise<{ method: string; brand: string; last4?: string } | null> {
+  try {
+    const db = getAdminFirestore()
+
+    // Get promoter's Stripe credentials
+    const promoterSnapshot = await db.collection('promoters')
+      .where('slug', '==', promoterSlug)
+      .limit(1)
+      .get()
+
+    if (promoterSnapshot.empty) return null
+
+    const promoterId = promoterSnapshot.docs[0].id
+    const gatewaySnapshot = await db.collection('payment_gateways')
+      .where('promoterId', '==', promoterId)
+      .limit(1)
+      .get()
+
+    if (gatewaySnapshot.empty) return null
+
+    const gateway = gatewaySnapshot.docs[0].data()
+    if (gateway.provider !== 'stripe' || !gateway.credentials?.secretKey) return null
+
+    const stripe = new Stripe(gateway.credentials.secretKey, { apiVersion: '2023-10-16' })
+
+    // Fetch payment intent
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId)
+
+    // Get charge details
+    const chargeId = paymentIntent.latest_charge as string
+    if (!chargeId) return null
+
+    const charge = await stripe.charges.retrieve(chargeId)
+    const pmDetails = charge.payment_method_details
+
+    if (!pmDetails) return null
+
+    // Extract payment method info
+    if (pmDetails.card) {
+      return {
+        method: 'card',
+        brand: pmDetails.card.brand || 'Card',
+        last4: pmDetails.card.last4 || undefined,
+      }
+    } else if ((pmDetails as any).amazon_pay) {
+      return { method: 'amazon_pay', brand: 'Amazon Pay' }
+    } else if ((pmDetails as any).link) {
+      return { method: 'link', brand: 'Link' }
+    } else if ((pmDetails as any).paypal) {
+      return { method: 'paypal', brand: 'PayPal' }
+    } else if ((pmDetails as any).cashapp) {
+      return { method: 'cashapp', brand: 'Cash App' }
+    } else if (pmDetails.type) {
+      const typeDisplayNames: Record<string, string> = {
+        amazon_pay: 'Amazon Pay',
+        link: 'Link',
+        paypal: 'PayPal',
+        cashapp: 'Cash App',
+        afterpay_clearpay: 'Afterpay',
+        klarna: 'Klarna',
+        affirm: 'Affirm',
+        apple_pay: 'Apple Pay',
+        google_pay: 'Google Pay',
+      }
+      return {
+        method: pmDetails.type,
+        brand: typeDisplayNames[pmDetails.type] || pmDetails.type,
+      }
+    }
+
+    return null
+  } catch (error) {
+    console.error('Error fetching payment method from Stripe:', error)
+    return null
+  }
+}
 
 interface PageProps {
   params: Promise<{ slug: string; orderId: string }>
@@ -91,7 +177,19 @@ export default async function ConfirmationPage({ params, searchParams }: PagePro
   const venueLocation = formatVenueLocation(event?.venue)
 
   // Get payment method display
-  const paymentMethod = formatPaymentMethod(order)
+  // If not in order yet (webhook hasn't fired), fetch from Stripe directly
+  let paymentMethod = formatPaymentMethod(order)
+  if (!paymentMethod && resolvedSearchParams.payment_intent) {
+    const stripePayment = await getPaymentMethodFromStripe(
+      resolvedSearchParams.payment_intent,
+      slug
+    )
+    if (stripePayment) {
+      paymentMethod = stripePayment.last4
+        ? `${stripePayment.brand} ending in ${stripePayment.last4}`
+        : stripePayment.brand
+    }
+  }
 
   return (
     <Layout promoterSlug={slug}>
@@ -257,9 +355,27 @@ export default async function ConfirmationPage({ params, searchParams }: PagePro
                       <p className="font-medium text-gray-900 dark:text-white">{order.orderId}</p>
                     </div>
                     <div>
+                      <span className="text-gray-500 dark:text-gray-400">Order Date</span>
+                      <p className="font-medium text-gray-900 dark:text-white">
+                        {order.createdAt ? formatEventDate(order.createdAt, {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                          hour: 'numeric',
+                          minute: '2-digit',
+                        }) : 'N/A'}
+                      </p>
+                    </div>
+                    <div>
                       <span className="text-gray-500 dark:text-gray-400">Email</span>
                       <p className="font-medium text-gray-900 dark:text-white">{order.customerEmail}</p>
                     </div>
+                    {order.customerPhone && (
+                      <div>
+                        <span className="text-gray-500 dark:text-gray-400">Phone</span>
+                        <p className="font-medium text-gray-900 dark:text-white">{order.customerPhone}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
