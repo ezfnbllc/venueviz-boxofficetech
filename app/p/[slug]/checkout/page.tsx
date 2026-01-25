@@ -195,10 +195,14 @@ function BillingForm({
   formData,
   setFormData,
   emailError,
+  existingCustomer,
+  promoterSlug,
 }: {
   formData: { firstName: string; lastName: string; email: string; address: string; city: string; state: string; zipCode: string; country: string }
   setFormData: React.Dispatch<React.SetStateAction<typeof formData>>
   emailError?: string
+  existingCustomer?: { exists: boolean; firstName?: string; orderCount?: number } | null
+  promoterSlug: string
 }) {
   return (
     <div className="main-card">
@@ -206,6 +210,36 @@ function BillingForm({
         <h4>Billing Information</h4>
       </div>
       <div className="p-6">
+        {/* Existing Customer Notification */}
+        {existingCustomer?.exists && (
+          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <p className="font-medium text-green-800">
+                  Welcome back{existingCustomer.firstName ? `, ${existingCustomer.firstName}` : ''}!
+                </p>
+                <p className="text-sm text-green-700 mt-1">
+                  We found your account. Your tickets will be added to your existing account and you can view them anytime by{' '}
+                  <a href={`/p/${promoterSlug}/login`} className="underline font-medium hover:text-green-900">
+                    signing in
+                  </a>
+                  {' '}after your purchase.
+                  {existingCustomer.orderCount && existingCustomer.orderCount > 0 && (
+                    <span className="block mt-1 text-green-600">
+                      You have {existingCustomer.orderCount} previous order{existingCustomer.orderCount > 1 ? 's' : ''} with us.
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="form-group">
             <label className="form-label">First Name*</label>
@@ -516,7 +550,9 @@ export default function CheckoutPage() {
   })
   const [emailError, setEmailError] = useState<string | null>(null)
   const [isRedirecting, setIsRedirecting] = useState(false)
+  const [existingCustomer, setExistingCustomer] = useState<{ exists: boolean; firstName?: string; orderCount?: number } | null>(null)
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const customerCheckTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Fetch promoter's payment configuration on mount
   useEffect(() => {
@@ -543,6 +579,48 @@ export default function CheckoutPage() {
       fetchPaymentConfig()
     }
   }, [slug])
+
+  // Check for existing customer when email changes
+  useEffect(() => {
+    // Clear any pending timer
+    if (customerCheckTimerRef.current) {
+      clearTimeout(customerCheckTimerRef.current)
+    }
+
+    // Reset existing customer state if email is empty or invalid
+    if (!formData.email || !isValidEmail(formData.email)) {
+      setExistingCustomer(null)
+      return
+    }
+
+    // Debounce the API call
+    customerCheckTimerRef.current = setTimeout(async () => {
+      try {
+        const response = await fetch('/api/customers/check-guest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: formData.email,
+            promoterSlug: slug,
+          }),
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          setExistingCustomer(data)
+        }
+      } catch (error) {
+        console.error('Error checking customer:', error)
+        setExistingCustomer(null)
+      }
+    }, 500) // 500ms debounce
+
+    return () => {
+      if (customerCheckTimerRef.current) {
+        clearTimeout(customerCheckTimerRef.current)
+      }
+    }
+  }, [formData.email, slug])
 
   // Memoize the Stripe promise to avoid recreating it on every render
   const stripePromise = useMemo(() => {
@@ -879,7 +957,13 @@ export default function CheckoutPage() {
             {/* Left Column - Forms */}
             <div className="lg:col-span-2 space-y-6">
               {/* Billing Information */}
-              <BillingForm formData={formData} setFormData={setFormData} emailError={emailError || undefined} />
+              <BillingForm
+                formData={formData}
+                setFormData={setFormData}
+                emailError={emailError || undefined}
+                existingCustomer={existingCustomer}
+                promoterSlug={slug}
+              />
 
               {/* Payment Section */}
               {paymentConfigLoading ? (

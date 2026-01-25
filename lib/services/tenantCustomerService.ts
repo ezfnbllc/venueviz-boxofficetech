@@ -390,3 +390,102 @@ export async function incrementCustomerOrderStats(
     console.error('Error incrementing customer order stats:', error)
   }
 }
+
+/**
+ * Check if customer exists for guest checkout notification
+ * Returns basic info without sensitive data
+ */
+export async function checkGuestCustomerExists(
+  promoterSlug: string,
+  email: string
+): Promise<{ exists: boolean; firstName?: string; orderCount?: number }> {
+  try {
+    const customer = await getTenantCustomer(promoterSlug, email)
+    if (!customer) {
+      return { exists: false }
+    }
+    return {
+      exists: true,
+      firstName: customer.firstName,
+      orderCount: customer.orderCount,
+    }
+  } catch (error) {
+    console.error('Error checking guest customer:', error)
+    return { exists: false }
+  }
+}
+
+/**
+ * Create or get guest customer (for guest checkout)
+ * Creates a minimal customer record if doesn't exist
+ */
+export async function getOrCreateGuestCustomer(
+  promoterSlug: string,
+  email: string,
+  customerData?: { firstName?: string; lastName?: string; phone?: string }
+): Promise<{ customer: TenantCustomer | null; isNew: boolean; error?: string }> {
+  try {
+    // Check if customer already exists
+    const existing = await getTenantCustomer(promoterSlug, email)
+    if (existing) {
+      // Update with any new info provided
+      if (customerData && (customerData.firstName || customerData.lastName || customerData.phone)) {
+        const updates: any = {}
+        if (customerData.firstName && !existing.firstName) updates.firstName = customerData.firstName
+        if (customerData.lastName && !existing.lastName) updates.lastName = customerData.lastName
+        if (customerData.phone && !existing.phone) updates.phone = customerData.phone
+
+        if (Object.keys(updates).length > 0) {
+          await updateTenantCustomer(existing.id, updates)
+        }
+      }
+      return { customer: existing, isNew: false }
+    }
+
+    // Get promoter ID
+    const promotersRef = collection(db, 'promoters')
+    const q = query(promotersRef, where('slug', '==', promoterSlug), limit(1))
+    const snapshot = await getDocs(q)
+
+    if (snapshot.empty) {
+      return { customer: null, isNew: false, error: 'Invalid site' }
+    }
+
+    const promoterId = snapshot.docs[0].id
+    const customersRef = collection(db, 'customers')
+    const customerDoc = doc(customersRef)
+    const now = Timestamp.now()
+
+    // Create guest customer (no firebaseUid yet)
+    const newCustomerData = {
+      promoterId,
+      promoterSlug,
+      email: email.toLowerCase(),
+      firebaseUid: '', // Empty for guest - will be linked if they register later
+      firstName: customerData?.firstName || null,
+      lastName: customerData?.lastName || null,
+      phone: customerData?.phone || null,
+      emailVerified: false,
+      isGuest: true, // Flag to identify guest customers
+      createdAt: now,
+      updatedAt: now,
+      orderCount: 0,
+      totalSpent: 0,
+    }
+
+    await setDoc(customerDoc, newCustomerData)
+
+    return {
+      customer: {
+        id: customerDoc.id,
+        ...newCustomerData,
+        createdAt: now.toDate(),
+        updatedAt: now.toDate(),
+      },
+      isNew: true,
+    }
+  } catch (error: any) {
+    console.error('Error getting/creating guest customer:', error)
+    return { customer: null, isNew: false, error: error.message }
+  }
+}
