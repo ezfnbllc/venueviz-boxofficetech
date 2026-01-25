@@ -402,13 +402,13 @@ async function createGuestAccount(
         updatedAt: new Date(),
       }
 
-      // Update phone if not set and provided
-      if (phone && !customerData.phone) {
+      // Always update phone if provided (use most recent contact info)
+      if (phone) {
         updateData.phone = phone
       }
 
-      // Update address if not set and provided
-      if (billingAddress && !customerData.address) {
+      // Always update address if provided (use most recent billing address)
+      if (billingAddress && (billingAddress.street || billingAddress.city)) {
         updateData.address = {
           street: billingAddress.street || null,
           city: billingAddress.city || null,

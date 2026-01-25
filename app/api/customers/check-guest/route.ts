@@ -38,11 +38,20 @@ export async function POST(request: NextRequest) {
 
     const customer = customersSnapshot.docs[0].data()
 
+    // Count actual orders from orders collection (more accurate than cached orderCount)
+    const ordersSnapshot = await db.collection('orders')
+      .where('promoterSlug', '==', promoterSlug)
+      .where('customerEmail', '==', email.toLowerCase())
+      .where('status', 'in', ['completed', 'confirmed'])
+      .get()
+
+    const actualOrderCount = ordersSnapshot.size
+
     // Return limited info for privacy
     return NextResponse.json({
       exists: true,
       firstName: customer.firstName || null,
-      orderCount: customer.orderCount || 0,
+      orderCount: actualOrderCount,
       isGuest: customer.isGuest || false,
     })
   } catch (error) {
