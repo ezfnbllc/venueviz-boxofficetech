@@ -177,63 +177,65 @@ export function generateInsights(metrics: DashboardMetrics): AIInsight[] {
 }
 
 /**
- * Generate tenant-specific insights for master admins
+ * Generate promoter-specific insights for master admins
+ * Note: In this system, promoters = tenants
  */
-export function generateTenantInsights(tenants: any[]): AIInsight[] {
+export function generateTenantInsights(promoters: any[]): AIInsight[] {
   const insights: AIInsight[] = []
 
-  if (tenants.length === 0) {
+  if (promoters.length === 0) {
     insights.push({
-      id: 'no-tenants',
+      id: 'no-promoters',
       type: 'alert',
-      title: 'No Tenants Yet',
-      description: 'Onboard your first tenant to start growing your platform.',
+      title: 'No Promoters Yet',
+      description: 'Onboard your first promoter to start growing your platform.',
       priority: 'high',
-      actionLabel: 'Add Tenant',
-      actionHref: '/admin/white-label',
+      actionLabel: 'Add Promoter',
+      actionHref: '/admin/promoters',
       icon: '🏢',
     })
     return insights
   }
 
-  // Tenant health analysis
-  const activeTenants = tenants.filter(t => t.status === 'active').length
-  const pendingTenants = tenants.filter(t => t.status === 'pending').length
-  const suspendedTenants = tenants.filter(t => t.status === 'suspended').length
+  // Promoter health analysis
+  const activePromoters = promoters.filter(t => t.active === true).length
+  const inactivePromoters = promoters.filter(t => t.active === false).length
+  const advancedPromoters = promoters.filter(t => t.brandingType === 'advanced').length
+  const basicPromoters = promoters.filter(t => t.brandingType === 'basic').length
 
-  if (pendingTenants > 0) {
+  if (inactivePromoters > 0) {
     insights.push({
-      id: 'pending-tenants',
+      id: 'inactive-promoters',
       type: 'alert',
-      title: `${pendingTenants} Tenant${pendingTenants > 1 ? 's' : ''} Pending Activation`,
-      description: 'Review and activate pending tenants to help them get started.',
-      priority: 'high',
-      actionLabel: 'Review Tenants',
-      actionHref: '/admin/white-label',
-      icon: '⏳',
-    })
-  }
-
-  if (suspendedTenants > 0) {
-    insights.push({
-      id: 'suspended-tenants',
-      type: 'alert',
-      title: `${suspendedTenants} Suspended Tenant${suspendedTenants > 1 ? 's' : ''}`,
-      description: 'Some tenants have been suspended. Review their status and take appropriate action.',
+      title: `${inactivePromoters} Inactive Promoter${inactivePromoters > 1 ? 's' : ''}`,
+      description: 'Some promoters are inactive. Review their status and re-engage them.',
       priority: 'medium',
-      actionLabel: 'View Suspended',
-      actionHref: '/admin/white-label?status=suspended',
+      actionLabel: 'View Promoters',
+      actionHref: '/admin/promoters',
       icon: '⚠️',
     })
   }
 
-  if (activeTenants >= 5) {
+  if (basicPromoters > advancedPromoters && basicPromoters >= 2) {
+    insights.push({
+      id: 'upgrade-opportunity',
+      type: 'opportunity',
+      title: 'Upgrade Opportunity',
+      description: `${basicPromoters} promoters are on basic branding. Consider upgrading them to advanced for better customization.`,
+      priority: 'low',
+      actionLabel: 'View Promoters',
+      actionHref: '/admin/promoters',
+      icon: '💡',
+    })
+  }
+
+  if (activePromoters >= 3) {
     insights.push({
       id: 'growth',
       type: 'trend',
       title: 'Platform Growing Strong',
-      description: `You have ${activeTenants} active tenants! Consider expanding your feature set to drive more value.`,
-      metric: `${activeTenants} active`,
+      description: `You have ${activePromoters} active promoters! Keep up the great work.`,
+      metric: `${activePromoters} active`,
       priority: 'low',
       icon: '🚀',
     })

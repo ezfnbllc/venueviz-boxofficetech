@@ -23,10 +23,9 @@ export default function AdminDashboard() {
     selectedTenantId,
     setSelectedTenantId,
     currentTenant,
-    tenantUser,
     promoterId,
     isMasterAdmin,
-    isTenantAdmin,
+    isPromoter,
     scopeLabel,
   } = useTenantContext()
 
@@ -54,28 +53,19 @@ export default function AdminDashboard() {
         let filteredEvents = events
         let filteredOrders = orders
 
-        // Filter by selected tenant (for master admin) or current tenant
-        const tenantIdToFilter = selectedTenantId || (isTenantAdmin ? currentTenant?.id : null)
+        // Determine which promoter to filter by:
+        // - For master admin with selection: use selectedTenantId (which is promoter ID)
+        // - For promoter users: use their promoterId
+        const promoterIdToFilter = selectedTenantId || (isPromoter ? promoterId : null)
 
-        if (tenantIdToFilter) {
-          // Filter events by tenant
+        if (promoterIdToFilter) {
+          // Filter events by promoter ID
           filteredEvents = events.filter((event: any) => {
-            const eventTenantId = event.tenantId || event.promoter?.tenantId
-            return eventTenantId === tenantIdToFilter
+            const eventPromoterId = event.promoter?.promoterId || event.promoterId
+            return eventPromoterId === promoterIdToFilter
           })
 
           // Filter orders for those events
-          const eventIds = new Set(filteredEvents.map((e: any) => e.id))
-          filteredOrders = orders.filter((order: any) => eventIds.has(order.eventId))
-        }
-
-        // Filter by promoter for promoter users
-        if (promoterId && !isMasterAdmin && !isTenantAdmin) {
-          filteredEvents = events.filter((event: any) => {
-            const eventPromoterId = event.promoter?.promoterId || event.promoterId
-            return eventPromoterId === promoterId
-          })
-
           const eventIds = new Set(filteredEvents.map((e: any) => e.id))
           filteredOrders = orders.filter((order: any) => eventIds.has(order.eventId))
         }
@@ -142,10 +132,9 @@ export default function AdminDashboard() {
   }, [
     contextLoading,
     selectedTenantId,
-    currentTenant?.id,
     promoterId,
     isMasterAdmin,
-    isTenantAdmin,
+    isPromoter,
     allTenants,
   ])
 
@@ -182,11 +171,11 @@ export default function AdminDashboard() {
         />
       )}
 
-      {/* Tenant Admin: Tenant Banner */}
-      {isTenantAdmin && currentTenant && (
+      {/* Promoter: Show their promoter info */}
+      {isPromoter && currentTenant && (
         <TenantInfoBanner
           tenant={currentTenant}
-          tenantRole={tenantUser?.role}
+          tenantRole="Promoter"
         />
       )}
 
