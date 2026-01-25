@@ -51,6 +51,15 @@ function PagesPageContent() {
     error: null,
   })
 
+  // System pages initialization state
+  const [systemPagesStatus, setSystemPagesStatus] = useState<{
+    initialized: boolean
+    existing: number
+    total: number
+    missing: string[]
+  } | null>(null)
+  const [initializingPages, setInitializingPages] = useState(false)
+
   const { effectivePromoterId, isAdmin } = usePromoterAccess()
   const { user } = useFirebaseAuth()
 
@@ -121,6 +130,57 @@ function PagesPageContent() {
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  // Check system pages status
+  const checkSystemPagesStatus = useCallback(async () => {
+    if (!tenantId) return
+
+    try {
+      const response = await fetch(`/api/cms/pages?action=checkSystemPages&tenantId=${tenantId}`)
+      const data = await response.json()
+      setSystemPagesStatus(data)
+    } catch (error) {
+      console.error('Error checking system pages:', error)
+    }
+  }, [tenantId])
+
+  useEffect(() => {
+    if (tenantId && themes.length > 0) {
+      checkSystemPagesStatus()
+    }
+  }, [tenantId, themes.length, checkSystemPagesStatus])
+
+  // Initialize system pages
+  const handleInitializeSystemPages = async () => {
+    if (!tenantId || !user || !selectedThemeId) return
+
+    setInitializingPages(true)
+    try {
+      const response = await fetch('/api/cms/pages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'initializeSystemPages',
+          tenantId,
+          themeId: selectedThemeId,
+          userId: user.uid,
+        }),
+      })
+
+      const data = await response.json()
+      if (response.ok) {
+        setMessage({ type: 'success', text: data.message })
+        loadData()
+        checkSystemPagesStatus()
+      } else {
+        throw new Error(data.error || 'Failed to initialize pages')
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Initialization failed' })
+    } finally {
+      setInitializingPages(false)
+    }
+  }
 
   // Generate slug from title
   const generateSlug = (title: string) => {
@@ -697,6 +757,52 @@ function PagesPageContent() {
       {/* Page List View */}
       {viewMode === 'list' && (
         <div className="space-y-4">
+          {/* System Pages Initialization Banner */}
+          {systemPagesStatus && !systemPagesStatus.initialized && selectedThemeId && (
+            <div className="bg-gradient-to-r from-purple-600/10 to-blue-600/10 border border-purple-500/20 rounded-xl p-6">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-full bg-purple-500/20 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-6 h-6 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-1">
+                    Initialize System Pages
+                  </h3>
+                  <p className="text-slate-600 dark:text-gray-400 mb-3">
+                    Set up the core pages for your site: Home, Events, About, Contact, Terms, Privacy, and more.
+                    These pages will be automatically configured with your theme settings.
+                  </p>
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={handleInitializeSystemPages}
+                      disabled={initializingPages}
+                      className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-600/50 text-white rounded-lg transition-colors font-medium flex items-center gap-2"
+                    >
+                      {initializingPages ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-white"></div>
+                          Initializing...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                          Initialize {systemPagesStatus.total - systemPagesStatus.existing} Pages
+                        </>
+                      )}
+                    </button>
+                    <span className="text-sm text-slate-500 dark:text-gray-400">
+                      {systemPagesStatus.existing} of {systemPagesStatus.total} pages exist
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {pages.length === 0 ? (
             <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-12 border border-slate-200 dark:border-white/10 text-center">
               <svg className="w-16 h-16 text-slate-300 dark:text-gray-600 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -706,14 +812,37 @@ function PagesPageContent() {
                 No Pages Yet
               </h3>
               <p className="text-slate-600 dark:text-gray-400 mb-6">
-                Create your first page to get started.
+                Initialize system pages or create a custom page to get started.
               </p>
-              <button
-                onClick={() => setViewMode('create')}
-                className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
-              >
-                Create Your First Page
-              </button>
+              <div className="flex justify-center gap-4">
+                {systemPagesStatus && !systemPagesStatus.initialized && selectedThemeId && (
+                  <button
+                    onClick={handleInitializeSystemPages}
+                    disabled={initializingPages}
+                    className="px-6 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-600/50 text-white rounded-lg transition-colors flex items-center gap-2"
+                  >
+                    {initializingPages ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-white"></div>
+                        Initializing...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        Initialize System Pages
+                      </>
+                    )}
+                  </button>
+                )}
+                <button
+                  onClick={() => setViewMode('create')}
+                  className="px-6 py-3 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-700 dark:text-white rounded-lg transition-colors"
+                >
+                  Create Custom Page
+                </button>
+              </div>
             </div>
           ) : (
             <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl border border-slate-200 dark:border-white/10 overflow-hidden">
@@ -747,15 +876,22 @@ function PagesPageContent() {
                       className="border-b border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
                     >
                       <td className="py-4 px-6">
-                        <div>
-                          <p className="text-slate-900 dark:text-white font-medium">
-                            {page.title}
-                          </p>
-                          {page.showInNav && (
-                            <p className="text-xs text-slate-500 dark:text-gray-400 mt-1">
-                              Shown in navigation
-                            </p>
+                        <div className="flex items-center gap-2">
+                          {page.isProtected && (
+                            <svg className="w-4 h-4 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" title="Protected system page">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            </svg>
                           )}
+                          <div>
+                            <p className="text-slate-900 dark:text-white font-medium">
+                              {page.title}
+                            </p>
+                            {page.showInNav && (
+                              <p className="text-xs text-slate-500 dark:text-gray-400 mt-1">
+                                Shown in navigation
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="py-4 px-6">
@@ -808,8 +944,13 @@ function PagesPageContent() {
                           </button>
                           <button
                             onClick={() => handleDelete(page.id)}
-                            className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded text-sm transition-colors"
-                            title="Delete page"
+                            disabled={page.isProtected}
+                            className={`px-3 py-1.5 rounded text-sm transition-colors ${
+                              page.isProtected
+                                ? 'bg-slate-500/10 text-slate-400 cursor-not-allowed'
+                                : 'bg-red-500/20 hover:bg-red-500/30 text-red-400'
+                            }`}
+                            title={page.isProtected ? 'System pages cannot be deleted' : 'Delete page'}
                           >
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

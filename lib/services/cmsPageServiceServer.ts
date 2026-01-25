@@ -13,6 +13,8 @@ import {
   PageTranslation,
   PageSEO,
   SectionType,
+  PageType,
+  SystemPageType,
 } from '@/lib/types/cms'
 
 // ============================================================================
@@ -46,9 +48,13 @@ export async function createPageServer(
   data: {
     title: string
     slug: string
-    type?: 'static' | 'dynamic' | 'system'
-    systemType?: 'home' | 'events' | 'event-detail' | 'cart' | 'checkout'
+    type?: PageType
+    systemType?: SystemPageType
     templateId?: string
+    isProtected?: boolean
+    description?: string
+    showInNav?: boolean
+    navOrder?: number
   },
   userId: string
 ): Promise<TenantPage> {
@@ -63,7 +69,7 @@ export async function createPageServer(
     themeId,
     title: data.title,
     slug: data.slug,
-    description: '',
+    description: data.description || '',
     defaultLanguage: 'en',
     availableLanguages: ['en'],
     translations: {},
@@ -72,8 +78,8 @@ export async function createPageServer(
     templateId: data.templateId || '',
     sections: [],
     status: 'draft',
-    showInNav: true,
-    navOrder: 0,
+    showInNav: data.showInNav ?? true,
+    navOrder: data.navOrder ?? 0,
     createdAt: now,
     updatedAt: now,
     createdBy: userId,
@@ -83,6 +89,9 @@ export async function createPageServer(
   // Only add optional fields if they have values
   if (data.systemType) {
     page.systemType = data.systemType
+  }
+  if (data.isProtected) {
+    page.isProtected = data.isProtected
   }
 
   await pageRef.set(page)

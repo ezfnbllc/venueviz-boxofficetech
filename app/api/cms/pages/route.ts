@@ -33,6 +33,10 @@ import {
   publishTranslationServer,
   removeLanguageServer,
 } from '@/lib/services/cmsPageServiceServer'
+import {
+  initializeSystemPages,
+  areSystemPagesInitialized,
+} from '@/lib/services/systemPageSeederService'
 import { SectionType } from '@/lib/types/cms'
 
 // ============================================================================
@@ -69,6 +73,12 @@ export async function GET(request: NextRequest) {
     if (action === 'published' && tenantId) {
       const pages = await getPublishedPagesServer(tenantId)
       return NextResponse.json({ pages })
+    }
+
+    // Check if system pages are initialized
+    if (action === 'checkSystemPages' && tenantId) {
+      const status = await areSystemPagesInitialized(tenantId)
+      return NextResponse.json(status)
     }
 
     // List all pages for tenant
@@ -120,6 +130,22 @@ export async function POST(request: NextRequest) {
         }, userId)
 
         return NextResponse.json({ page }, { status: 201 })
+      }
+
+      // Initialize system pages for a tenant
+      case 'initializeSystemPages': {
+        if (!tenantId || !themeId) {
+          return NextResponse.json(
+            { error: 'Tenant ID and theme ID required' },
+            { status: 400 }
+          )
+        }
+
+        const result = await initializeSystemPages(tenantId, themeId, userId)
+        return NextResponse.json({
+          message: `System pages initialized. Created: ${result.created.length}, Skipped: ${result.skipped.length}`,
+          ...result,
+        }, { status: 201 })
       }
 
       // Add section to page
@@ -366,6 +392,19 @@ export async function DELETE(request: NextRequest) {
 
     if (!pageId) {
       return NextResponse.json({ error: 'Page ID required' }, { status: 400 })
+    }
+
+    // Check if page is protected (system pages cannot be deleted)
+    const page = await getPageServer(pageId)
+    if (!page) {
+      return NextResponse.json({ error: 'Page not found' }, { status: 404 })
+    }
+
+    if (page.isProtected) {
+      return NextResponse.json(
+        { error: 'Cannot delete protected system page. System pages are required for your site to function.' },
+        { status: 403 }
+      )
     }
 
     await deletePageServer(pageId)

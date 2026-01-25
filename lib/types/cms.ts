@@ -226,6 +226,25 @@ export interface DetectedSlot {
 // PAGE TYPES
 // ============================================================================
 
+export type PageType = 'static' | 'dynamic' | 'system' | 'custom' | 'landing'
+
+export type SystemPageType =
+  | 'home'
+  | 'events'
+  | 'event-detail'
+  | 'cart'
+  | 'checkout'
+  | 'about'
+  | 'contact'
+  | 'privacy'
+  | 'terms'
+  | 'faq'
+  | 'venues'
+  | 'venue-detail'
+  | 'account'
+  | 'login'
+  | 'register'
+
 export interface TenantPage {
   id: string
   tenantId: string
@@ -247,8 +266,9 @@ export interface TenantPage {
   seo: PageSEO
 
   // Page Type
-  type: 'static' | 'dynamic' | 'system'
-  systemType?: 'home' | 'events' | 'event-detail' | 'cart' | 'checkout'
+  type: PageType
+  systemType?: SystemPageType
+  isProtected?: boolean                  // System pages cannot be deleted
 
   // Template
   templateId: string
