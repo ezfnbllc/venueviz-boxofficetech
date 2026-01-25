@@ -197,7 +197,9 @@ export async function POST(request: NextRequest) {
               orderData.customerName,
               orderData.promoterSlug,
               orderDoc.id,
-              orderData.pricing?.total || orderData.total || 0
+              orderData.pricing?.total || orderData.total || 0,
+              orderData.customerPhone,
+              orderData.billingAddress
             )
           }
         }
@@ -432,7 +434,9 @@ async function createGuestAccount(
   customerName: string,
   promoterSlug: string,
   orderId: string,
-  orderTotal: number
+  orderTotal: number,
+  phone?: string,
+  billingAddress?: { street?: string; city?: string; state?: string; zip?: string; country?: string }
 ): Promise<void> {
   try {
     const normalizedEmail = email.toLowerCase()
@@ -458,17 +462,35 @@ async function createGuestAccount(
     const promoterId = promoterSnapshot.docs[0].id
 
     if (!existingCustomer.empty) {
-      // Customer exists - just update their order stats
+      // Customer exists - update their order stats and contact info
       const customerDoc = existingCustomer.docs[0]
       const customerData = customerDoc.data()
 
-      await customerDoc.ref.update({
+      const updateData: Record<string, any> = {
         orderCount: (customerData.orderCount || 0) + 1,
         totalSpent: (customerData.totalSpent || 0) + orderTotal,
         lastOrderId: orderId,
         lastOrderAt: new Date(),
         updatedAt: new Date(),
-      })
+      }
+
+      // Always update phone if provided (use most recent contact info)
+      if (phone) {
+        updateData.phone = phone
+      }
+
+      // Always update address if provided (use most recent billing address)
+      if (billingAddress && (billingAddress.street || billingAddress.city)) {
+        updateData.address = {
+          street: billingAddress.street || null,
+          city: billingAddress.city || null,
+          state: billingAddress.state || null,
+          zip: billingAddress.zip || null,
+          country: billingAddress.country || 'USA',
+        }
+      }
+
+      await customerDoc.ref.update(updateData)
 
       console.log(`[Guest Account] Updated existing customer for ${normalizedEmail} on tenant ${promoterSlug}`)
       return
@@ -522,7 +544,14 @@ async function createGuestAccount(
       firebaseUid,
       firstName,
       lastName,
-      phone: null,
+      phone: phone || null,
+      address: billingAddress ? {
+        street: billingAddress.street || null,
+        city: billingAddress.city || null,
+        state: billingAddress.state || null,
+        zip: billingAddress.zip || null,
+        country: billingAddress.country || 'USA',
+      } : null,
       emailVerified: false,
       isGuest: true,
       needsPasswordReset: firebaseUid ? true : false, // Flag to prompt password reset on first login
