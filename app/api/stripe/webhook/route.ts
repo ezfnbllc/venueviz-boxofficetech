@@ -9,8 +9,22 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
-import { getAdminFirestore } from '@/lib/firebase-admin'
+import { getAdminFirestore, getAdminAuth } from '@/lib/firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
+import crypto from 'crypto'
+
+/**
+ * Generate a random secure password
+ */
+function generateRandomPassword(length = 16): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*'
+  const bytes = crypto.randomBytes(length)
+  let password = ''
+  for (let i = 0; i < length; i++) {
+    password += chars[bytes[i] % chars.length]
+  }
+  return password
+}
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2023-10-16',
@@ -173,6 +187,19 @@ export async function POST(request: NextRequest) {
           })
 
           console.log(`Order ${orderDoc.id} confirmed (Risk: ${riskLevel}, Score: ${riskScore})`)
+
+          // Auto-create customer account if guest checkout
+          const orderData = orderDoc.data()
+          if (orderData.customerEmail && orderData.promoterSlug) {
+            await createGuestAccount(
+              db,
+              orderData.customerEmail,
+              orderData.customerName,
+              orderData.promoterSlug,
+              orderDoc.id,
+              orderData.pricing?.total || orderData.total || 0
+            )
+          }
         }
         break
       }
@@ -392,6 +419,145 @@ export async function POST(request: NextRequest) {
       { error: 'Webhook processing failed' },
       { status: 500 }
     )
+  }
+}
+
+/**
+ * Create a guest customer account after successful purchase
+ * Creates Firebase Auth user and tenant customer record
+ */
+async function createGuestAccount(
+  db: FirebaseFirestore.Firestore,
+  email: string,
+  customerName: string,
+  promoterSlug: string,
+  orderId: string,
+  orderTotal: number
+): Promise<void> {
+  try {
+    const normalizedEmail = email.toLowerCase()
+
+    // Check if customer already exists for this tenant
+    const existingCustomer = await db.collection('customers')
+      .where('promoterSlug', '==', promoterSlug)
+      .where('email', '==', normalizedEmail)
+      .limit(1)
+      .get()
+
+    // Get promoter ID from slug
+    const promoterSnapshot = await db.collection('promoters')
+      .where('slug', '==', promoterSlug)
+      .limit(1)
+      .get()
+
+    if (promoterSnapshot.empty) {
+      console.error(`[Guest Account] Promoter not found: ${promoterSlug}`)
+      return
+    }
+
+    const promoterId = promoterSnapshot.docs[0].id
+
+    if (!existingCustomer.empty) {
+      // Customer exists - just update their order stats
+      const customerDoc = existingCustomer.docs[0]
+      const customerData = customerDoc.data()
+
+      await customerDoc.ref.update({
+        orderCount: (customerData.orderCount || 0) + 1,
+        totalSpent: (customerData.totalSpent || 0) + orderTotal,
+        lastOrderId: orderId,
+        lastOrderAt: new Date(),
+        updatedAt: new Date(),
+      })
+
+      console.log(`[Guest Account] Updated existing customer for ${normalizedEmail} on tenant ${promoterSlug}`)
+      return
+    }
+
+    // Parse name into firstName and lastName
+    const nameParts = (customerName || '').trim().split(' ')
+    const firstName = nameParts[0] || ''
+    const lastName = nameParts.slice(1).join(' ') || ''
+
+    // Generate a random password
+    const tempPassword = generateRandomPassword()
+
+    // Try to create or find Firebase Auth user
+    let firebaseUid = ''
+    const auth = getAdminAuth()
+
+    try {
+      // Check if user already exists in Firebase Auth
+      const existingUser = await auth.getUserByEmail(normalizedEmail)
+      firebaseUid = existingUser.uid
+      console.log(`[Guest Account] Firebase user already exists: ${firebaseUid}`)
+    } catch (authError: any) {
+      // User doesn't exist, create new one
+      if (authError.code === 'auth/user-not-found') {
+        try {
+          const newUser = await auth.createUser({
+            email: normalizedEmail,
+            password: tempPassword,
+            displayName: customerName || email.split('@')[0],
+            emailVerified: false,
+          })
+          firebaseUid = newUser.uid
+          console.log(`[Guest Account] Created new Firebase user: ${firebaseUid}`)
+        } catch (createError: any) {
+          console.error(`[Guest Account] Failed to create Firebase user:`, createError.message)
+          // Continue without Firebase Auth - guest checkout still works
+        }
+      } else {
+        console.error(`[Guest Account] Firebase Auth error:`, authError.message)
+      }
+    }
+
+    // Create tenant customer record
+    const now = new Date()
+    const customerRef = db.collection('customers').doc()
+    await customerRef.set({
+      promoterId,
+      promoterSlug,
+      email: normalizedEmail,
+      firebaseUid,
+      firstName,
+      lastName,
+      phone: null,
+      emailVerified: false,
+      isGuest: true,
+      needsPasswordReset: firebaseUid ? true : false, // Flag to prompt password reset on first login
+      createdAt: now,
+      updatedAt: now,
+      orderCount: 1,
+      totalSpent: orderTotal,
+      lastOrderId: orderId,
+      lastOrderAt: now,
+    })
+
+    // Queue welcome email (to be sent when email service is configured)
+    if (firebaseUid) {
+      await db.collection('email_queue').add({
+        type: 'welcome_guest',
+        to: normalizedEmail,
+        promoterSlug,
+        templateData: {
+          firstName: firstName || 'Customer',
+          email: normalizedEmail,
+          tempPassword, // Will be removed once email is sent
+          orderId,
+          loginUrl: `https://${promoterSlug}.venueviz.com/login`, // This should use actual domain config
+        },
+        status: 'pending',
+        createdAt: now,
+        attempts: 0,
+      })
+      console.log(`[Guest Account] Queued welcome email for ${normalizedEmail}`)
+    }
+
+    console.log(`[Guest Account] Created customer for ${normalizedEmail} on tenant ${promoterSlug}`)
+  } catch (error) {
+    console.error('[Guest Account] Error creating guest account:', error)
+    // Don't throw - payment already succeeded, this is supplementary
   }
 }
 

@@ -9,6 +9,7 @@ export default function OrdersPage() {
   const [events, setEvents] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('all')
+  const [searchQuery, setSearchQuery] = useState('')
   const [selectedOrder, setSelectedOrder] = useState<any>(null)
 
   useEffect(() => {
@@ -33,6 +34,13 @@ export default function OrdersPage() {
         eventPromoterName: eventsMap.get(order.eventId)?.promoter?.promoterName
       }))
 
+      // Sort by createdAt descending (most recent first)
+      enrichedOrders.sort((a, b) => {
+        const dateA = a.createdAt?.toDate?.() || a.createdAt || new Date(0)
+        const dateB = b.createdAt?.toDate?.() || b.createdAt || new Date(0)
+        return new Date(dateB).getTime() - new Date(dateA).getTime()
+      })
+
       setOrders(enrichedOrders)
       setEvents(eventsData)
     } catch (error) {
@@ -42,15 +50,6 @@ export default function OrdersPage() {
     }
   }
 
-  const filteredOrders = orders.filter(order =>
-    statusFilter === 'all' || order.status === statusFilter
-  )
-
-  const totalRevenue = orders.reduce((sum, order) => sum + (order.pricing?.total || order.total || 0), 0)
-  const completedOrders = orders.filter(o => o.status === 'confirmed' || o.status === 'completed').length
-  const pendingOrders = orders.filter(o => o.status === 'pending').length
-  const avgOrderValue = orders.length > 0 ? totalRevenue / orders.length : 0
-
   // Helper function to get customer info from various possible locations
   const getCustomerInfo = (order: any) => {
     return {
@@ -59,6 +58,38 @@ export default function OrdersPage() {
       phone: order.customer?.phone || order.customerPhone || order.buyerPhone || order.phone || 'N/A'
     }
   }
+
+  // Filter orders by status and search query
+  const filteredOrders = orders.filter(order => {
+    // Status filter
+    if (statusFilter !== 'all' && order.status !== statusFilter) {
+      return false
+    }
+
+    // Search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      const customerInfo = getCustomerInfo(order)
+      const eventName = (order.eventName || order.event?.name || '').toLowerCase()
+      const venueName = (order.event?.venueName || order.event?.venue?.name || '').toLowerCase()
+      const orderId = (order.orderId || order.id || '').toLowerCase()
+
+      return (
+        customerInfo.name.toLowerCase().includes(query) ||
+        customerInfo.email.toLowerCase().includes(query) ||
+        eventName.includes(query) ||
+        venueName.includes(query) ||
+        orderId.includes(query)
+      )
+    }
+
+    return true
+  })
+
+  const totalRevenue = orders.reduce((sum, order) => sum + (order.pricing?.total || order.total || 0), 0)
+  const completedOrders = orders.filter(o => o.status === 'confirmed' || o.status === 'completed').length
+  const pendingOrders = orders.filter(o => o.status === 'pending').length
+  const avgOrderValue = orders.length > 0 ? totalRevenue / orders.length : 0
 
   const printTicket = (ticket: any) => {
     window.print()
@@ -112,12 +143,39 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      {/* Filter */}
-      <div className="mb-6">
+      {/* Search and Filter */}
+      <div className="mb-6 flex flex-col sm:flex-row gap-4">
+        {/* Search Box */}
+        <div className="relative flex-1">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <svg className="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          <input
+            type="text"
+            placeholder="Search by customer name, email, event, venue, or order ID..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 text-slate-900 dark:text-white placeholder-slate-400"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+
+        {/* Status Filter */}
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-4 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 text-slate-900 dark:text-white"
+          className="px-4 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 text-slate-900 dark:text-white min-w-[160px]"
         >
           <option value="all">All Orders</option>
           <option value="pending">Pending</option>
@@ -127,6 +185,14 @@ export default function OrdersPage() {
           <option value="refunded">Refunded</option>
         </select>
       </div>
+
+      {/* Results count */}
+      {(searchQuery || statusFilter !== 'all') && (
+        <div className="mb-4 text-sm text-slate-500 dark:text-slate-400">
+          Showing {filteredOrders.length} of {orders.length} orders
+          {searchQuery && <span> matching &quot;{searchQuery}&quot;</span>}
+        </div>
+      )}
 
       {/* Orders List */}
       {filteredOrders.length === 0 ? (
