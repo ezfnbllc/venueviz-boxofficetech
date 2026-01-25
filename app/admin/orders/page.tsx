@@ -50,6 +50,15 @@ export default function OrdersPage() {
     }
   }
 
+  // Helper function to get customer info from various possible locations
+  const getCustomerInfo = (order: any) => {
+    return {
+      name: order.customer?.name || order.customerName || order.buyerName || 'N/A',
+      email: order.customer?.email || order.customerEmail || order.buyerEmail || order.email || 'N/A',
+      phone: order.customer?.phone || order.customerPhone || order.buyerPhone || order.phone || 'N/A'
+    }
+  }
+
   // Filter orders by status and search query
   const filteredOrders = orders.filter(order => {
     // Status filter
@@ -81,15 +90,6 @@ export default function OrdersPage() {
   const completedOrders = orders.filter(o => o.status === 'confirmed' || o.status === 'completed').length
   const pendingOrders = orders.filter(o => o.status === 'pending').length
   const avgOrderValue = orders.length > 0 ? totalRevenue / orders.length : 0
-
-  // Helper function to get customer info from various possible locations
-  const getCustomerInfo = (order: any) => {
-    return {
-      name: order.customer?.name || order.customerName || order.buyerName || 'N/A',
-      email: order.customer?.email || order.customerEmail || order.buyerEmail || order.email || 'N/A',
-      phone: order.customer?.phone || order.customerPhone || order.buyerPhone || order.phone || 'N/A'
-    }
-  }
 
   const printTicket = (ticket: any) => {
     window.print()
