@@ -131,16 +131,50 @@ export async function getEventDetails(eventId: string): Promise<EventDetails | n
     const data = eventDoc.data()
     if (!data) return null
 
+    // Handle various image field names for backwards compatibility
+    // Events can store images in: bannerImage, thumbnail, images.cover, image, coverImage
+    const bannerImage = data.bannerImage || data.images?.cover || data.coverImage || data.image
+    const thumbnail = data.thumbnail || data.images?.cover || data.bannerImage || data.image
+
+    // Handle various date formats
+    // Check schedule.performances first, then startDate field
+    let startDate: Date | null = null
+    const firstPerformance = data.schedule?.performances?.[0]
+    if (firstPerformance?.date) {
+      const rawDate = firstPerformance.date
+      if (rawDate?.toDate) {
+        startDate = rawDate.toDate()
+      } else if (rawDate?._seconds) {
+        startDate = new Date(rawDate._seconds * 1000)
+      } else if (rawDate) {
+        startDate = new Date(rawDate)
+      }
+    } else if (data.startDate) {
+      const rawDate = data.startDate
+      if (rawDate?.toDate) {
+        startDate = rawDate.toDate()
+      } else if (rawDate?._seconds) {
+        startDate = new Date(rawDate._seconds * 1000)
+      } else if (rawDate) {
+        startDate = new Date(rawDate)
+      }
+    }
+
+    // Get start time from schedule or direct field
+    const startTime = firstPerformance?.startTime || data.startTime
+    const endTime = firstPerformance?.endTime || data.endTime
+    const doorsOpenTime = firstPerformance?.doorsOpen || data.doorsOpenTime || data.doorsOpen
+
     return {
       id: eventDoc.id,
       name: data.name,
       slug: data.slug,
-      bannerImage: data.bannerImage,
-      thumbnail: data.thumbnail,
-      startDate: data.startDate?.toDate?.() || null,
-      startTime: data.startTime,
-      endTime: data.endTime,
-      doorsOpenTime: data.doorsOpenTime,
+      bannerImage,
+      thumbnail,
+      startDate,
+      startTime,
+      endTime,
+      doorsOpenTime,
       venue: data.venue,
       description: data.description,
       shortDescription: data.shortDescription,
