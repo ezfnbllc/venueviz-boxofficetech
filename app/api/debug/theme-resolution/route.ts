@@ -132,6 +132,7 @@ export async function GET(request: NextRequest) {
         brandingType: promoter.brandingType,
         themeId: promoter.themeId || 'NOT SET',
         hasThemeOverrides: !!promoter.themeOverrides,
+        themeOverrides: promoter.themeOverrides || null, // Show actual content
         hasColorScheme: !!promoter.colorScheme,
         colorScheme: promoter.colorScheme,
       }
