@@ -4,14 +4,14 @@
  * Resolves and generates theme CSS for promoter public pages.
  *
  * For ADVANCED branding promoters:
- * - Uses master theme (Barren) as base
- * - Can override with custom themeId
- * - Can apply themeOverrides on top
- * - Ignores legacy colorScheme field
+ * - Uses ONLY theme colors (master theme or custom themeId)
+ * - Ignores both themeOverrides and legacy colorScheme
+ * - Colors are configured directly in the theme manager (/admin/white-label/themes/[id])
  *
  * For BASIC branding promoters:
+ * - Uses master theme as base
+ * - Can apply themeOverrides for quick customization
  * - Falls back to legacy colorScheme if no themeOverrides
- * - Provides backwards compatibility
  */
 
 import { getAdminFirestore } from '@/lib/firebase-admin'
@@ -94,19 +94,22 @@ export async function getThemeConfigForPromoter(promoter: PromoterProfile): Prom
     }
   }
 
-  // Priority 1: Apply promoter's themeOverrides (highest priority)
-  if (promoter.themeOverrides) {
-    config = applyThemeOverrides(config, promoter.themeOverrides)
-  }
-
-  // For BASIC branding: apply legacy colorScheme if no themeOverrides colors
-  // For ADVANCED branding: use the theme colors (Barren), don't apply legacy colorScheme
-  const isBasicBranding = promoter.brandingType !== 'advanced'
-  if (isBasicBranding && !promoter.themeOverrides?.colors && promoter.colorScheme) {
-    config = applyLegacyColorScheme(config, promoter.colorScheme)
-    console.log(`[PromoterTheme] Using legacy colorScheme for basic promoter: ${promoter.slug}`)
-  } else if (promoter.brandingType === 'advanced') {
+  // For ADVANCED branding: Use ONLY theme colors (Barren or custom theme)
+  // They configure colors directly in the theme manager, not via promoter overrides
+  // For BASIC branding: Apply themeOverrides and/or legacy colorScheme
+  if (promoter.brandingType === 'advanced') {
+    // Advanced promoters: theme colors only, no overrides
     console.log(`[PromoterTheme] Using theme colors for advanced promoter: ${promoter.slug}`)
+  } else {
+    // Basic promoters: apply overrides for quick customization
+    if (promoter.themeOverrides) {
+      config = applyThemeOverrides(config, promoter.themeOverrides)
+    }
+    // Fall back to legacy colorScheme if no themeOverrides colors
+    if (!promoter.themeOverrides?.colors && promoter.colorScheme) {
+      config = applyLegacyColorScheme(config, promoter.colorScheme)
+      console.log(`[PromoterTheme] Using legacy colorScheme for basic promoter: ${promoter.slug}`)
+    }
   }
 
   // Cache the result
