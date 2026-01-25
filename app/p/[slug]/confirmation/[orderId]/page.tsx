@@ -3,91 +3,37 @@
  *
  * Displays order confirmation after successful payment.
  * Shows order details, tickets, and calendar integration options.
+ * Uses shared orderService for core platform functionality.
  */
 
 import { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { getAdminFirestore } from '@/lib/firebase-admin'
+import Image from 'next/image'
 import Layout from '@/components/public/Layout'
 import TicketCard from '@/components/shared/TicketCard'
 import WalletButtons from '@/components/wallet/WalletButtons'
+import {
+  getOrderById,
+  getEventDetails,
+  updateOrderStatus,
+  formatTime,
+  formatEventDate,
+  formatVenueLocation,
+  formatPaymentMethod,
+  getEventImage,
+  type OrderData,
+  type EventDetails,
+} from '@/lib/services/orderService'
 
 interface PageProps {
   params: Promise<{ slug: string; orderId: string }>
   searchParams: Promise<{ payment_intent?: string; payment_intent_client_secret?: string; redirect_status?: string }>
 }
 
-interface OrderData {
-  orderId: string
-  status: string
-  customerName: string
-  customerEmail: string
-  items: Array<{
-    eventId: string
-    eventName: string
-    eventImage?: string
-    ticketType?: string
-    quantity: number
-    price: number
-  }>
-  subtotal: number
-  serviceFee: number
-  total: number
-  currency: string
-  createdAt: any
-  paidAt?: any
-  qrCode?: string
-  tickets?: Array<{
-    id: string
-    ticketId?: string
-    tierName?: string
-    ticketType?: string
-    eventName?: string
-    section?: string | null
-    row?: number | null
-    seat?: number | null
-    status?: string
-    qrCode?: string
-  }>
-}
-
-async function getOrder(orderId: string): Promise<OrderData | null> {
-  try {
-    const db = getAdminFirestore()
-    const orderDoc = await db.collection('orders').doc(orderId).get()
-
-    if (!orderDoc.exists) {
-      return null
-    }
-
-    const data = orderDoc.data()
-    return {
-      orderId: orderDoc.id,
-      ...data,
-    } as OrderData
-  } catch (error) {
-    console.error('Error fetching order:', error)
-    return null
-  }
-}
-
-async function updateOrderStatus(orderId: string, status: string): Promise<void> {
-  try {
-    const db = getAdminFirestore()
-    await db.collection('orders').doc(orderId).update({
-      status,
-      paidAt: status === 'completed' ? new Date() : null,
-      updatedAt: new Date(),
-    })
-  } catch (error) {
-    console.error('Error updating order status:', error)
-  }
-}
-
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const resolvedParams = await params
-  const order = await getOrder(resolvedParams.orderId)
+  const order = await getOrderById(resolvedParams.orderId)
 
   if (!order) {
     return {
@@ -109,7 +55,7 @@ export default async function ConfirmationPage({ params, searchParams }: PagePro
   const { slug, orderId } = await params
   const resolvedSearchParams = await searchParams
 
-  const order = await getOrder(orderId)
+  const order = await getOrderById(orderId)
 
   if (!order) {
     notFound()
@@ -122,19 +68,30 @@ export default async function ConfirmationPage({ params, searchParams }: PagePro
     order.status = 'completed' // Update local reference for display
   }
 
-  // Format date
-  const orderDate = order.paidAt?.toDate?.() || order.createdAt?.toDate?.() || new Date()
-  const formattedDate = orderDate.toLocaleDateString('en-US', {
+  // Get event info from first item
+  const primaryEvent = order.items?.[0]
+
+  // Fetch full event details from Firestore
+  const eventId = order.eventId || primaryEvent?.eventId
+  const event = eventId ? await getEventDetails(eventId) : null
+
+  // Format event date (the actual event date, not purchase date)
+  const formattedEventDate = formatEventDate(event?.startDate, {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
     year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
   })
 
-  // Get event info from first item
-  const primaryEvent = order.items?.[0]
+  // Get event image
+  const eventImage = getEventImage(event, primaryEvent)
+
+  // Get venue info
+  const venueName = event?.venue?.name
+  const venueLocation = formatVenueLocation(event?.venue)
+
+  // Get payment method display
+  const paymentMethod = formatPaymentMethod(order)
 
   return (
     <Layout promoterSlug={slug}>
@@ -207,14 +164,16 @@ export default async function ConfirmationPage({ params, searchParams }: PagePro
               {/* Order Details */}
               <div className="p-6 border-t border-gray-100 dark:border-gray-700">
                 {/* Event Info */}
-                {primaryEvent && (
+                {(event || primaryEvent) && (
                   <div className="flex gap-4 mb-6">
-                    {primaryEvent.eventImage ? (
-                      <div className="w-24 h-24 rounded-lg overflow-hidden flex-shrink-0">
-                        <img
-                          src={primaryEvent.eventImage}
-                          alt={primaryEvent.eventName}
-                          className="w-full h-full object-cover"
+                    {eventImage ? (
+                      <div className="w-24 h-24 rounded-lg overflow-hidden flex-shrink-0 relative">
+                        <Image
+                          src={eventImage}
+                          alt={event?.name || primaryEvent?.eventName || 'Event'}
+                          fill
+                          className="object-cover"
+                          sizes="96px"
                         />
                       </div>
                     ) : (
@@ -225,9 +184,34 @@ export default async function ConfirmationPage({ params, searchParams }: PagePro
                       </div>
                     )}
                     <div className="flex-1">
-                      <h2 className="font-semibold text-gray-900 dark:text-white mb-1">{primaryEvent.eventName}</h2>
-                      <span className="text-sm text-gray-600 dark:text-gray-300 block mb-2">{formattedDate}</span>
+                      <h2 className="font-semibold text-gray-900 dark:text-white mb-1">
+                        {event?.name || primaryEvent?.eventName}
+                      </h2>
+                      {/* Event Date & Time */}
+                      {(formattedEventDate || event?.startTime) && (
+                        <div className="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-300 mb-1">
+                          <svg className="w-4 h-4 text-[#6ac045]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          <span>
+                            {formattedEventDate}
+                            {event?.startTime && ` at ${formatTime(event.startTime)}`}
+                          </span>
+                        </div>
+                      )}
+                      {/* Venue */}
+                      {venueName && (
+                        <div className="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-300 mb-1">
+                          <svg className="w-4 h-4 text-[#6ac045]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          <span>{venueName}{venueLocation && `, ${venueLocation}`}</span>
+                        </div>
+                      )}
+                      {/* Customer Name */}
                       <div className="text-sm text-gray-600 dark:text-gray-300">{order.customerName}</div>
+                      {/* Ticket Count */}
                       <div className="flex items-center gap-2 mt-2">
                         <svg className="w-4 h-4 text-[#6ac045]" fill="currentColor" viewBox="0 0 24 24">
                           <path d="M15.5 13.5l1 1v1H8v-1l1-1h6.5zm-5-5.5v1h3v-1h-3zm-4 0v1h3v-1h-3zm0 3v1h3v-1h-3zm4 0v1h3v-1h-3zm4 0v1h3v-1h-3zm-8-6h12v10H6.5V5zm0-2c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-12z"/>
@@ -236,10 +220,16 @@ export default async function ConfirmationPage({ params, searchParams }: PagePro
                           <span className="font-medium">{order.items?.reduce((sum, item) => sum + (item.quantity || 1), 0) || 1}</span> x Ticket
                         </span>
                       </div>
-                      <div className="mt-2">
+                      {/* Total & Payment */}
+                      <div className="mt-2 flex items-center justify-between">
                         <span className="font-semibold text-[#6ac045]">
                           Total: ${order.total.toFixed(2)}
                         </span>
+                        {paymentMethod && (
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            Paid via {paymentMethod}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>

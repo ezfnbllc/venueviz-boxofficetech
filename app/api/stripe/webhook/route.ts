@@ -57,15 +57,74 @@ export async function POST(request: NextRequest) {
         if (!ordersSnapshot.empty) {
           const orderDoc = ordersSnapshot.docs[0]
 
-          // Get charge details for fraud assessment
+          // Get charge details for fraud assessment and payment method info
           const chargeId = paymentIntent.latest_charge as string
           let riskLevel = 'normal'
           let riskScore: number | null = null
           let fraudDetails: Record<string, any> = {}
+          let paymentMethodDetails: Record<string, any> = {}
 
           if (chargeId) {
             try {
               const charge = await stripe.charges.retrieve(chargeId)
+
+              // Extract payment method details (card brand, last4)
+              if (charge.payment_method_details) {
+                const pmDetails = charge.payment_method_details
+                if (pmDetails.card) {
+                  paymentMethodDetails = {
+                    paymentMethod: 'card',
+                    paymentBrand: pmDetails.card.brand || null,
+                    paymentLast4: pmDetails.card.last4 || null,
+                    paymentExpMonth: pmDetails.card.exp_month || null,
+                    paymentExpYear: pmDetails.card.exp_year || null,
+                    paymentFunding: pmDetails.card.funding || null, // credit, debit, prepaid
+                    paymentCountry: pmDetails.card.country || null,
+                  }
+                } else if ((pmDetails as any).amazon_pay) {
+                  // Handle Amazon Pay
+                  paymentMethodDetails = {
+                    paymentMethod: 'amazon_pay',
+                    paymentBrand: 'Amazon Pay',
+                  }
+                } else if ((pmDetails as any).link) {
+                  // Handle Stripe Link
+                  paymentMethodDetails = {
+                    paymentMethod: 'link',
+                    paymentBrand: 'Link',
+                  }
+                } else if ((pmDetails as any).paypal) {
+                  // Handle PayPal
+                  paymentMethodDetails = {
+                    paymentMethod: 'paypal',
+                    paymentBrand: 'PayPal',
+                  }
+                } else if ((pmDetails as any).cashapp) {
+                  // Handle Cash App
+                  paymentMethodDetails = {
+                    paymentMethod: 'cashapp',
+                    paymentBrand: 'Cash App',
+                  }
+                } else if (pmDetails.type) {
+                  // Handle other payment methods
+                  const typeDisplayNames: Record<string, string> = {
+                    amazon_pay: 'Amazon Pay',
+                    link: 'Link',
+                    paypal: 'PayPal',
+                    cashapp: 'Cash App',
+                    afterpay_clearpay: 'Afterpay',
+                    klarna: 'Klarna',
+                    affirm: 'Affirm',
+                    apple_pay: 'Apple Pay',
+                    google_pay: 'Google Pay',
+                  }
+                  paymentMethodDetails = {
+                    paymentMethod: pmDetails.type,
+                    paymentBrand: typeDisplayNames[pmDetails.type] || pmDetails.type,
+                  }
+                }
+              }
+
               // Extract Radar outcome for fraud assessment
               if (charge.outcome) {
                 riskLevel = charge.outcome.risk_level || 'normal'
@@ -93,6 +152,8 @@ export async function POST(request: NextRequest) {
             paymentStatus: 'paid',
             paidAt: new Date(),
             stripeReceiptUrl: chargeId ? await getReceiptUrl(chargeId) : null,
+            // Payment method details for order display
+            ...paymentMethodDetails,
             // Fraud prevention: Store risk assessment
             fraudAssessment: {
               riskLevel,
