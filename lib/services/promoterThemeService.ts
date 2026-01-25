@@ -2,12 +2,16 @@
  * Promoter Theme Service
  *
  * Resolves and generates theme CSS for promoter public pages.
- * Inheritance chain:
- * 1. Promoter's themeOverrides (quick customizations)
- * 2. Promoter's themeId (custom TenantTheme if assigned)
- * 3. Master tenant's default theme (Barren)
  *
- * Also handles conversion from legacy colorScheme to theme config.
+ * For ADVANCED branding promoters:
+ * - Uses master theme (Barren) as base
+ * - Can override with custom themeId
+ * - Can apply themeOverrides on top
+ * - Ignores legacy colorScheme field
+ *
+ * For BASIC branding promoters:
+ * - Falls back to legacy colorScheme if no themeOverrides
+ * - Provides backwards compatibility
  */
 
 import { getAdminFirestore } from '@/lib/firebase-admin'
@@ -95,9 +99,14 @@ export async function getThemeConfigForPromoter(promoter: PromoterProfile): Prom
     config = applyThemeOverrides(config, promoter.themeOverrides)
   }
 
-  // Also apply legacy colorScheme if themeOverrides don't exist
-  if (!promoter.themeOverrides?.colors && promoter.colorScheme) {
+  // For BASIC branding: apply legacy colorScheme if no themeOverrides colors
+  // For ADVANCED branding: use the theme colors (Barren), don't apply legacy colorScheme
+  const isBasicBranding = promoter.brandingType !== 'advanced'
+  if (isBasicBranding && !promoter.themeOverrides?.colors && promoter.colorScheme) {
     config = applyLegacyColorScheme(config, promoter.colorScheme)
+    console.log(`[PromoterTheme] Using legacy colorScheme for basic promoter: ${promoter.slug}`)
+  } else if (promoter.brandingType === 'advanced') {
+    console.log(`[PromoterTheme] Using theme colors for advanced promoter: ${promoter.slug}`)
   }
 
   // Cache the result
