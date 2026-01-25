@@ -217,21 +217,38 @@ export default async function OrderDetailPage({ params }: PageProps) {
 
   // Get payment method display
   const getPaymentMethodDisplay = () => {
+    const brandNames: Record<string, string> = {
+      visa: 'Visa',
+      mastercard: 'Mastercard',
+      amex: 'American Express',
+      discover: 'Discover',
+      diners: 'Diners Club',
+      jcb: 'JCB',
+      unionpay: 'UnionPay',
+      'amazon pay': 'Amazon Pay',
+    }
+    const methodNames: Record<string, string> = {
+      amazon_pay: 'Amazon Pay',
+      card: 'Card',
+      link: 'Link',
+      paypal: 'PayPal',
+      cashapp: 'Cash App',
+      klarna: 'Klarna',
+      affirm: 'Affirm',
+    }
+
+    // If we have brand and last4, show card details
     if (order.paymentBrand && order.paymentLast4) {
-      const brandNames: Record<string, string> = {
-        visa: 'Visa',
-        mastercard: 'Mastercard',
-        amex: 'American Express',
-        discover: 'Discover',
-        diners: 'Diners Club',
-        jcb: 'JCB',
-        unionpay: 'UnionPay',
-      }
       const brand = brandNames[order.paymentBrand.toLowerCase()] || order.paymentBrand
       return `${brand} ending in ${order.paymentLast4}`
     }
+    // If we have a brand name (like Amazon Pay), show it
+    if (order.paymentBrand) {
+      return brandNames[order.paymentBrand.toLowerCase()] || order.paymentBrand
+    }
+    // If we have a payment method type, show friendly name
     if (order.paymentMethod) {
-      return order.paymentMethod
+      return methodNames[order.paymentMethod.toLowerCase()] || order.paymentMethod
     }
     return null
   }
@@ -437,9 +454,9 @@ export default async function OrderDetailPage({ params }: PageProps) {
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 p-6 mb-6">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Payment Method</h2>
                 <div className="flex items-center gap-3">
-                  {order.paymentBrand && (
+                  {(order.paymentBrand || order.paymentMethod) && (
                     <div className="flex-shrink-0">
-                      {order.paymentBrand.toLowerCase() === 'visa' && (
+                      {order.paymentBrand?.toLowerCase() === 'visa' && (
                         <svg className="w-10 h-6" viewBox="0 0 48 32" fill="none">
                           <rect width="48" height="32" rx="4" fill="#1A1F71"/>
                           <path d="M19.5 21.5L21 10.5H24L22.5 21.5H19.5Z" fill="white"/>
@@ -448,7 +465,7 @@ export default async function OrderDetailPage({ params }: PageProps) {
                           <path d="M17 10.5L14 18.5L13.7 17L12.5 11.5C12.3 10.8 11.7 10.5 11 10.5H6.5L6.4 10.8C7.8 11.1 9 11.6 10 12.2L12.5 21.5H15.7L20 10.5H17Z" fill="white"/>
                         </svg>
                       )}
-                      {order.paymentBrand.toLowerCase() === 'mastercard' && (
+                      {order.paymentBrand?.toLowerCase() === 'mastercard' && (
                         <svg className="w-10 h-6" viewBox="0 0 48 32" fill="none">
                           <rect width="48" height="32" rx="4" fill="#1A1F71"/>
                           <circle cx="19" cy="16" r="8" fill="#EB001B"/>
@@ -456,14 +473,38 @@ export default async function OrderDetailPage({ params }: PageProps) {
                           <path d="M24 10.8C25.8 12.3 27 14.5 27 17C27 19.5 25.8 21.7 24 23.2C22.2 21.7 21 19.5 21 17C21 14.5 22.2 12.3 24 10.8Z" fill="#FF5F00"/>
                         </svg>
                       )}
-                      {order.paymentBrand.toLowerCase() === 'amex' && (
+                      {order.paymentBrand?.toLowerCase() === 'amex' && (
                         <svg className="w-10 h-6" viewBox="0 0 48 32" fill="none">
                           <rect width="48" height="32" rx="4" fill="#006FCF"/>
                           <path d="M8 16L11 10H15L18 16L21 10H25L20 22H16L13 16L10 22H6L11 10" fill="white"/>
                           <path d="M25 10H40V13H28V15H39V18H28V20H40V22H25V10Z" fill="white"/>
                         </svg>
                       )}
-                      {!['visa', 'mastercard', 'amex'].includes(order.paymentBrand.toLowerCase()) && (
+                      {(order.paymentMethod === 'amazon_pay' || order.paymentBrand?.toLowerCase() === 'amazon pay') && (
+                        <svg className="w-10 h-6" viewBox="0 0 48 32" fill="none">
+                          <rect width="48" height="32" rx="4" fill="#FF9900"/>
+                          <path d="M24 8c-4.4 0-8 3.6-8 8s3.6 8 8 8c2.2 0 4.2-.9 5.7-2.3" stroke="#232F3E" strokeWidth="2" fill="none"/>
+                          <path d="M14 20c2 2 5.5 4 10 4s8-2 10-4" stroke="#232F3E" strokeWidth="2" fill="none" strokeLinecap="round"/>
+                          <path d="M34 18l-2 4 4-1" fill="#232F3E"/>
+                        </svg>
+                      )}
+                      {order.paymentMethod === 'link' && (
+                        <div className="w-10 h-6 bg-[#00D66F] rounded flex items-center justify-center">
+                          <span className="text-white text-xs font-bold">Link</span>
+                        </div>
+                      )}
+                      {order.paymentMethod === 'paypal' && (
+                        <svg className="w-10 h-6" viewBox="0 0 48 32" fill="none">
+                          <rect width="48" height="32" rx="4" fill="#003087"/>
+                          <path d="M19 10h6c3 0 5 2 4.5 5s-3 5-6 5h-2l-1 4h-3l2.5-14z" fill="#009CDE"/>
+                          <path d="M16 12h6c3 0 5 2 4.5 5s-3 5-6 5h-2l-1 4h-3l2.5-14z" fill="white"/>
+                        </svg>
+                      )}
+                      {!['visa', 'mastercard', 'amex'].includes(order.paymentBrand?.toLowerCase() || '') &&
+                       order.paymentMethod !== 'amazon_pay' &&
+                       order.paymentBrand?.toLowerCase() !== 'amazon pay' &&
+                       order.paymentMethod !== 'link' &&
+                       order.paymentMethod !== 'paypal' && (
                         <div className="w-10 h-6 bg-gray-200 dark:bg-gray-600 rounded flex items-center justify-center">
                           <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />

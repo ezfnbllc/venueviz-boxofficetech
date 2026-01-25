@@ -81,10 +81,46 @@ export async function POST(request: NextRequest) {
                     paymentFunding: pmDetails.card.funding || null, // credit, debit, prepaid
                     paymentCountry: pmDetails.card.country || null,
                   }
+                } else if ((pmDetails as any).amazon_pay) {
+                  // Handle Amazon Pay
+                  paymentMethodDetails = {
+                    paymentMethod: 'amazon_pay',
+                    paymentBrand: 'Amazon Pay',
+                  }
+                } else if ((pmDetails as any).link) {
+                  // Handle Stripe Link
+                  paymentMethodDetails = {
+                    paymentMethod: 'link',
+                    paymentBrand: 'Link',
+                  }
+                } else if ((pmDetails as any).paypal) {
+                  // Handle PayPal
+                  paymentMethodDetails = {
+                    paymentMethod: 'paypal',
+                    paymentBrand: 'PayPal',
+                  }
+                } else if ((pmDetails as any).cashapp) {
+                  // Handle Cash App
+                  paymentMethodDetails = {
+                    paymentMethod: 'cashapp',
+                    paymentBrand: 'Cash App',
+                  }
                 } else if (pmDetails.type) {
-                  // Handle other payment methods (Google Pay, Apple Pay, etc.)
+                  // Handle other payment methods
+                  const typeDisplayNames: Record<string, string> = {
+                    amazon_pay: 'Amazon Pay',
+                    link: 'Link',
+                    paypal: 'PayPal',
+                    cashapp: 'Cash App',
+                    afterpay_clearpay: 'Afterpay',
+                    klarna: 'Klarna',
+                    affirm: 'Affirm',
+                    apple_pay: 'Apple Pay',
+                    google_pay: 'Google Pay',
+                  }
                   paymentMethodDetails = {
                     paymentMethod: pmDetails.type,
+                    paymentBrand: typeDisplayNames[pmDetails.type] || pmDetails.type,
                   }
                 }
               }
