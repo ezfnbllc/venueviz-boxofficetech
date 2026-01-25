@@ -132,9 +132,9 @@ export async function getEventDetails(eventId: string): Promise<EventDetails | n
     if (!data) return null
 
     // Handle various image field names for backwards compatibility
-    // Events can store images in: bannerImage, thumbnail, images.cover, image, coverImage
-    const bannerImage = data.bannerImage || data.images?.cover || data.coverImage || data.image
-    const thumbnail = data.thumbnail || data.images?.cover || data.bannerImage || data.image
+    // Events can store images in: basics.images.cover (admin), bannerImage, images.cover, coverImage, image
+    const bannerImage = data.basics?.images?.cover || data.bannerImage || data.images?.cover || data.coverImage || data.image
+    const thumbnail = data.basics?.images?.thumbnail || data.thumbnail || data.basics?.images?.cover || data.images?.cover || data.bannerImage || data.image
 
     // Handle various date formats
     // Check schedule.performances first, then startDate field
@@ -167,8 +167,8 @@ export async function getEventDetails(eventId: string): Promise<EventDetails | n
 
     return {
       id: eventDoc.id,
-      name: data.name,
-      slug: data.slug,
+      name: data.name || data.basics?.name || data.title || '',
+      slug: data.slug || data.communications?.seo?.urlSlug,
       bannerImage,
       thumbnail,
       startDate,
@@ -176,8 +176,8 @@ export async function getEventDetails(eventId: string): Promise<EventDetails | n
       endTime,
       doorsOpenTime,
       venue: data.venue,
-      description: data.description,
-      shortDescription: data.shortDescription,
+      description: data.description || data.basics?.description,
+      shortDescription: data.shortDescription || data.basics?.shortDescription,
     }
   } catch (error) {
     console.error('Error fetching event:', error)
