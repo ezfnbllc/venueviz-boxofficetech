@@ -70,14 +70,19 @@ export default function CustomersManagement() {
       // Merge stats with customer data
       const enhancedCustomers = customersData.map((customer: any) => {
         const stats = customerStats.get(customer.email) || {}
+        // Handle both name schemas: single 'name' field or 'firstName' + 'lastName'
+        const customerName = customer.name ||
+          [customer.firstName, customer.lastName].filter(Boolean).join(' ') ||
+          customer.email?.split('@')[0] || 'Unknown'
         return {
           ...customer,
-          totalOrders: stats.totalOrders || customer.totalOrders || 0,
+          name: customerName,
+          totalOrders: stats.totalOrders || customer.totalOrders || customer.orderCount || 0,
           totalSpent: stats.totalSpent || customer.totalSpent || 0,
-          lastOrderDate: stats.lastOrderDate || customer.lastOrderDate,
+          lastOrderDate: stats.lastOrderDate || customer.lastOrderDate || customer.lastLoginAt,
           eventCount: stats.events?.size || 0,
           // Calculate membership tier based on spending
-          membershipTier: customer.membershipTier || calculateTier(stats.totalSpent || 0)
+          membershipTier: customer.membershipTier || calculateTier(stats.totalSpent || customer.totalSpent || 0)
         }
       })
 
@@ -106,9 +111,15 @@ export default function CustomersManagement() {
   }
 
   const handleViewDetails = async (customer: any) => {
-    setSelectedCustomer(customer)
+    // Handle both name schemas
+    const displayName = customer.name ||
+      [customer.firstName, customer.lastName].filter(Boolean).join(' ') ||
+      customer.email?.split('@')[0] || ''
+    setSelectedCustomer({ ...customer, name: displayName })
     setEditValues({
-      name: customer.name || '',
+      name: displayName,
+      firstName: customer.firstName || '',
+      lastName: customer.lastName || '',
       email: customer.email || '',
       phone: customer.phone || '',
       dateOfBirth: customer.dateOfBirth ? formatDateForInput(customer.dateOfBirth) : '',
@@ -383,6 +394,7 @@ export default function CustomersManagement() {
                 <thead className="border-b border-slate-200 dark:border-slate-700">
                   <tr>
                     <th className="text-left p-4 text-slate-900 dark:text-white">Customer</th>
+                    <th className="text-left p-4 text-slate-900 dark:text-white">Tenant</th>
                     <th className="text-left p-4 text-slate-900 dark:text-white">Contact</th>
                     <th className="text-center p-4 text-slate-900 dark:text-white">Orders</th>
                     <th className="text-center p-4 text-slate-900 dark:text-white">Events</th>
@@ -398,6 +410,12 @@ export default function CustomersManagement() {
                       <td className="p-4">
                         <div className="font-semibold text-slate-900 dark:text-white">{customer.name || 'Unknown'}</div>
                         <div className="text-sm text-slate-500 dark:text-slate-400">{customer.email}</div>
+                        {customer.isGuest && (
+                          <span className="text-xs px-2 py-0.5 bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 rounded-full">Guest</span>
+                        )}
+                      </td>
+                      <td className="p-4 text-sm text-slate-500 dark:text-slate-400">
+                        {customer.promoterSlug || '-'}
                       </td>
                       <td className="p-4 text-sm text-slate-500 dark:text-slate-400">
                         {customer.phone || 'No phone'}
@@ -471,9 +489,19 @@ export default function CustomersManagement() {
                         <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getTierColor(selectedCustomer.membershipTier)}`}>
                           {selectedCustomer.membershipTier || 'bronze'}
                         </span>
-                        {selectedCustomer.uid && (
+                        {selectedCustomer.firebaseUid && (
                           <span className="px-3 py-1 bg-green-600/20 text-green-400 rounded-full text-xs">
                             Registered User
+                          </span>
+                        )}
+                        {selectedCustomer.isGuest && (
+                          <span className="px-3 py-1 bg-yellow-600/20 text-yellow-400 rounded-full text-xs">
+                            Guest
+                          </span>
+                        )}
+                        {selectedCustomer.promoterSlug && (
+                          <span className="px-3 py-1 bg-blue-600/20 text-blue-400 rounded-full text-xs">
+                            Tenant: {selectedCustomer.promoterSlug}
                           </span>
                         )}
                       </div>
@@ -498,22 +526,43 @@ export default function CustomersManagement() {
                 <h3 className="font-semibold mb-3 text-blue-600 dark:text-accent-400">Personal Information</h3>
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">Name</p>
-                    {editingField === 'name' ? (
+                    <p className="text-sm text-slate-500 dark:text-slate-400">First Name</p>
+                    {editingField === 'firstName' ? (
                       <div className="flex gap-2">
                         <input
                           type="text"
-                          value={editValues.name}
-                          onChange={(e) => setEditValues({...editValues, name: e.target.value})}
+                          value={editValues.firstName}
+                          onChange={(e) => setEditValues({...editValues, firstName: e.target.value})}
                           className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded text-slate-900 dark:text-white"
                         />
-                        <button onClick={() => handleUpdateField('name')} className="px-2 py-1 bg-green-600 rounded text-xs text-white">Save</button>
+                        <button onClick={() => handleUpdateField('firstName')} className="px-2 py-1 bg-green-600 rounded text-xs text-white">Save</button>
                         <button onClick={() => setEditingField(null)} className="px-2 py-1 bg-gray-600 rounded text-xs text-white">Cancel</button>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2">
-                        <p className="font-semibold text-slate-900 dark:text-white">{selectedCustomer.name || 'N/A'}</p>
-                        <button onClick={() => setEditingField('name')} className="text-blue-400 text-xs">Edit</button>
+                        <p className="font-semibold text-slate-900 dark:text-white">{selectedCustomer.firstName || 'N/A'}</p>
+                        <button onClick={() => setEditingField('firstName')} className="text-blue-400 text-xs">Edit</button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">Last Name</p>
+                    {editingField === 'lastName' ? (
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={editValues.lastName}
+                          onChange={(e) => setEditValues({...editValues, lastName: e.target.value})}
+                          className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded text-slate-900 dark:text-white"
+                        />
+                        <button onClick={() => handleUpdateField('lastName')} className="px-2 py-1 bg-green-600 rounded text-xs text-white">Save</button>
+                        <button onClick={() => setEditingField(null)} className="px-2 py-1 bg-gray-600 rounded text-xs text-white">Cancel</button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-slate-900 dark:text-white">{selectedCustomer.lastName || 'N/A'}</p>
+                        <button onClick={() => setEditingField('lastName')} className="text-blue-400 text-xs">Edit</button>
                       </div>
                     )}
                   </div>
@@ -813,14 +862,20 @@ export default function CustomersManagement() {
               </div>
 
               {/* Account Information */}
-              {(selectedCustomer.uid || selectedCustomer.stripeCustomerId) && (
+              {(selectedCustomer.uid || selectedCustomer.firebaseUid || selectedCustomer.stripeCustomerId || selectedCustomer.promoterSlug) && (
                 <div className="bg-slate-100 dark:bg-slate-900 rounded-xl p-4 mb-6 border border-slate-200 dark:border-slate-700">
                   <h3 className="font-semibold mb-3 text-blue-600 dark:text-accent-400">Account Information</h3>
                   <div className="grid md:grid-cols-2 gap-4">
-                    {selectedCustomer.uid && (
+                    {(selectedCustomer.uid || selectedCustomer.firebaseUid) && (
                       <div>
                         <p className="text-sm text-slate-500 dark:text-slate-400">Firebase UID</p>
-                        <p className="font-mono text-sm text-slate-900 dark:text-white">{selectedCustomer.uid}</p>
+                        <p className="font-mono text-sm text-slate-900 dark:text-white">{selectedCustomer.firebaseUid || selectedCustomer.uid}</p>
+                      </div>
+                    )}
+                    {selectedCustomer.promoterSlug && (
+                      <div>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">Tenant</p>
+                        <p className="font-mono text-sm text-slate-900 dark:text-white">{selectedCustomer.promoterSlug}</p>
                       </div>
                     )}
                     {selectedCustomer.stripeCustomerId && (
