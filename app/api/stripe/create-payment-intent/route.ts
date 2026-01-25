@@ -350,8 +350,17 @@ export async function POST(request: NextRequest) {
       status: 'pending',
       customerEmail,
       customerName,
+      customerPhone: metadata?.customerPhone || null,
       tenantId: tenantId || null,
       promoterSlug: promoterSlug || null,
+      // Billing address from checkout form
+      billingAddress: {
+        street: metadata?.billingAddress || null,
+        city: metadata?.billingCity || null,
+        state: metadata?.billingState || null,
+        zip: metadata?.billingZip || null,
+        country: metadata?.billingCountry || 'USA',
+      },
       // Event info for admin display
       eventId,
       eventName,

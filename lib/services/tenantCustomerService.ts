@@ -35,7 +35,16 @@ export interface TenantCustomer {
   firstName?: string
   lastName?: string
   phone?: string
+  address?: {
+    street?: string
+    city?: string
+    state?: string
+    zip?: string
+    country?: string
+  }
   emailVerified?: boolean
+  isGuest?: boolean
+  needsPasswordReset?: boolean
   createdAt: Date
   updatedAt?: Date
   lastLoginAt?: Date
@@ -124,6 +133,8 @@ export async function getTenantCustomer(
       lastName: data.lastName,
       phone: data.phone,
       emailVerified: data.emailVerified,
+      isGuest: data.isGuest,
+      needsPasswordReset: data.needsPasswordReset,
       createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
       updatedAt: data.updatedAt?.toDate?.() || (data.updatedAt ? new Date(data.updatedAt) : undefined),
       lastLoginAt: data.lastLoginAt?.toDate?.() || (data.lastLoginAt ? new Date(data.lastLoginAt) : undefined),
@@ -168,6 +179,8 @@ export async function getTenantCustomerByUid(
       lastName: data.lastName,
       phone: data.phone,
       emailVerified: data.emailVerified,
+      isGuest: data.isGuest,
+      needsPasswordReset: data.needsPasswordReset,
       createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
       updatedAt: data.updatedAt?.toDate?.() || (data.updatedAt ? new Date(data.updatedAt) : undefined),
       lastLoginAt: data.lastLoginAt?.toDate?.() || (data.lastLoginAt ? new Date(data.lastLoginAt) : undefined),
@@ -258,6 +271,27 @@ export async function updateCustomerLastLogin(customerId: string): Promise<void>
     })
   } catch (error) {
     console.error('Error updating customer last login:', error)
+  }
+}
+
+/**
+ * Activate a guest customer after they successfully sign in
+ * This transitions them from "guest" to a full customer
+ */
+export async function activateGuestCustomer(customerId: string): Promise<boolean> {
+  try {
+    const customerRef = doc(db, 'customers', customerId)
+    await updateDoc(customerRef, {
+      isGuest: false,
+      needsPasswordReset: false,
+      lastLoginAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    })
+    console.log(`[TenantCustomer] Activated guest customer: ${customerId}`)
+    return true
+  } catch (error) {
+    console.error('Error activating guest customer:', error)
+    return false
   }
 }
 

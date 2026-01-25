@@ -20,6 +20,7 @@ import {
   getTenantCustomer,
   getTenantCustomerByUid,
   updateCustomerLastLogin,
+  activateGuestCustomer,
   linkFirebaseUserToCustomer,
   type TenantCustomer,
 } from '@/lib/services/tenantCustomerService'
@@ -310,8 +311,16 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
       // Sign in with Firebase
       const result = await signInWithEmailAndPassword(auth, email, password)
 
-      // Update last login
-      await updateCustomerLastLogin(customer.id)
+      // If guest customer, activate them (transition from guest to full customer)
+      if (customer.isGuest) {
+        await activateGuestCustomer(customer.id)
+        customer.isGuest = false
+        customer.needsPasswordReset = false
+      } else {
+        // Update last login
+        await updateCustomerLastLogin(customer.id)
+      }
+
       setTenantCustomer(customer)
 
       return { success: true }
@@ -353,8 +362,15 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
 
         customer = createResult.customer || null
       } else {
-        // Update last login
-        await updateCustomerLastLogin(customer.id)
+        // If guest customer, activate them (transition from guest to full customer)
+        if (customer.isGuest) {
+          await activateGuestCustomer(customer.id)
+          customer.isGuest = false
+          customer.needsPasswordReset = false
+        } else {
+          // Update last login
+          await updateCustomerLastLogin(customer.id)
+        }
       }
 
       setTenantCustomer(customer)

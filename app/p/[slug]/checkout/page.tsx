@@ -198,7 +198,7 @@ function BillingForm({
   existingCustomer,
   promoterSlug,
 }: {
-  formData: { firstName: string; lastName: string; email: string; address: string; city: string; state: string; zipCode: string; country: string }
+  formData: { firstName: string; lastName: string; email: string; phone: string; address: string; city: string; state: string; zipCode: string; country: string }
   setFormData: React.Dispatch<React.SetStateAction<typeof formData>>
   emailError?: string
   existingCustomer?: { exists: boolean; firstName?: string; orderCount?: number } | null
@@ -273,6 +273,16 @@ function BillingForm({
             {emailError && (
               <p className="text-red-500 text-sm mt-1">{emailError}</p>
             )}
+          </div>
+          <div className="form-group">
+            <label className="form-label">Phone</label>
+            <input
+              className="form-control h-12"
+              type="tel"
+              placeholder="(optional)"
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+            />
           </div>
           <div className="form-group">
             <label className="form-label">Address*</label>
@@ -542,6 +552,7 @@ export default function CheckoutPage() {
     firstName: '',
     lastName: '',
     email: '',
+    phone: '',
     address: '',
     city: '',
     state: '',
@@ -699,6 +710,7 @@ export default function CheckoutPage() {
             promoterSlug: slug,
             sessionId, // For seat hold verification
             metadata: {
+              customerPhone: formData.phone,
               billingAddress: formData.address,
               billingCity: formData.city,
               billingState: formData.state,

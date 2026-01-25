@@ -336,7 +336,9 @@ export async function updateOrderStatus(
             orderData.customerName,
             orderData.promoterSlug,
             orderId,
-            orderData.pricing?.total || orderData.total || 0
+            orderData.pricing?.total || orderData.total || 0,
+            orderData.customerPhone,
+            orderData.billingAddress
           ).catch(err => console.error('[OrderService] Guest account creation failed:', err))
         }
       }
@@ -352,13 +354,16 @@ export async function updateOrderStatus(
 /**
  * Create a guest customer account after successful purchase
  * Creates Firebase Auth user and tenant customer record
+ * Updates existing customers with new billing info if provided
  */
 async function createGuestAccount(
   email: string,
   customerName: string,
   promoterSlug: string,
   orderId: string,
-  orderTotal: number
+  orderTotal: number,
+  phone?: string,
+  billingAddress?: { street?: string; city?: string; state?: string; zip?: string; country?: string }
 ): Promise<void> {
   try {
     const db = getAdminFirestore()
@@ -385,17 +390,35 @@ async function createGuestAccount(
     const promoterId = promoterSnapshot.docs[0].id
 
     if (!existingCustomer.empty) {
-      // Customer exists - just update their order stats
+      // Customer exists - update their order stats and any missing info
       const customerDoc = existingCustomer.docs[0]
       const customerData = customerDoc.data()
 
-      await customerDoc.ref.update({
+      const updateData: Record<string, any> = {
         orderCount: (customerData.orderCount || 0) + 1,
         totalSpent: (customerData.totalSpent || 0) + orderTotal,
         lastOrderId: orderId,
         lastOrderAt: new Date(),
         updatedAt: new Date(),
-      })
+      }
+
+      // Update phone if not set and provided
+      if (phone && !customerData.phone) {
+        updateData.phone = phone
+      }
+
+      // Update address if not set and provided
+      if (billingAddress && !customerData.address) {
+        updateData.address = {
+          street: billingAddress.street || null,
+          city: billingAddress.city || null,
+          state: billingAddress.state || null,
+          zip: billingAddress.zip || null,
+          country: billingAddress.country || 'USA',
+        }
+      }
+
+      await customerDoc.ref.update(updateData)
 
       console.log(`[Guest Account] Updated existing customer for ${normalizedEmail} on tenant ${promoterSlug}`)
       return
@@ -449,7 +472,14 @@ async function createGuestAccount(
       firebaseUid,
       firstName,
       lastName,
-      phone: null,
+      phone: phone || null,
+      address: billingAddress ? {
+        street: billingAddress.street || null,
+        city: billingAddress.city || null,
+        state: billingAddress.state || null,
+        zip: billingAddress.zip || null,
+        country: billingAddress.country || 'USA',
+      } : null,
       emailVerified: false,
       isGuest: true,
       needsPasswordReset: firebaseUid ? true : false,
