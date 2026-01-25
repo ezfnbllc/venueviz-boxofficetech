@@ -9,8 +9,10 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Metadata } from 'next'
+import Stripe from 'stripe'
 import Layout from '@/components/public/Layout'
 import TicketCard from '@/components/shared/TicketCard'
+import { getAdminFirestore } from '@/lib/firebase-admin'
 import {
   getOrderById,
   getEventDetails,
@@ -20,6 +22,114 @@ import {
   formatPaymentMethod,
   getEventImage,
 } from '@/lib/services/orderService'
+
+/**
+ * Verify and update order status from Stripe if still pending
+ * This handles cases where webhook hasn't fired yet
+ */
+async function verifyAndUpdateOrderStatus(
+  order: any,
+  promoterSlug: string
+): Promise<{ status: string; paymentMethod?: string }> {
+  // Only check Stripe if order is pending and has a payment intent
+  if (order.status !== 'pending' || !order.stripePaymentIntentId) {
+    return { status: order.status }
+  }
+
+  try {
+    const db = getAdminFirestore()
+
+    // Get promoter's Stripe credentials
+    const promoterSnapshot = await db.collection('promoters')
+      .where('slug', '==', promoterSlug)
+      .limit(1)
+      .get()
+
+    if (promoterSnapshot.empty) return { status: order.status }
+
+    const promoterId = promoterSnapshot.docs[0].id
+    const gatewaySnapshot = await db.collection('payment_gateways')
+      .where('promoterId', '==', promoterId)
+      .limit(1)
+      .get()
+
+    if (gatewaySnapshot.empty) return { status: order.status }
+
+    const gateway = gatewaySnapshot.docs[0].data()
+    if (gateway.provider !== 'stripe' || !gateway.credentials?.secretKey) {
+      return { status: order.status }
+    }
+
+    const stripe = new Stripe(gateway.credentials.secretKey, { apiVersion: '2023-10-16' })
+
+    // Fetch payment intent status
+    const paymentIntent = await stripe.paymentIntents.retrieve(order.stripePaymentIntentId)
+
+    if (paymentIntent.status === 'succeeded') {
+      // Payment succeeded but order wasn't updated - update it now
+      let paymentMethodDetails: Record<string, any> = {}
+      let paymentMethodDisplay = ''
+
+      const chargeId = paymentIntent.latest_charge as string
+      if (chargeId) {
+        const charge = await stripe.charges.retrieve(chargeId)
+        const pmDetails = charge.payment_method_details
+
+        if (pmDetails?.card) {
+          paymentMethodDetails = {
+            paymentMethod: 'card',
+            paymentBrand: pmDetails.card.brand || null,
+            paymentLast4: pmDetails.card.last4 || null,
+          }
+          paymentMethodDisplay = `${pmDetails.card.brand} ending in ${pmDetails.card.last4}`
+        } else if ((pmDetails as any)?.amazon_pay) {
+          paymentMethodDetails = { paymentMethod: 'amazon_pay', paymentBrand: 'Amazon Pay' }
+          paymentMethodDisplay = 'Amazon Pay'
+        } else if ((pmDetails as any)?.link) {
+          paymentMethodDetails = { paymentMethod: 'link', paymentBrand: 'Link' }
+          paymentMethodDisplay = 'Link'
+        } else if ((pmDetails as any)?.paypal) {
+          paymentMethodDetails = { paymentMethod: 'paypal', paymentBrand: 'PayPal' }
+          paymentMethodDisplay = 'PayPal'
+        } else if ((pmDetails as any)?.cashapp) {
+          paymentMethodDetails = { paymentMethod: 'cashapp', paymentBrand: 'Cash App' }
+          paymentMethodDisplay = 'Cash App'
+        } else if (pmDetails?.type) {
+          const typeDisplayNames: Record<string, string> = {
+            amazon_pay: 'Amazon Pay',
+            link: 'Link',
+            paypal: 'PayPal',
+            cashapp: 'Cash App',
+            afterpay_clearpay: 'Afterpay',
+            klarna: 'Klarna',
+            affirm: 'Affirm',
+          }
+          paymentMethodDetails = {
+            paymentMethod: pmDetails.type,
+            paymentBrand: typeDisplayNames[pmDetails.type] || pmDetails.type,
+          }
+          paymentMethodDisplay = typeDisplayNames[pmDetails.type] || pmDetails.type
+        }
+      }
+
+      // Update order in Firestore
+      await db.collection('orders').doc(order.id).update({
+        status: 'confirmed',
+        paymentStatus: 'paid',
+        paidAt: new Date(),
+        ...paymentMethodDetails,
+        updatedAt: new Date(),
+      })
+
+      return { status: 'confirmed', paymentMethod: paymentMethodDisplay }
+    }
+
+    return { status: order.status }
+  } catch (error) {
+    console.error('Error verifying order status:', error)
+    return { status: order.status }
+  }
+}
 
 interface PageProps {
   params: { slug: string; orderId: string }
@@ -47,6 +157,16 @@ export default async function OrderDetailPage({ params }: PageProps) {
     notFound()
   }
 
+  // Verify payment status with Stripe if order is still pending
+  // This handles cases where webhook hasn't fired yet
+  const { status: verifiedStatus, paymentMethod: stripePaymentMethod } =
+    await verifyAndUpdateOrderStatus(order, slug)
+
+  // Update order status for display
+  if (verifiedStatus !== order.status) {
+    order.status = verifiedStatus
+  }
+
   // Format order date
   const orderDate = order.paidAt || order.createdAt || new Date()
   const formattedOrderDate = orderDate.toLocaleDateString('en-US', {
@@ -68,7 +188,8 @@ export default async function OrderDetailPage({ params }: PageProps) {
   // Get event image and venue address using shared utilities
   const eventImage = getEventImage(event, primaryEvent)
   const venueAddress = formatVenueAddress(event?.venue)
-  const paymentMethod = formatPaymentMethod(order)
+  // Use Stripe payment method if we just verified, otherwise from order
+  const paymentMethod = stripePaymentMethod || formatPaymentMethod(order)
 
   return (
     <Layout promoterSlug={slug}>
