@@ -18,10 +18,10 @@ import { getAdminFirestore } from '@/lib/firebase-admin'
 import { TenantTheme, ThemeConfig, DEFAULT_THEME_CONFIG } from '@/lib/types/cms'
 import { PromoterProfile, PromoterThemeOverrides } from '@/lib/types/promoter'
 import { getMasterTheme } from './themeResolutionService'
-import { generateThemeCSSServer, getThemeServer } from './themeAssetServiceServer'
+import { generateThemeCSSServer, generateFullThemeCSS, getThemeServer } from './themeAssetServiceServer'
 
 // Cache for resolved promoter themes (5 minute TTL)
-const promoterThemeCache = new Map<string, { config: ThemeConfig; expiry: number }>()
+const promoterThemeCache = new Map<string, { config: ThemeConfig; theme?: TenantTheme; expiry: number }>()
 const CACHE_TTL = 5 * 60 * 1000
 
 /**
@@ -120,9 +120,29 @@ export async function getThemeConfigForPromoter(promoter: PromoterProfile): Prom
 
 /**
  * Generate complete CSS for a promoter's theme
+ * For advanced promoters, includes asset CSS (fonts, logos)
  */
 export async function generatePromoterThemeCSS(promoter: PromoterProfile): Promise<string> {
   const config = await getThemeConfigForPromoter(promoter)
+
+  // For advanced promoters, also generate asset CSS from the full theme
+  if (promoter.brandingType === 'advanced') {
+    // Get the full theme to access assets
+    let theme: TenantTheme | null = null
+
+    if (promoter.themeId) {
+      theme = await getThemeServer(promoter.themeId)
+    }
+    if (!theme) {
+      theme = await getMasterTheme()
+    }
+
+    if (theme) {
+      // Generate full CSS including assets
+      return generateFullThemeCSS({ ...theme, config })
+    }
+  }
+
   return generateThemeCSSServer(config)
 }
 

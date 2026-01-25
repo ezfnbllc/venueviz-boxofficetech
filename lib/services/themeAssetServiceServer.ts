@@ -16,6 +16,7 @@ import {
   DEFAULT_THEME_CONFIG,
   DEFAULT_THEME_ASSETS,
   MAX_FILE_SIZES,
+  ThemeFontAssets,
 } from '@/lib/types/cms'
 
 const THEMES_COLLECTION = 'tenantThemes'
@@ -287,7 +288,39 @@ export async function deleteThemeServer(themeId: string): Promise<void> {
  * Generate CSS from theme configuration
  */
 export function generateThemeCSSServer(config: ThemeConfig): string {
-  const { colors, typography, layout } = config
+  const { colors, typography, layout, components } = config
+
+  // Calculate spacing values based on spacing setting
+  const spacingValues = {
+    compact: { base: '0.5rem', section: '2rem', component: '0.75rem' },
+    normal: { base: '1rem', section: '4rem', component: '1.5rem' },
+    relaxed: { base: '1.5rem', section: '6rem', component: '2rem' },
+  }
+  const spacing = spacingValues[layout.spacing] || spacingValues.normal
+
+  // Calculate border radius based on button style
+  const borderRadiusValues = {
+    square: '0',
+    rounded: '0.5rem',
+    pill: '9999px',
+  }
+  const buttonRadius = borderRadiusValues[components.buttonStyle] || borderRadiusValues.rounded
+
+  // Card shadow based on card style
+  const cardStyles = {
+    flat: { shadow: 'none', border: 'none' },
+    raised: { shadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)', border: 'none' },
+    bordered: { shadow: 'none', border: `1px solid ${colors.border}` },
+  }
+  const card = cardStyles[components.cardStyle] || cardStyles.raised
+
+  // Input styles
+  const inputStyles = {
+    underline: { border: 'none', borderBottom: `2px solid ${colors.border}`, borderRadius: '0', background: 'transparent' },
+    outlined: { border: `1px solid ${colors.border}`, borderBottom: '', borderRadius: '0.375rem', background: 'transparent' },
+    filled: { border: 'none', borderBottom: '', borderRadius: '0.375rem', background: colors.surface },
+  }
+  const input = inputStyles[components.inputStyle] || inputStyles.outlined
 
   return `
 :root {
@@ -321,6 +354,18 @@ export function generateThemeCSSServer(config: ThemeConfig): string {
   --sidebar-width: ${layout.sidebarWidth};
   --header-height: ${layout.headerHeight};
   --footer-height: ${layout.footerHeight};
+  --spacing-base: ${spacing.base};
+  --spacing-section: ${spacing.section};
+  --spacing-component: ${spacing.component};
+
+  /* Component Styles */
+  --button-radius: ${buttonRadius};
+  --card-shadow: ${card.shadow};
+  --card-border: ${card.border};
+  --input-border: ${input.border};
+  --input-border-bottom: ${input.borderBottom};
+  --input-radius: ${input.borderRadius};
+  --input-background: ${input.background};
 }
 
 body {
@@ -344,6 +389,75 @@ a:hover {
   color: var(--color-link-hover);
 }
 `.trim()
+}
+
+/**
+ * Generate CSS for theme assets (fonts, logos)
+ */
+export function generateThemeAssetCSS(assets: ThemeAssets): string {
+  const parts: string[] = []
+
+  // Generate @font-face declarations for custom fonts
+  if (assets.fonts?.files?.length) {
+    for (const font of assets.fonts.files) {
+      const formatMap: Record<string, string> = {
+        woff2: 'woff2',
+        woff: 'woff',
+        ttf: 'truetype',
+        otf: 'opentype',
+      }
+      const format = formatMap[font.format] || font.format
+      parts.push(`
+@font-face {
+  font-family: '${font.name}';
+  src: url('${font.url}') format('${format}');
+  font-display: swap;
+}`)
+    }
+  }
+
+  // Include any pre-generated font-face CSS
+  if (assets.fonts?.fontFaces) {
+    parts.push(assets.fonts.fontFaces)
+  }
+
+  // Generate CSS variables for asset URLs (logo, favicon)
+  const assetVars: string[] = []
+  if (assets.images?.logo?.primary) {
+    assetVars.push(`  --logo-primary: url('${assets.images.logo.primary}');`)
+  }
+  if (assets.images?.logo?.secondary) {
+    assetVars.push(`  --logo-secondary: url('${assets.images.logo.secondary}');`)
+  }
+  if (assets.images?.logo?.favicon) {
+    assetVars.push(`  --favicon: url('${assets.images.logo.favicon}');`)
+  }
+  if (assets.images?.logo?.loading) {
+    assetVars.push(`  --logo-loading: url('${assets.images.logo.loading}');`)
+  }
+
+  if (assetVars.length > 0) {
+    parts.push(`
+:root {
+  /* Asset URLs */
+${assetVars.join('\n')}
+}`)
+  }
+
+  return parts.join('\n').trim()
+}
+
+/**
+ * Generate complete CSS including config and assets
+ */
+export function generateFullThemeCSS(theme: TenantTheme): string {
+  const configCSS = generateThemeCSSServer(theme.config)
+  const assetCSS = generateThemeAssetCSS(theme.assets)
+
+  if (assetCSS) {
+    return `${assetCSS}\n\n${configCSS}`
+  }
+  return configCSS
 }
 
 // ============================================================================
