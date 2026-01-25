@@ -1,6 +1,6 @@
 /**
  * EventCard Component
- * Based on Barren theme .main-card + .event-thumbnail + .event-content styles
+ * Uses theme CSS variables for colors
  *
  * Used in event listings, grid displays
  */
@@ -167,9 +167,9 @@ export function EventCard({
   return (
     <div
       className={cn(
-        'bg-white border-2 border-[#efefef] rounded-lg overflow-hidden',
+        'bg-[var(--color-background,#fff)] border-2 border-[var(--color-border,#efefef)] rounded-lg overflow-hidden',
         'transition-all duration-200 hover:shadow-[0px_2px_15px_-9px_rgba(0,0,0,0.1)]',
-        'hover:border-[#6ac045]',
+        'hover:border-[var(--color-primary,#6ac045)]',
         isSoldOut && 'opacity-75',
         className
       )}
@@ -186,9 +186,9 @@ export function EventCard({
               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
             />
           ) : (
-            <div className="w-full h-full bg-[#f1f2f3] flex items-center justify-center">
+            <div className="w-full h-full bg-[var(--color-surface,#f1f2f3)] flex items-center justify-center">
               <svg
-                className="w-12 h-12 text-[#717171]"
+                className="w-12 h-12 text-[var(--color-text-secondary,#717171)]"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -211,7 +211,7 @@ export function EventCard({
           title="Bookmark"
         >
           <svg
-            className="w-4 h-4 text-[#717171] hover:text-[#6ac045]"
+            className="w-4 h-4 text-[var(--color-text-secondary,#717171)] hover:text-[var(--color-primary,#6ac045)]"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -228,12 +228,12 @@ export function EventCard({
         {/* Status Badges */}
         <div className="absolute top-3 left-3 flex flex-col gap-1">
           {isOnline && (
-            <div className="px-2 py-1 bg-[#6ac045] text-white text-xs font-medium rounded">
+            <div className="px-2 py-1 bg-[var(--color-primary,#6ac045)] text-white text-xs font-medium rounded">
               Online Event
             </div>
           )}
           {isSoldOut && (
-            <div className="px-2 py-1 bg-red-500 text-white text-xs font-medium rounded">
+            <div className="px-2 py-1 bg-[var(--color-error,#EF4444)] text-white text-xs font-medium rounded">
               Sold Out
             </div>
           )}
@@ -243,14 +243,14 @@ export function EventCard({
       {/* Event Content */}
       <div className="p-4">
         <Link href={eventUrl}>
-          <h3 className="text-base font-semibold text-[#000] hover:text-[#6ac045] transition-colors line-clamp-2 mb-2">
+          <h3 className="text-base font-semibold text-[var(--color-heading,#000)] hover:text-[var(--color-primary,#6ac045)] transition-colors line-clamp-2 mb-2">
             {title}
           </h3>
         </Link>
 
         {/* Venue */}
         {venue && (
-          <div className="flex items-center text-sm text-[#717171] mb-2">
+          <div className="flex items-center text-sm text-[var(--color-text-secondary,#717171)] mb-2">
             <svg className="w-4 h-4 mr-1.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -261,9 +261,9 @@ export function EventCard({
 
         {/* Price */}
         <div className="flex items-center justify-between">
-          <span className="text-[#6ac045] font-semibold">{displayPrice}*</span>
+          <span className="text-[var(--color-primary,#6ac045)] font-semibold">{displayPrice}*</span>
           {remaining !== undefined && remaining > 0 && remaining < 20 && (
-            <span className="text-xs text-orange-500 font-medium">
+            <span className="text-xs text-[var(--color-warning,#F59E0B)] font-medium">
               Only {remaining} left
             </span>
           )}
@@ -271,8 +271,8 @@ export function EventCard({
       </div>
 
       {/* Event Footer - Date/Time */}
-      <div className="px-4 py-3 border-t border-[#efefef] bg-[#fafafa]">
-        <div className="flex items-center text-sm text-[#717171]">
+      <div className="px-4 py-3 border-t border-[var(--color-border,#efefef)] bg-[var(--color-surface,#fafafa)]">
+        <div className="flex items-center text-sm text-[var(--color-text-secondary,#717171)]">
           <svg className="w-4 h-4 mr-1.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
             <path
               fillRule="evenodd"

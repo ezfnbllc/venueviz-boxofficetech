@@ -190,14 +190,14 @@ export default async function PromoterHomePage({ params }: PageProps) {
 
       {/* Featured Events */}
       {featuredCards.length > 0 && (
-        <section className="py-16 bg-white">
+        <section className="py-16 bg-[var(--color-background,#fff)]">
           <div className="container mx-auto px-4">
             <div className="flex items-center justify-between mb-8">
               <div>
-                <h2 className="text-2xl md:text-3xl font-bold text-[#1d1d1d]">
+                <h2 className="text-2xl md:text-3xl font-bold text-[var(--color-heading,#1d1d1d)]">
                   Featured Events
                 </h2>
-                <p className="text-[#717171] mt-2">
+                <p className="text-[var(--color-text-secondary,#717171)] mt-2">
                   Don't miss these highlighted experiences
                 </p>
               </div>
@@ -220,14 +220,14 @@ export default async function PromoterHomePage({ params }: PageProps) {
 
       {/* Upcoming Events */}
       {upcomingCards.length > 0 && (
-        <section className="py-16 bg-[#f9fafb]">
+        <section className="py-16 bg-[var(--color-surface,#f9fafb)]">
           <div className="container mx-auto px-4">
             <div className="flex items-center justify-between mb-8">
               <div>
-                <h2 className="text-2xl md:text-3xl font-bold text-[#1d1d1d]">
+                <h2 className="text-2xl md:text-3xl font-bold text-[var(--color-heading,#1d1d1d)]">
                   Upcoming Events
                 </h2>
-                <p className="text-[#717171] mt-2">
+                <p className="text-[var(--color-text-secondary,#717171)] mt-2">
                   Explore what's happening next
                 </p>
               </div>
@@ -251,14 +251,14 @@ export default async function PromoterHomePage({ params }: PageProps) {
 
       {/* Partner/Affiliate Events */}
       {affiliateEvents.length > 0 && (
-        <section className="py-16 bg-white">
+        <section className="py-16 bg-[var(--color-background,#fff)]">
           <div className="container mx-auto px-4">
             <div className="flex items-center justify-between mb-8">
               <div>
-                <h2 className="text-2xl md:text-3xl font-bold text-[#1d1d1d]">
+                <h2 className="text-2xl md:text-3xl font-bold text-[var(--color-heading,#1d1d1d)]">
                   More Events You'll Love
                 </h2>
-                <p className="text-[#717171] mt-2">
+                <p className="text-[var(--color-text-secondary,#717171)] mt-2">
                   Tickets available from our partners
                 </p>
               </div>
@@ -270,10 +270,10 @@ export default async function PromoterHomePage({ params }: PageProps) {
                   href={event.affiliateUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="group bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 border border-slate-100"
+                  className="group bg-[var(--color-background,#fff)] rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 border border-[var(--color-border,#e2e8f0)]"
                 >
                   {/* Event Image */}
-                  <div className="relative aspect-[16/9] overflow-hidden bg-slate-100">
+                  <div className="relative aspect-[16/9] overflow-hidden bg-[var(--color-surface,#f1f5f9)]">
                     {event.imageUrl ? (
                       <img
                         src={event.imageUrl}
@@ -288,7 +288,7 @@ export default async function PromoterHomePage({ params }: PageProps) {
                       </div>
                     )}
                     {/* Partner badge */}
-                    <div className="absolute top-2 right-2 px-2 py-1 bg-white/90 backdrop-blur-sm rounded-full text-xs font-medium text-[#717171] flex items-center gap-1">
+                    <div className="absolute top-2 right-2 px-2 py-1 bg-white/90 backdrop-blur-sm rounded-full text-xs font-medium text-[var(--color-text-secondary,#717171)] flex items-center gap-1">
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                       </svg>
@@ -298,10 +298,10 @@ export default async function PromoterHomePage({ params }: PageProps) {
 
                   {/* Event Details */}
                   <div className="p-4">
-                    <h3 className="font-semibold text-[#1d1d1d] line-clamp-2 group-hover:text-[#6ac045] transition-colors">
+                    <h3 className="font-semibold text-[var(--color-heading,#1d1d1d)] line-clamp-2 group-hover:text-[var(--color-primary,#6ac045)] transition-colors">
                       {event.name}
                     </h3>
-                    <div className="mt-2 space-y-1 text-sm text-[#717171]">
+                    <div className="mt-2 space-y-1 text-sm text-[var(--color-text-secondary,#717171)]">
                       <p className="flex items-center gap-1.5">
                         <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -326,7 +326,7 @@ export default async function PromoterHomePage({ params }: PageProps) {
                       </p>
                     </div>
                     {event.minPrice && (
-                      <p className="mt-3 text-sm font-semibold text-[#1d1d1d]">
+                      <p className="mt-3 text-sm font-semibold text-[var(--color-heading,#1d1d1d)]">
                         From {new Intl.NumberFormat('en-US', { style: 'currency', currency: event.currency || 'USD' }).format(event.minPrice)}
                       </p>
                     )}
@@ -340,10 +340,10 @@ export default async function PromoterHomePage({ params }: PageProps) {
 
       {/* No Events Message */}
       {featuredCards.length === 0 && upcomingCards.length === 0 && affiliateEvents.length === 0 && (
-        <section className="py-24 bg-white">
+        <section className="py-24 bg-[var(--color-background,#fff)]">
           <div className="container mx-auto px-4 text-center">
             <svg
-              className="w-20 h-20 mx-auto text-[#efefef] mb-6"
+              className="w-20 h-20 mx-auto text-[var(--color-border,#efefef)] mb-6"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -355,10 +355,10 @@ export default async function PromoterHomePage({ params }: PageProps) {
                 d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
               />
             </svg>
-            <h2 className="text-2xl font-bold text-[#1d1d1d] mb-4">
+            <h2 className="text-2xl font-bold text-[var(--color-heading,#1d1d1d)] mb-4">
               No Events Available
             </h2>
-            <p className="text-[#717171] max-w-md mx-auto">
+            <p className="text-[var(--color-text-secondary,#717171)] max-w-md mx-auto">
               Check back soon! New events will be announced here.
             </p>
           </div>
@@ -366,7 +366,7 @@ export default async function PromoterHomePage({ params }: PageProps) {
       )}
 
       {/* CTA Section */}
-      <section className="py-16 bg-[#1d1d1d]">
+      <section className="py-16 bg-[var(--color-heading,#1d1d1d)]">
         <div className="container mx-auto px-4 text-center">
           <h2 className="text-2xl md:text-3xl font-bold text-white mb-4">
             Stay Updated
@@ -378,7 +378,7 @@ export default async function PromoterHomePage({ params }: PageProps) {
             <input
               type="email"
               placeholder="Enter your email"
-              className="flex-1 px-4 py-3 rounded-md border-0 focus:ring-2 focus:ring-[#6ac045]"
+              className="flex-1 px-4 py-3 rounded-md border-0 focus:ring-2 focus:ring-[var(--color-primary,#6ac045)]"
             />
             <Button variant="primary" size="lg">
               Subscribe

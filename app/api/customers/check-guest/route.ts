@@ -38,11 +38,10 @@ export async function POST(request: NextRequest) {
 
     const customer = customersSnapshot.docs[0].data()
 
-    // Count actual orders from orders collection (more accurate than cached orderCount)
+    // Count actual orders from orders collection (matches admin count - all orders for this customer)
     const ordersSnapshot = await db.collection('orders')
       .where('promoterSlug', '==', promoterSlug)
       .where('customerEmail', '==', email.toLowerCase())
-      .where('status', 'in', ['completed', 'confirmed'])
       .get()
 
     const actualOrderCount = ordersSnapshot.size

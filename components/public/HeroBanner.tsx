@@ -1,6 +1,6 @@
 /**
  * HeroBanner Component
- * Based on Barren theme .hero-banner styles
+ * Uses theme CSS variables for colors
  *
  * Full-width hero section for homepage
  */
@@ -53,7 +53,7 @@ export function HeroBanner({
     <section
       className={cn(
         'relative w-full overflow-hidden',
-        backgroundImage ? 'bg-cover bg-center' : 'bg-gradient-to-r from-[#1d1d1d] to-[#2d2d2d]',
+        backgroundImage ? 'bg-cover bg-center' : 'bg-gradient-to-r from-[var(--color-heading,#1d1d1d)] to-gray-800',
         sizes[size],
         className
       )}
@@ -124,7 +124,7 @@ export function HeroBanner({
                   <Button
                     variant="outline"
                     size="lg"
-                    className="border-white text-white hover:bg-white hover:text-[#1d1d1d]"
+                    className="border-white text-white hover:bg-white hover:text-[var(--color-heading,#1d1d1d)]"
                   >
                     {secondaryCtaText}
                   </Button>
@@ -136,7 +136,7 @@ export function HeroBanner({
       </div>
 
       {/* Decorative Elements */}
-      <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white to-transparent" />
+      <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-[var(--color-background,#fff)] to-transparent" />
     </section>
   )
 }
