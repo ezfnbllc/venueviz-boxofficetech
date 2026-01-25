@@ -11,6 +11,7 @@ import Link from 'next/link'
 import { getAdminFirestore } from '@/lib/firebase-admin'
 import Layout from '@/components/public/Layout'
 import TicketCard from '@/components/shared/TicketCard'
+import WalletButtons from '@/components/wallet/WalletButtons'
 
 interface PageProps {
   params: Promise<{ slug: string; orderId: string }>
@@ -254,6 +255,9 @@ export default async function ConfirmationPage({ params, searchParams }: PagePro
                   </svg>
                   View Ticket
                 </Link>
+
+                {/* Save to Digital Wallet */}
+                <WalletButtons orderId={orderId} className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-700" />
 
                 {/* Order Info */}
                 <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-700">
