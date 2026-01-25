@@ -161,20 +161,31 @@ export default function PromoterDetailPage() {
             </div>
           </div>
 
-          {/* Color Scheme Preview */}
-          {promoter.colorScheme && (
-            <div className="flex items-center gap-3 bg-slate-100 dark:bg-slate-700/50 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-600">
-              <span className="text-sm text-secondary-contrast">Brand Colors:</span>
-              {['primary', 'secondary', 'accent'].map(key => (
-                <div
-                  key={key}
-                  className="w-8 h-8 rounded-lg ring-2 ring-slate-300 dark:ring-white/20 shadow-lg"
-                  style={{ backgroundColor: promoter.colorScheme?.[key as keyof typeof promoter.colorScheme] }}
-                  title={key}
-                />
-              ))}
-            </div>
-          )}
+          {/* Color Scheme Preview & Theme Settings */}
+          <div className="flex items-center gap-3">
+            {promoter.colorScheme && (
+              <div className="flex items-center gap-3 bg-slate-100 dark:bg-slate-700/50 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-600">
+                <span className="text-sm text-secondary-contrast">Brand Colors:</span>
+                {['primary', 'secondary', 'accent'].map(key => (
+                  <div
+                    key={key}
+                    className="w-8 h-8 rounded-lg ring-2 ring-slate-300 dark:ring-white/20 shadow-lg"
+                    style={{ backgroundColor: promoter.colorScheme?.[key as keyof typeof promoter.colorScheme] }}
+                    title={key}
+                  />
+                ))}
+              </div>
+            )}
+            <button
+              onClick={() => router.push(`/admin/promoters/${promoterId}/settings`)}
+              className="btn-accent px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+              </svg>
+              Theme Settings
+            </button>
+          </div>
         </div>
       </div>
 
