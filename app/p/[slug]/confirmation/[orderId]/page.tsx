@@ -3,145 +3,37 @@
  *
  * Displays order confirmation after successful payment.
  * Shows order details, tickets, and calendar integration options.
+ * Uses shared orderService for core platform functionality.
  */
 
 import { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { getAdminFirestore } from '@/lib/firebase-admin'
 import Layout from '@/components/public/Layout'
 import TicketCard from '@/components/shared/TicketCard'
 import WalletButtons from '@/components/wallet/WalletButtons'
+import {
+  getOrderById,
+  getEventDetails,
+  updateOrderStatus,
+  formatTime,
+  formatEventDate,
+  formatVenueLocation,
+  formatPaymentMethod,
+  getEventImage,
+  type OrderData,
+  type EventDetails,
+} from '@/lib/services/orderService'
 
 interface PageProps {
   params: Promise<{ slug: string; orderId: string }>
   searchParams: Promise<{ payment_intent?: string; payment_intent_client_secret?: string; redirect_status?: string }>
 }
 
-interface EventData {
-  id: string
-  name: string
-  slug?: string
-  bannerImage?: string
-  thumbnail?: string
-  startDate: Date | null
-  startTime?: string
-  endTime?: string
-  doorsOpenTime?: string
-  venue?: {
-    name: string
-    streetAddress1?: string
-    city?: string
-    state?: string
-  }
-}
-
-interface OrderData {
-  orderId: string
-  status: string
-  customerName: string
-  customerEmail: string
-  eventId?: string
-  items: Array<{
-    eventId: string
-    eventName: string
-    eventImage?: string
-    ticketType?: string
-    quantity: number
-    price: number
-  }>
-  subtotal: number
-  serviceFee: number
-  total: number
-  currency: string
-  createdAt: any
-  paidAt?: any
-  qrCode?: string
-  tickets?: Array<{
-    id: string
-    ticketId?: string
-    tierName?: string
-    ticketType?: string
-    eventName?: string
-    section?: string | null
-    row?: number | null
-    seat?: number | null
-    status?: string
-    qrCode?: string
-  }>
-  // Payment information
-  paymentMethod?: string
-  paymentBrand?: string
-  paymentLast4?: string
-}
-
-async function getOrder(orderId: string): Promise<OrderData | null> {
-  try {
-    const db = getAdminFirestore()
-    const orderDoc = await db.collection('orders').doc(orderId).get()
-
-    if (!orderDoc.exists) {
-      return null
-    }
-
-    const data = orderDoc.data()
-    return {
-      orderId: orderDoc.id,
-      ...data,
-    } as OrderData
-  } catch (error) {
-    console.error('Error fetching order:', error)
-    return null
-  }
-}
-
-async function getEventDetails(eventId: string): Promise<EventData | null> {
-  try {
-    const db = getAdminFirestore()
-    const eventDoc = await db.collection('events').doc(eventId).get()
-
-    if (!eventDoc.exists) {
-      return null
-    }
-
-    const data = eventDoc.data()
-    if (!data) return null
-
-    return {
-      id: eventDoc.id,
-      name: data.name,
-      slug: data.slug,
-      bannerImage: data.bannerImage,
-      thumbnail: data.thumbnail,
-      startDate: data.startDate?.toDate?.() || null,
-      startTime: data.startTime,
-      endTime: data.endTime,
-      doorsOpenTime: data.doorsOpenTime,
-      venue: data.venue,
-    }
-  } catch (error) {
-    console.error('Error fetching event:', error)
-    return null
-  }
-}
-
-async function updateOrderStatus(orderId: string, status: string): Promise<void> {
-  try {
-    const db = getAdminFirestore()
-    await db.collection('orders').doc(orderId).update({
-      status,
-      paidAt: status === 'completed' ? new Date() : null,
-      updatedAt: new Date(),
-    })
-  } catch (error) {
-    console.error('Error updating order status:', error)
-  }
-}
-
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const resolvedParams = await params
-  const order = await getOrder(resolvedParams.orderId)
+  const order = await getOrderById(resolvedParams.orderId)
 
   if (!order) {
     return {
@@ -163,7 +55,7 @@ export default async function ConfirmationPage({ params, searchParams }: PagePro
   const { slug, orderId } = await params
   const resolvedSearchParams = await searchParams
 
-  const order = await getOrder(orderId)
+  const order = await getOrderById(orderId)
 
   if (!order) {
     notFound()
@@ -184,60 +76,22 @@ export default async function ConfirmationPage({ params, searchParams }: PagePro
   const event = eventId ? await getEventDetails(eventId) : null
 
   // Format event date (the actual event date, not purchase date)
-  const eventDate = event?.startDate
-  const formattedEventDate = eventDate
-    ? eventDate.toLocaleDateString('en-US', {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      })
-    : null
-
-  // Format time (convert 24h to 12h format)
-  const formatTime = (time?: string) => {
-    if (!time) return null
-    const [hours, minutes] = time.split(':').map(Number)
-    const period = hours >= 12 ? 'PM' : 'AM'
-    const hour12 = hours % 12 || 12
-    return `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`
-  }
+  const formattedEventDate = formatEventDate(event?.startDate, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
 
   // Get event image
-  const eventImage = event?.bannerImage || event?.thumbnail || primaryEvent?.eventImage
+  const eventImage = getEventImage(event, primaryEvent)
 
   // Get venue info
   const venueName = event?.venue?.name
-  const venueLocation = event?.venue?.city && event?.venue?.state
-    ? `${event.venue.city}, ${event.venue.state}`
-    : event?.venue?.city || ''
+  const venueLocation = formatVenueLocation(event?.venue)
 
   // Get payment method display
-  const getPaymentMethodDisplay = () => {
-    if (order.paymentBrand && order.paymentLast4) {
-      const brandNames: Record<string, string> = {
-        visa: 'Visa',
-        mastercard: 'Mastercard',
-        amex: 'American Express',
-        discover: 'Discover',
-        amazon_pay: 'Amazon Pay',
-      }
-      const brand = brandNames[order.paymentBrand.toLowerCase()] || order.paymentBrand
-      return `${brand} ****${order.paymentLast4}`
-    }
-    if (order.paymentMethod) {
-      const methodNames: Record<string, string> = {
-        amazon_pay: 'Amazon Pay',
-        card: 'Card',
-        link: 'Link',
-        paypal: 'PayPal',
-      }
-      return methodNames[order.paymentMethod.toLowerCase()] || order.paymentMethod
-    }
-    return null
-  }
-
-  const paymentMethod = getPaymentMethodDisplay()
+  const paymentMethod = formatPaymentMethod(order)
 
   return (
     <Layout promoterSlug={slug}>

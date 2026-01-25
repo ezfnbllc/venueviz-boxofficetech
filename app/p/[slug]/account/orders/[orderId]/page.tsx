@@ -1,153 +1,32 @@
 /**
  * Order Detail Page
  *
- * Displays order details and tickets with full event information
+ * Displays order details and tickets with full event information.
+ * Uses shared orderService for core platform functionality.
  */
 
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Metadata } from 'next'
-import { getAdminFirestore } from '@/lib/firebase-admin'
 import Layout from '@/components/public/Layout'
 import TicketCard from '@/components/shared/TicketCard'
+import {
+  getOrderById,
+  getEventDetails,
+  formatTime,
+  formatEventDate,
+  formatVenueAddress,
+  formatPaymentMethod,
+  getEventImage,
+} from '@/lib/services/orderService'
 
 interface PageProps {
   params: { slug: string; orderId: string }
 }
 
-interface EventData {
-  id: string
-  name: string
-  slug?: string
-  bannerImage?: string
-  thumbnail?: string
-  startDate: Date | null
-  startTime?: string
-  endTime?: string
-  doorsOpenTime?: string
-  venue?: {
-    name: string
-    streetAddress1?: string
-    streetAddress2?: string
-    city?: string
-    state?: string
-    zipCode?: string
-    country?: string
-  }
-  description?: string
-  shortDescription?: string
-}
-
-interface OrderData {
-  orderId: string
-  status: string
-  customerName: string
-  customerEmail: string
-  customerPhone?: string
-  eventId?: string
-  items: Array<{
-    eventId: string
-    eventName: string
-    eventImage?: string
-    ticketType?: string
-    quantity: number
-    price: number
-  }>
-  subtotal: number
-  serviceFee: number
-  total: number
-  currency: string
-  createdAt: any
-  paidAt?: any
-  qrCode?: string
-  tickets?: Array<{
-    ticketId: string
-    id?: string
-    eventName: string
-    ticketType?: string
-    tierName?: string
-    qrCode: string
-    status: string
-    section?: string
-    row?: string | number
-    seat?: string | number
-  }>
-  // Payment information
-  paymentMethod?: string
-  paymentBrand?: string
-  paymentLast4?: string
-  stripePaymentIntentId?: string
-}
-
-async function getOrder(orderId: string): Promise<OrderData | null> {
-  try {
-    const db = getAdminFirestore()
-
-    // Try to find by orderId field first
-    let orderDoc = await db.collection('orders').doc(orderId).get()
-
-    if (!orderDoc.exists) {
-      // Try to find by orderId field
-      const query = await db.collection('orders')
-        .where('orderId', '==', orderId)
-        .limit(1)
-        .get()
-
-      if (!query.empty) {
-        orderDoc = query.docs[0]
-      }
-    }
-
-    if (!orderDoc.exists) {
-      return null
-    }
-
-    const data = orderDoc.data()
-    return {
-      orderId: data?.orderId || orderDoc.id,
-      ...data,
-    } as OrderData
-  } catch (error) {
-    console.error('Error fetching order:', error)
-    return null
-  }
-}
-
-async function getEventDetails(eventId: string): Promise<EventData | null> {
-  try {
-    const db = getAdminFirestore()
-    const eventDoc = await db.collection('events').doc(eventId).get()
-
-    if (!eventDoc.exists) {
-      return null
-    }
-
-    const data = eventDoc.data()
-    if (!data) return null
-
-    return {
-      id: eventDoc.id,
-      name: data.name,
-      slug: data.slug,
-      bannerImage: data.bannerImage,
-      thumbnail: data.thumbnail,
-      startDate: data.startDate?.toDate?.() || null,
-      startTime: data.startTime,
-      endTime: data.endTime,
-      doorsOpenTime: data.doorsOpenTime,
-      venue: data.venue,
-      description: data.description,
-      shortDescription: data.shortDescription,
-    }
-  } catch (error) {
-    console.error('Error fetching event:', error)
-    return null
-  }
-}
-
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const order = await getOrder(params.orderId)
+  const order = await getOrderById(params.orderId)
 
   if (!order) {
     return { title: 'Order Not Found' }
@@ -162,13 +41,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function OrderDetailPage({ params }: PageProps) {
   const { slug, orderId } = params
-  const order = await getOrder(orderId)
+  const order = await getOrderById(orderId)
 
   if (!order) {
     notFound()
   }
 
-  const orderDate = order.paidAt?.toDate?.() || order.createdAt?.toDate?.() || new Date()
+  // Format order date
+  const orderDate = order.paidAt || order.createdAt || new Date()
   const formattedOrderDate = orderDate.toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'long',
@@ -182,80 +62,13 @@ export default async function OrderDetailPage({ params }: PageProps) {
   const eventId = order.eventId || primaryEvent?.eventId
   const event = eventId ? await getEventDetails(eventId) : null
 
-  // Format event date
-  const eventDate = event?.startDate
-  const formattedEventDate = eventDate
-    ? eventDate.toLocaleDateString('en-US', {
-        weekday: 'long',
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric',
-      })
-    : null
+  // Format event date using shared utility
+  const formattedEventDate = formatEventDate(event?.startDate)
 
-  // Format time (convert 24h to 12h format)
-  const formatTime = (time?: string) => {
-    if (!time) return null
-    const [hours, minutes] = time.split(':').map(Number)
-    const period = hours >= 12 ? 'PM' : 'AM'
-    const hour12 = hours % 12 || 12
-    return `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`
-  }
-
-  // Build venue address
-  const getVenueAddress = () => {
-    if (!event?.venue) return null
-    const parts = [
-      event.venue.streetAddress1,
-      event.venue.streetAddress2,
-      event.venue.city,
-      event.venue.state,
-      event.venue.zipCode,
-    ].filter(Boolean)
-    return parts.length > 0 ? parts.join(', ') : null
-  }
-
-  // Get payment method display
-  const getPaymentMethodDisplay = () => {
-    const brandNames: Record<string, string> = {
-      visa: 'Visa',
-      mastercard: 'Mastercard',
-      amex: 'American Express',
-      discover: 'Discover',
-      diners: 'Diners Club',
-      jcb: 'JCB',
-      unionpay: 'UnionPay',
-      'amazon pay': 'Amazon Pay',
-    }
-    const methodNames: Record<string, string> = {
-      amazon_pay: 'Amazon Pay',
-      card: 'Card',
-      link: 'Link',
-      paypal: 'PayPal',
-      cashapp: 'Cash App',
-      klarna: 'Klarna',
-      affirm: 'Affirm',
-    }
-
-    // If we have brand and last4, show card details
-    if (order.paymentBrand && order.paymentLast4) {
-      const brand = brandNames[order.paymentBrand.toLowerCase()] || order.paymentBrand
-      return `${brand} ending in ${order.paymentLast4}`
-    }
-    // If we have a brand name (like Amazon Pay), show it
-    if (order.paymentBrand) {
-      return brandNames[order.paymentBrand.toLowerCase()] || order.paymentBrand
-    }
-    // If we have a payment method type, show friendly name
-    if (order.paymentMethod) {
-      return methodNames[order.paymentMethod.toLowerCase()] || order.paymentMethod
-    }
-    return null
-  }
-
-  const eventImage = event?.bannerImage || event?.thumbnail || primaryEvent?.eventImage
-  const venueAddress = getVenueAddress()
-  const paymentMethod = getPaymentMethodDisplay()
+  // Get event image and venue address using shared utilities
+  const eventImage = getEventImage(event, primaryEvent)
+  const venueAddress = formatVenueAddress(event?.venue)
+  const paymentMethod = formatPaymentMethod(order)
 
   return (
     <Layout promoterSlug={slug}>
@@ -291,7 +104,7 @@ export default async function OrderDetailPage({ params }: PageProps) {
               <div className="flex items-center justify-between mb-4">
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Order #{order.orderId}</h1>
                 <span className={`inline-block px-3 py-1 text-sm font-medium rounded-full ${
-                  order.status === 'confirmed' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' :
+                  order.status === 'confirmed' || order.status === 'completed' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' :
                   order.status === 'pending' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400' :
                   order.status === 'refunded' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' :
                   'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
