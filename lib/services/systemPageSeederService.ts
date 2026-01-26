@@ -11,9 +11,377 @@
 
 import { getAdminDb } from '@/lib/firebase-admin'
 import { Timestamp } from 'firebase-admin/firestore'
-import { TenantPage, SystemPageType, PageSEO } from '@/lib/types/cms'
+import {
+  TenantPage,
+  SystemPageType,
+  PageSEO,
+  PageSection,
+  HeroContent,
+  ContentBlockContent,
+  EventsListContent,
+  ContactFormContent,
+  CTAContent,
+  MapContent,
+  SectionSettings,
+} from '@/lib/types/cms'
 
 const PAGES_COLLECTION = 'tenantPages'
+
+// ============================================================================
+// DEFAULT SECTION GENERATORS
+// ============================================================================
+
+/**
+ * Generate a unique section ID
+ */
+function generateSectionId(): string {
+  return `section_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+}
+
+/**
+ * Default section settings
+ */
+const defaultSettings: SectionSettings = {
+  padding: 'medium',
+  visibility: 'visible',
+}
+
+/**
+ * Get default sections for a system page type
+ */
+function getDefaultSectionsForPage(systemType: SystemPageType): PageSection[] {
+  switch (systemType) {
+    case 'home':
+      return [
+        {
+          id: generateSectionId(),
+          type: 'hero',
+          order: 0,
+          settings: { ...defaultSettings, padding: 'none' },
+          content: {
+            type: 'hero',
+            headline: 'Welcome to Our Events',
+            subheadline: 'Discover amazing experiences and book your tickets today',
+            alignment: 'center',
+            height: 'medium',
+            overlayOpacity: 0.4,
+            ctaButton: {
+              text: 'Browse Events',
+              link: '/events',
+              style: 'primary',
+            },
+          } as HeroContent,
+        },
+        {
+          id: generateSectionId(),
+          type: 'events',
+          order: 1,
+          settings: defaultSettings,
+          content: {
+            type: 'events',
+            heading: 'Upcoming Events',
+            displayMode: 'grid',
+            columns: 3,
+            limit: 6,
+            filter: { upcoming: true },
+            showFilters: false,
+          } as EventsListContent,
+        },
+        {
+          id: generateSectionId(),
+          type: 'cta',
+          order: 2,
+          settings: { ...defaultSettings, backgroundColor: '#f8fafc' },
+          content: {
+            type: 'cta',
+            headline: 'Never Miss an Event',
+            subtext: 'Sign up for our newsletter to get updates on upcoming events and exclusive offers.',
+            button: {
+              text: 'Subscribe Now',
+              link: '/contact',
+              style: 'primary',
+            },
+            style: 'banner',
+          } as CTAContent,
+        },
+      ]
+
+    case 'events':
+      return [
+        {
+          id: generateSectionId(),
+          type: 'hero',
+          order: 0,
+          settings: { ...defaultSettings, padding: 'none' },
+          content: {
+            type: 'hero',
+            headline: 'Browse Our Events',
+            subheadline: 'Find the perfect event for you',
+            alignment: 'center',
+            height: 'small',
+            overlayOpacity: 0.5,
+          } as HeroContent,
+        },
+        {
+          id: generateSectionId(),
+          type: 'events',
+          order: 1,
+          settings: defaultSettings,
+          content: {
+            type: 'events',
+            heading: '',
+            displayMode: 'grid',
+            columns: 3,
+            limit: 12,
+            filter: { upcoming: true },
+            showFilters: true,
+          } as EventsListContent,
+        },
+      ]
+
+    case 'about':
+      return [
+        {
+          id: generateSectionId(),
+          type: 'hero',
+          order: 0,
+          settings: { ...defaultSettings, padding: 'none' },
+          content: {
+            type: 'hero',
+            headline: 'About Us',
+            subheadline: 'Learn more about who we are and what we do',
+            alignment: 'center',
+            height: 'small',
+            overlayOpacity: 0.5,
+          } as HeroContent,
+        },
+        {
+          id: generateSectionId(),
+          type: 'content',
+          order: 1,
+          settings: defaultSettings,
+          content: {
+            type: 'content',
+            heading: 'Our Story',
+            body: `<p>Welcome to our events platform! We are passionate about bringing people together through memorable experiences.</p>
+<p>Our mission is to make it easy for you to discover and attend amazing events in your area. Whether you're looking for concerts, theater, sports, or community gatherings, we've got you covered.</p>
+<p>We work with the best venues and promoters to bring you a curated selection of events that cater to every taste and interest.</p>`,
+            columns: 1,
+          } as ContentBlockContent,
+        },
+        {
+          id: generateSectionId(),
+          type: 'content',
+          order: 2,
+          settings: { ...defaultSettings, backgroundColor: '#f8fafc' },
+          content: {
+            type: 'content',
+            heading: 'Why Choose Us',
+            body: `<ul>
+<li><strong>Easy Booking:</strong> Simple and secure ticket purchasing</li>
+<li><strong>Best Selection:</strong> Curated events from top promoters</li>
+<li><strong>Great Support:</strong> Friendly customer service team</li>
+<li><strong>Instant Delivery:</strong> E-tickets delivered to your inbox</li>
+</ul>`,
+            columns: 1,
+          } as ContentBlockContent,
+        },
+      ]
+
+    case 'contact':
+      return [
+        {
+          id: generateSectionId(),
+          type: 'hero',
+          order: 0,
+          settings: { ...defaultSettings, padding: 'none' },
+          content: {
+            type: 'hero',
+            headline: 'Contact Us',
+            subheadline: 'We\'d love to hear from you',
+            alignment: 'center',
+            height: 'small',
+            overlayOpacity: 0.5,
+          } as HeroContent,
+        },
+        {
+          id: generateSectionId(),
+          type: 'contact',
+          order: 1,
+          settings: defaultSettings,
+          content: {
+            type: 'contact',
+            heading: 'Get in Touch',
+            fields: [
+              { id: 'name', type: 'text', label: 'Name', placeholder: 'Your name', required: true },
+              { id: 'email', type: 'email', label: 'Email', placeholder: 'your@email.com', required: true },
+              { id: 'subject', type: 'text', label: 'Subject', placeholder: 'How can we help?', required: false },
+              { id: 'message', type: 'textarea', label: 'Message', placeholder: 'Your message...', required: true },
+            ],
+            submitButton: 'Send Message',
+            successMessage: 'Thank you! We\'ll get back to you soon.',
+            recipientEmail: '',
+          } as ContactFormContent,
+        },
+        {
+          id: generateSectionId(),
+          type: 'map',
+          order: 2,
+          settings: defaultSettings,
+          content: {
+            type: 'map',
+            heading: 'Find Us',
+            address: '',
+            zoom: 15,
+            showMarker: true,
+          } as MapContent,
+        },
+      ]
+
+    case 'faq':
+      return [
+        {
+          id: generateSectionId(),
+          type: 'hero',
+          order: 0,
+          settings: { ...defaultSettings, padding: 'none' },
+          content: {
+            type: 'hero',
+            headline: 'Frequently Asked Questions',
+            subheadline: 'Find answers to common questions',
+            alignment: 'center',
+            height: 'small',
+            overlayOpacity: 0.5,
+          } as HeroContent,
+        },
+        {
+          id: generateSectionId(),
+          type: 'content',
+          order: 1,
+          settings: defaultSettings,
+          content: {
+            type: 'content',
+            heading: 'Tickets & Booking',
+            body: `<h4>How do I purchase tickets?</h4>
+<p>Simply browse our events, select the one you're interested in, choose your seats or tickets, and complete the checkout process. You'll receive your tickets via email.</p>
+
+<h4>Can I get a refund?</h4>
+<p>Refund policies vary by event. Please check the specific event's terms and conditions or contact our support team for assistance.</p>
+
+<h4>How do I access my tickets?</h4>
+<p>After purchase, your tickets are available in your account dashboard and are also sent to your email. You can print them or show them on your mobile device.</p>`,
+            columns: 1,
+          } as ContentBlockContent,
+        },
+        {
+          id: generateSectionId(),
+          type: 'content',
+          order: 2,
+          settings: { ...defaultSettings, backgroundColor: '#f8fafc' },
+          content: {
+            type: 'content',
+            heading: 'Account & Support',
+            body: `<h4>How do I create an account?</h4>
+<p>Click the "Sign Up" button and follow the registration process. You can also create an account during checkout.</p>
+
+<h4>I forgot my password. What do I do?</h4>
+<p>Click "Forgot Password" on the login page and enter your email address. We'll send you instructions to reset your password.</p>
+
+<h4>How can I contact customer support?</h4>
+<p>You can reach us through our contact page, by email, or by phone during business hours. We're here to help!</p>`,
+            columns: 1,
+          } as ContentBlockContent,
+        },
+      ]
+
+    case 'terms':
+      return [
+        {
+          id: generateSectionId(),
+          type: 'content',
+          order: 0,
+          settings: defaultSettings,
+          content: {
+            type: 'content',
+            heading: 'Terms of Service',
+            body: `<p><em>Last updated: ${new Date().toLocaleDateString()}</em></p>
+
+<h3>1. Acceptance of Terms</h3>
+<p>By accessing and using this website, you accept and agree to be bound by the terms and conditions of this agreement.</p>
+
+<h3>2. Ticket Purchases</h3>
+<p>All ticket sales are final unless otherwise stated in the event-specific terms. Tickets are non-transferable unless explicitly allowed by the event organizer.</p>
+
+<h3>3. User Accounts</h3>
+<p>You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account.</p>
+
+<h3>4. Prohibited Conduct</h3>
+<p>You agree not to engage in any activity that interferes with or disrupts the services or servers connected to this website.</p>
+
+<h3>5. Limitation of Liability</h3>
+<p>We shall not be liable for any indirect, incidental, special, consequential, or punitive damages resulting from your use of our services.</p>
+
+<h3>6. Changes to Terms</h3>
+<p>We reserve the right to modify these terms at any time. Your continued use of the website constitutes acceptance of any changes.</p>
+
+<p>For questions about these terms, please contact us.</p>`,
+            columns: 1,
+          } as ContentBlockContent,
+        },
+      ]
+
+    case 'privacy':
+      return [
+        {
+          id: generateSectionId(),
+          type: 'content',
+          order: 0,
+          settings: defaultSettings,
+          content: {
+            type: 'content',
+            heading: 'Privacy Policy',
+            body: `<p><em>Last updated: ${new Date().toLocaleDateString()}</em></p>
+
+<h3>Information We Collect</h3>
+<p>We collect information you provide directly to us, such as when you create an account, make a purchase, or contact us for support. This may include your name, email address, phone number, and payment information.</p>
+
+<h3>How We Use Your Information</h3>
+<p>We use the information we collect to:</p>
+<ul>
+<li>Process your ticket purchases</li>
+<li>Send you transaction confirmations and event updates</li>
+<li>Respond to your comments, questions, and requests</li>
+<li>Improve our services and develop new features</li>
+</ul>
+
+<h3>Information Sharing</h3>
+<p>We do not sell your personal information to third parties. We may share your information with event organizers for the events you purchase tickets to, and with service providers who assist us in operating our platform.</p>
+
+<h3>Data Security</h3>
+<p>We implement appropriate security measures to protect your personal information against unauthorized access, alteration, disclosure, or destruction.</p>
+
+<h3>Your Rights</h3>
+<p>You have the right to access, correct, or delete your personal information. You can manage your account settings or contact us to exercise these rights.</p>
+
+<h3>Contact Us</h3>
+<p>If you have any questions about this Privacy Policy, please contact us through our contact page.</p>`,
+            columns: 1,
+          } as ContentBlockContent,
+        },
+      ]
+
+    // Pages that are handled by React components - no CMS sections needed
+    case 'login':
+    case 'register':
+    case 'account':
+    case 'event-detail':
+    case 'checkout':
+      return []
+
+    default:
+      return []
+  }
+}
 
 // ============================================================================
 // SYSTEM PAGE DEFINITIONS
@@ -250,6 +618,10 @@ export async function initializeSystemPages(
     }
 
     const pageRef = db.collection(PAGES_COLLECTION).doc()
+
+    // Get default sections for this page type
+    const defaultSections = getDefaultSectionsForPage(pageDef.systemType)
+
     const page: TenantPage = {
       id: pageRef.id,
       tenantId,
@@ -264,7 +636,7 @@ export async function initializeSystemPages(
       type: 'system',
       systemType: pageDef.systemType,
       templateId: '',
-      sections: [],
+      sections: defaultSections,
       status: 'published', // System pages are published by default
       isProtected: true,   // System pages cannot be deleted
       showInNav: pageDef.showInNav,
@@ -348,4 +720,73 @@ export async function getSystemPage(
 
   if (snapshot.empty) return null
   return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as TenantPage
+}
+
+/**
+ * Populate default sections for existing system pages that have empty sections
+ * This is useful for migrating pages that were created before default sections were added
+ *
+ * @param tenantId - The tenant ID
+ * @param userId - The user performing the action (for audit)
+ * @returns Object with updated and skipped page counts
+ */
+export async function populateDefaultSections(
+  tenantId: string,
+  userId: string
+): Promise<{
+  updated: string[]
+  skipped: string[]
+  total: number
+}> {
+  const db = getAdminDb()
+  const updated: string[] = []
+  const skipped: string[] = []
+
+  // Get all system pages for this tenant
+  const pagesSnapshot = await db.collection(PAGES_COLLECTION)
+    .where('tenantId', '==', tenantId)
+    .where('type', '==', 'system')
+    .get()
+
+  const batch = db.batch()
+  const now = Timestamp.now()
+
+  for (const doc of pagesSnapshot.docs) {
+    const page = doc.data() as TenantPage
+    const systemType = page.systemType as SystemPageType
+
+    // Skip if page already has sections
+    if (page.sections && page.sections.length > 0) {
+      skipped.push(systemType || page.title)
+      continue
+    }
+
+    // Get default sections for this page type
+    const defaultSections = getDefaultSectionsForPage(systemType)
+
+    // Skip if no default sections for this page type
+    if (defaultSections.length === 0) {
+      skipped.push(systemType || page.title)
+      continue
+    }
+
+    // Update the page with default sections
+    batch.update(doc.ref, {
+      sections: defaultSections,
+      updatedAt: now,
+      updatedBy: userId,
+    })
+    updated.push(systemType || page.title)
+  }
+
+  // Commit all updates
+  if (updated.length > 0) {
+    await batch.commit()
+  }
+
+  return {
+    updated,
+    skipped,
+    total: pagesSnapshot.size,
+  }
 }

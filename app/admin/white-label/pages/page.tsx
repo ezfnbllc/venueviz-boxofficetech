@@ -59,6 +59,7 @@ function PagesPageContent() {
     missing: string[]
   } | null>(null)
   const [initializingPages, setInitializingPages] = useState(false)
+  const [populatingDefaults, setPopulatingDefaults] = useState(false)
 
   const { effectivePromoterId, isAdmin } = usePromoterAccess()
   const { user } = useFirebaseAuth()
@@ -179,6 +180,41 @@ function PagesPageContent() {
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Initialization failed' })
     } finally {
       setInitializingPages(false)
+    }
+  }
+
+  // Count pages with empty sections
+  const pagesWithEmptySections = pages.filter(
+    p => p.type === 'system' && (!p.sections || p.sections.length === 0)
+  )
+
+  // Populate default sections for existing pages
+  const handlePopulateDefaultSections = async () => {
+    if (!tenantId || !user) return
+
+    setPopulatingDefaults(true)
+    try {
+      const response = await fetch('/api/cms/pages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'populateDefaultSections',
+          tenantId,
+          userId: user.uid,
+        }),
+      })
+
+      const data = await response.json()
+      if (response.ok) {
+        setMessage({ type: 'success', text: data.message })
+        loadData()
+      } else {
+        throw new Error(data.error || 'Failed to populate default sections')
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Population failed' })
+    } finally {
+      setPopulatingDefaults(false)
     }
   }
 
@@ -796,6 +832,52 @@ function PagesPageContent() {
                     </button>
                     <span className="text-sm text-slate-500 dark:text-gray-400">
                       {systemPagesStatus.existing} of {systemPagesStatus.total} pages exist
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Populate Default Sections Banner */}
+          {pagesWithEmptySections.length > 0 && (
+            <div className="bg-gradient-to-r from-amber-600/10 to-orange-600/10 border border-amber-500/20 rounded-xl p-6">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-6 h-6 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-1">
+                    Add Default Content
+                  </h3>
+                  <p className="text-slate-600 dark:text-gray-400 mb-3">
+                    {pagesWithEmptySections.length} system page{pagesWithEmptySections.length > 1 ? 's have' : ' has'} no content sections.
+                    You can add starter content (hero sections, text blocks, etc.) to help you get started quickly.
+                  </p>
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={handlePopulateDefaultSections}
+                      disabled={populatingDefaults}
+                      className="px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-600/50 text-white rounded-lg transition-colors font-medium flex items-center gap-2"
+                    >
+                      {populatingDefaults ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-white"></div>
+                          Adding Content...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                          </svg>
+                          Add Default Sections
+                        </>
+                      )}
+                    </button>
+                    <span className="text-sm text-slate-500 dark:text-gray-400">
+                      Pages: {pagesWithEmptySections.map(p => p.title).join(', ')}
                     </span>
                   </div>
                 </div>

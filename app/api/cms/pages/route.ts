@@ -36,6 +36,7 @@ import {
 import {
   initializeSystemPages,
   areSystemPagesInitialized,
+  populateDefaultSections,
 } from '@/lib/services/systemPageSeederService'
 import { SectionType } from '@/lib/types/cms'
 
@@ -146,6 +147,22 @@ export async function POST(request: NextRequest) {
           message: `System pages initialized. Created: ${result.created.length}, Skipped: ${result.skipped.length}`,
           ...result,
         }, { status: 201 })
+      }
+
+      // Populate default sections for existing pages with empty sections
+      case 'populateDefaultSections': {
+        if (!tenantId) {
+          return NextResponse.json(
+            { error: 'Tenant ID required' },
+            { status: 400 }
+          )
+        }
+
+        const result = await populateDefaultSections(tenantId, userId)
+        return NextResponse.json({
+          message: `Default sections populated. Updated: ${result.updated.length}, Skipped: ${result.skipped.length}`,
+          ...result,
+        })
       }
 
       // Add section to page
