@@ -183,9 +183,12 @@ function PagesPageContent() {
     }
   }
 
-  // Count pages with empty sections
+  // Count CMS-editable pages with empty sections (exclude locked/core pages)
   const pagesWithEmptySections = pages.filter(
-    p => p.type === 'system' && (!p.sections || p.sections.length === 0)
+    p => p.type === 'system' &&
+         p.isCmsEditable !== false &&
+         !p.isLocked &&
+         (!p.sections || p.sections.length === 0)
   )
 
   // Populate default sections for existing pages
@@ -959,20 +962,32 @@ function PagesPageContent() {
                     >
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-2">
-                          {page.isProtected && (
-                            <svg className="w-4 h-4 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" title="Protected system page">
+                          {/* Locked icon for core business pages */}
+                          {page.isLocked || page.isCmsEditable === false ? (
+                            <svg className="w-4 h-4 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" title="Core page - editing locked">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                             </svg>
-                          )}
+                          ) : page.isCmsEditable ? (
+                            <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" title="Editable page">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                            </svg>
+                          ) : null}
                           <div>
                             <p className="text-slate-900 dark:text-white font-medium">
                               {page.title}
                             </p>
-                            {page.showInNav && (
-                              <p className="text-xs text-slate-500 dark:text-gray-400 mt-1">
-                                Shown in navigation
-                              </p>
-                            )}
+                            <div className="flex items-center gap-2 mt-1">
+                              {page.showInNav && (
+                                <span className="text-xs text-slate-500 dark:text-gray-400">
+                                  Shown in navigation
+                                </span>
+                              )}
+                              {(page.isLocked || page.isCmsEditable === false) && (
+                                <span className="text-xs text-orange-400 bg-orange-500/10 px-1.5 py-0.5 rounded">
+                                  Core Page
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -999,12 +1014,22 @@ function PagesPageContent() {
                       </td>
                       <td className="py-4 px-6">
                         <div className="flex justify-end gap-2">
-                          <a
-                            href={`/admin/white-label/pages/${page.id}`}
-                            className="px-3 py-1.5 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-700 dark:text-white rounded text-sm transition-colors"
-                          >
-                            Edit
-                          </a>
+                          {/* Edit button - only for CMS-editable pages */}
+                          {page.isCmsEditable !== false && !page.isLocked ? (
+                            <a
+                              href={`/admin/white-label/pages/${page.id}`}
+                              className="px-3 py-1.5 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-700 dark:text-white rounded text-sm transition-colors"
+                            >
+                              Edit
+                            </a>
+                          ) : (
+                            <span
+                              className="px-3 py-1.5 bg-slate-500/10 text-slate-400 rounded text-sm cursor-not-allowed"
+                              title="Core business page - content is managed by platform code"
+                            >
+                              Locked
+                            </span>
+                          )}
                           <button
                             onClick={() => handleTogglePublish(page.id, page.isPublished)}
                             className={`px-3 py-1.5 rounded text-sm transition-colors ${
@@ -1015,15 +1040,18 @@ function PagesPageContent() {
                           >
                             {page.isPublished ? 'Unpublish' : 'Publish'}
                           </button>
-                          <button
-                            onClick={() => handleDuplicate(page.id, page.title)}
-                            className="px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded text-sm transition-colors"
-                            title="Duplicate page"
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                            </svg>
-                          </button>
+                          {/* Only show duplicate for editable pages */}
+                          {page.isCmsEditable !== false && !page.isLocked && (
+                            <button
+                              onClick={() => handleDuplicate(page.id, page.title)}
+                              className="px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded text-sm transition-colors"
+                              title="Duplicate page"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                            </button>
+                          )}
                           <button
                             onClick={() => handleDelete(page.id)}
                             disabled={page.isProtected}

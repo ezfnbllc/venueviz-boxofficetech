@@ -269,6 +269,8 @@ export interface TenantPage {
   type: PageType
   systemType?: SystemPageType
   isProtected?: boolean                  // System pages cannot be deleted
+  isLocked?: boolean                     // Locked pages cannot be edited via CMS (core business logic)
+  isCmsEditable?: boolean                // Pages that can be edited via CMS page builder
 
   // Template
   templateId: string

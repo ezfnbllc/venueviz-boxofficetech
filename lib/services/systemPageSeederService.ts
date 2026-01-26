@@ -48,96 +48,26 @@ const defaultSettings: SectionSettings = {
 
 /**
  * Get default sections for a system page type
+ * Only returns sections for CMS-editable pages (static content)
+ * Core business pages (home, events, checkout, etc.) return empty arrays
  */
 function getDefaultSectionsForPage(systemType: SystemPageType): PageSection[] {
   switch (systemType) {
+    // ============================================================================
+    // LOCKED PAGES - Return empty arrays (content managed by platform code)
+    // ============================================================================
     case 'home':
-      return [
-        {
-          id: generateSectionId(),
-          type: 'hero',
-          order: 0,
-          settings: { ...defaultSettings, padding: 'none' },
-          content: {
-            type: 'hero',
-            headline: 'Welcome to Our Events',
-            subheadline: 'Discover amazing experiences and book your tickets today',
-            alignment: 'center',
-            height: 'medium',
-            overlayOpacity: 0.4,
-            ctaButton: {
-              text: 'Browse Events',
-              link: '/events',
-              style: 'primary',
-            },
-          } as HeroContent,
-        },
-        {
-          id: generateSectionId(),
-          type: 'events',
-          order: 1,
-          settings: defaultSettings,
-          content: {
-            type: 'events',
-            heading: 'Upcoming Events',
-            displayMode: 'grid',
-            columns: 3,
-            limit: 6,
-            filter: { upcoming: true },
-            showFilters: false,
-          } as EventsListContent,
-        },
-        {
-          id: generateSectionId(),
-          type: 'cta',
-          order: 2,
-          settings: { ...defaultSettings, backgroundColor: '#f8fafc' },
-          content: {
-            type: 'cta',
-            headline: 'Never Miss an Event',
-            subtext: 'Sign up for our newsletter to get updates on upcoming events and exclusive offers.',
-            button: {
-              text: 'Subscribe Now',
-              link: '/contact',
-              style: 'primary',
-            },
-            style: 'banner',
-          } as CTAContent,
-        },
-      ]
-
     case 'events':
-      return [
-        {
-          id: generateSectionId(),
-          type: 'hero',
-          order: 0,
-          settings: { ...defaultSettings, padding: 'none' },
-          content: {
-            type: 'hero',
-            headline: 'Browse Our Events',
-            subheadline: 'Find the perfect event for you',
-            alignment: 'center',
-            height: 'small',
-            overlayOpacity: 0.5,
-          } as HeroContent,
-        },
-        {
-          id: generateSectionId(),
-          type: 'events',
-          order: 1,
-          settings: defaultSettings,
-          content: {
-            type: 'events',
-            heading: '',
-            displayMode: 'grid',
-            columns: 3,
-            limit: 12,
-            filter: { upcoming: true },
-            showFilters: true,
-          } as EventsListContent,
-        },
-      ]
+    case 'event-detail':
+    case 'checkout':
+    case 'login':
+    case 'register':
+    case 'account':
+      return [] // Core pages - no CMS sections
+
+    // ============================================================================
+    // EDITABLE PAGES - Return default starter content
+    // ============================================================================
 
     case 'about':
       return [
@@ -370,14 +300,6 @@ function getDefaultSectionsForPage(systemType: SystemPageType): PageSection[] {
         },
       ]
 
-    // Pages that are handled by React components - no CMS sections needed
-    case 'login':
-    case 'register':
-    case 'account':
-    case 'event-detail':
-    case 'checkout':
-      return []
-
     default:
       return []
   }
@@ -395,13 +317,17 @@ interface SystemPageDefinition {
   showInNav: boolean
   navOrder: number
   seo: PageSEO
+  isCmsEditable: boolean  // true = static content pages (about, contact, terms, privacy, faq)
+                          // false = core business logic pages (home, events, checkout, etc.)
 }
 
 /**
  * All system pages that should be auto-created for advanced tenants
  */
 export const SYSTEM_PAGES: SystemPageDefinition[] = [
-  // Main Navigation Pages
+  // ============================================================================
+  // LOCKED PAGES - Core business logic, not editable via CMS
+  // ============================================================================
   {
     systemType: 'home',
     title: 'Home',
@@ -409,6 +335,7 @@ export const SYSTEM_PAGES: SystemPageDefinition[] = [
     description: 'Main landing page',
     showInNav: true,
     navOrder: 1,
+    isCmsEditable: false, // Core page - locked
     seo: {
       title: 'Home',
       description: 'Welcome to our event ticketing platform',
@@ -422,12 +349,17 @@ export const SYSTEM_PAGES: SystemPageDefinition[] = [
     description: 'Browse upcoming events',
     showInNav: true,
     navOrder: 2,
+    isCmsEditable: false, // Core page - locked
     seo: {
       title: 'Events',
       description: 'Browse and discover upcoming events',
       keywords: ['events', 'upcoming', 'concerts', 'shows'],
     },
   },
+
+  // ============================================================================
+  // EDITABLE PAGES - Static content, can be edited via CMS
+  // ============================================================================
   {
     systemType: 'about',
     title: 'About Us',
@@ -435,6 +367,7 @@ export const SYSTEM_PAGES: SystemPageDefinition[] = [
     description: 'About our organization',
     showInNav: true,
     navOrder: 3,
+    isCmsEditable: true, // Static content - editable
     seo: {
       title: 'About Us',
       description: 'Learn more about our organization',
@@ -448,14 +381,13 @@ export const SYSTEM_PAGES: SystemPageDefinition[] = [
     description: 'Get in touch with us',
     showInNav: true,
     navOrder: 4,
+    isCmsEditable: true, // Static content - editable
     seo: {
       title: 'Contact Us',
       description: 'Contact us for inquiries and support',
       keywords: ['contact', 'support', 'help'],
     },
   },
-
-  // Legal Pages (not in main nav, shown in footer)
   {
     systemType: 'terms',
     title: 'Terms of Service',
@@ -463,6 +395,7 @@ export const SYSTEM_PAGES: SystemPageDefinition[] = [
     description: 'Terms and conditions',
     showInNav: false,
     navOrder: 100,
+    isCmsEditable: true, // Static content - editable
     seo: {
       title: 'Terms of Service',
       description: 'Our terms of service and conditions',
@@ -476,6 +409,7 @@ export const SYSTEM_PAGES: SystemPageDefinition[] = [
     description: 'Privacy policy',
     showInNav: false,
     navOrder: 101,
+    isCmsEditable: true, // Static content - editable
     seo: {
       title: 'Privacy Policy',
       description: 'Our privacy policy',
@@ -489,6 +423,7 @@ export const SYSTEM_PAGES: SystemPageDefinition[] = [
     description: 'Frequently asked questions',
     showInNav: false,
     navOrder: 102,
+    isCmsEditable: true, // Static content - editable
     seo: {
       title: 'FAQ',
       description: 'Frequently asked questions',
@@ -496,7 +431,9 @@ export const SYSTEM_PAGES: SystemPageDefinition[] = [
     },
   },
 
-  // Account Pages (not in nav, accessed via auth)
+  // ============================================================================
+  // LOCKED PAGES - Account & Auth (not in nav, accessed via auth)
+  // ============================================================================
   {
     systemType: 'login',
     title: 'Sign In',
@@ -504,6 +441,7 @@ export const SYSTEM_PAGES: SystemPageDefinition[] = [
     description: 'Sign in to your account',
     showInNav: false,
     navOrder: 200,
+    isCmsEditable: false, // Core page - locked
     seo: {
       title: 'Sign In',
       description: 'Sign in to your account',
@@ -518,6 +456,7 @@ export const SYSTEM_PAGES: SystemPageDefinition[] = [
     description: 'Create a new account',
     showInNav: false,
     navOrder: 201,
+    isCmsEditable: false, // Core page - locked
     seo: {
       title: 'Sign Up',
       description: 'Create a new account',
@@ -532,6 +471,7 @@ export const SYSTEM_PAGES: SystemPageDefinition[] = [
     description: 'Manage your account',
     showInNav: false,
     navOrder: 202,
+    isCmsEditable: false, // Core page - locked
     seo: {
       title: 'My Account',
       description: 'Manage your account and orders',
@@ -540,7 +480,9 @@ export const SYSTEM_PAGES: SystemPageDefinition[] = [
     },
   },
 
-  // Dynamic Pages (templates for dynamic content)
+  // ============================================================================
+  // LOCKED PAGES - Dynamic content (templates for dynamic content)
+  // ============================================================================
   {
     systemType: 'event-detail',
     title: 'Event Detail',
@@ -548,6 +490,7 @@ export const SYSTEM_PAGES: SystemPageDefinition[] = [
     description: 'Individual event page',
     showInNav: false,
     navOrder: 300,
+    isCmsEditable: false, // Core page - locked
     seo: {
       title: 'Event',
       description: 'Event details and ticket information',
@@ -561,6 +504,7 @@ export const SYSTEM_PAGES: SystemPageDefinition[] = [
     description: 'Complete your purchase',
     showInNav: false,
     navOrder: 301,
+    isCmsEditable: false, // Core page - locked
     seo: {
       title: 'Checkout',
       description: 'Complete your ticket purchase',
@@ -639,6 +583,8 @@ export async function initializeSystemPages(
       sections: defaultSections,
       status: 'published', // System pages are published by default
       isProtected: true,   // System pages cannot be deleted
+      isLocked: !pageDef.isCmsEditable,    // Locked pages cannot be edited via CMS
+      isCmsEditable: pageDef.isCmsEditable, // Only static content pages can be edited
       showInNav: pageDef.showInNav,
       navOrder: pageDef.navOrder,
       createdAt: now,
@@ -754,6 +700,12 @@ export async function populateDefaultSections(
   for (const doc of pagesSnapshot.docs) {
     const page = doc.data() as TenantPage
     const systemType = page.systemType as SystemPageType
+
+    // Skip locked/non-CMS-editable pages (core business pages)
+    if (page.isLocked || page.isCmsEditable === false) {
+      skipped.push(`${systemType || page.title} (locked)`)
+      continue
+    }
 
     // Skip if page already has sections
     if (page.sections && page.sections.length > 0) {
