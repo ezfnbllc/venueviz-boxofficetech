@@ -14,7 +14,7 @@ interface QueuedEmail {
   subject: string
   html: string
   text?: string
-  from: {
+  from?: {
     email: string
     name: string
   }
@@ -60,21 +60,21 @@ export default function EmailQueuePage() {
       const emailList: QueuedEmail[] = []
       const statusCounts = { pending: 0, sent: 0, failed: 0, cancelled: 0 }
 
-      snapshot.docs.forEach((doc) => {
-        const data = doc.data()
+      snapshot.docs.forEach((docSnap) => {
+        const data = docSnap.data()
         const email: QueuedEmail = {
-          id: doc.id,
-          type: data.type,
-          status: data.status,
-          to: data.to,
-          toName: data.toName,
-          subject: data.subject,
-          html: data.html,
+          id: docSnap.id,
+          type: data.type || 'custom',
+          status: data.status || 'pending',
+          to: data.to || data.templateData?.email || '',
+          toName: data.toName || data.templateData?.firstName,
+          subject: data.subject || `${data.type || 'Email'} notification`,
+          html: data.html || '',
           text: data.text,
-          from: data.from,
+          from: data.from || undefined,
           promoterSlug: data.promoterSlug,
-          metadata: data.metadata,
-          createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
+          metadata: data.metadata || data.templateData,
+          createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt || Date.now()),
           updatedAt: data.updatedAt?.toDate?.() || (data.updatedAt ? new Date(data.updatedAt) : undefined),
           sentAt: data.sentAt?.toDate?.() || (data.sentAt ? new Date(data.sentAt) : undefined),
           error: data.error,
@@ -448,7 +448,9 @@ export default function EmailQueuePage() {
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <span className="text-gray-500">From:</span>{' '}
-                  <span className="font-medium">{selectedEmail.from.name} &lt;{selectedEmail.from.email}&gt;</span>
+                  <span className="font-medium">
+                    {selectedEmail.from?.name || 'BoxOfficeTech'} &lt;{selectedEmail.from?.email || 'tickets@boxofficetech.com'}&gt;
+                  </span>
                 </div>
                 <div>
                   <span className="text-gray-500">Type:</span>{' '}
