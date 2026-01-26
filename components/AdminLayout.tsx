@@ -93,6 +93,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       items: [
         { label: 'Integrations', href: '/admin/integrations', icon: '🔗' },
         { label: 'Webhooks', href: '/admin/webhooks', icon: '🪝' },
+        { label: 'Email Queue', href: '/admin/email-queue', icon: '📬' },
         { label: 'API & Security', href: '/admin/security', icon: '🔐' },
         { label: 'Compliance', href: '/admin/compliance', icon: '📜' },
         { label: 'White Label', href: '/admin/white-label', icon: '🏷️' },

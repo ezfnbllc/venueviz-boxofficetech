@@ -4,10 +4,14 @@
  * Handles transactional email sending via Resend.
  * Used for order confirmations, password resets, and system notifications.
  *
+ * In test mode (default), all emails are queued for admin review.
+ * Set EMAIL_SEND_MODE=live to send emails immediately.
+ *
  * Configuration:
  * - RESEND_API_KEY: Required API key from Resend
  * - RESEND_FROM_EMAIL: Default sender email (e.g., tickets@yourdomain.com)
  * - RESEND_FROM_NAME: Default sender name (e.g., BoxOfficeTech)
+ * - EMAIL_SEND_MODE: 'queue' (default) or 'live'
  */
 
 import { Resend } from 'resend'
@@ -20,6 +24,9 @@ const resend = process.env.RESEND_API_KEY
 // Default sender configuration
 const DEFAULT_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'tickets@boxofficetech.com'
 const DEFAULT_FROM_NAME = process.env.RESEND_FROM_NAME || 'BoxOfficeTech'
+
+// Email mode: 'queue' (default for test) or 'live'
+const EMAIL_MODE = process.env.EMAIL_SEND_MODE || 'queue'
 
 export interface EmailRecipient {
   email: string
@@ -101,7 +108,77 @@ export interface WelcomeEmailData {
   }
 }
 
+export interface QueuedEmail {
+  id?: string
+  type: 'order_confirmation' | 'password_reset' | 'welcome' | 'custom'
+  status: 'pending' | 'approved' | 'sent' | 'failed' | 'cancelled'
+  to: string
+  toName?: string
+  subject: string
+  html: string
+  text?: string
+  from: {
+    email: string
+    name: string
+  }
+  promoterSlug?: string
+  metadata?: Record<string, any>
+  createdAt: Date
+  updatedAt?: Date
+  sentAt?: Date
+  error?: string
+  attempts: number
+}
+
 class ResendServiceClass {
+  /**
+   * Queue an email for admin review (test mode)
+   * Returns immediately with queued status
+   */
+  async queueEmail(
+    type: QueuedEmail['type'],
+    options: SendEmailOptions & { promoterSlug?: string; metadata?: Record<string, any> }
+  ): Promise<EmailResult> {
+    try {
+      // Dynamic import to avoid circular dependencies
+      const { getAdminFirestore } = await import('@/lib/firebase-admin')
+      const db = getAdminFirestore()
+
+      const toRecipient = Array.isArray(options.to) ? options.to[0] : options.to
+      const now = new Date()
+
+      const queuedEmail: Omit<QueuedEmail, 'id'> = {
+        type,
+        status: 'pending',
+        to: toRecipient.email,
+        toName: toRecipient.name,
+        subject: options.subject,
+        html: options.html,
+        text: options.text,
+        from: options.from || { email: DEFAULT_FROM_EMAIL, name: DEFAULT_FROM_NAME },
+        promoterSlug: options.promoterSlug,
+        metadata: options.metadata,
+        createdAt: now,
+        updatedAt: now,
+        attempts: 0,
+      }
+
+      const docRef = await db.collection('email_queue').add(queuedEmail)
+
+      console.log(`[ResendService] Email queued for review: ${docRef.id} (${type} to ${toRecipient.email})`)
+      return { success: true, messageId: `queued:${docRef.id}` }
+    } catch (error: any) {
+      console.error('[ResendService] Queue error:', error)
+      return { success: false, error: error.message || 'Failed to queue email' }
+    }
+  }
+
+  /**
+   * Check if we're in queue mode (test) or live mode
+   */
+  isQueueMode(): boolean {
+    return EMAIL_MODE !== 'live'
+  }
   /**
    * Send a raw email with custom content
    */
@@ -185,16 +262,16 @@ class ResendServiceClass {
       <h3 style="margin: 0 0 16px; color: #333; font-size: 18px;">${data.eventName}</h3>
       <div style="background-color: #f9fafb; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
         <p style="margin: 0 0 8px; color: #666;">
-          <strong>=Å Date:</strong> ${data.eventDate}${data.eventTime ? ` at ${data.eventTime}` : ''}
+          <strong>=ï¿½ Date:</strong> ${data.eventDate}${data.eventTime ? ` at ${data.eventTime}` : ''}
         </p>
         ${data.venueName ? `
         <p style="margin: 0 0 8px; color: #666;">
-          <strong>=Í Venue:</strong> ${data.venueName}
+          <strong>=ï¿½ Venue:</strong> ${data.venueName}
         </p>
         ` : ''}
         ${data.venueAddress ? `
         <p style="margin: 0; color: #666;">
-          <strong>=ë Address:</strong> ${data.venueAddress}
+          <strong>=ï¿½ Address:</strong> ${data.venueAddress}
         </p>
         ` : ''}
       </div>
@@ -252,7 +329,7 @@ class ResendServiceClass {
         Questions? Contact us at ${data.promoter.supportEmail || `support@${data.promoter.slug}.com`}
       </p>
       <p style="margin: 0; color: #999; font-size: 12px;">
-        © ${new Date().getFullYear()} ${data.promoter.name}. All rights reserved.
+        ï¿½ ${new Date().getFullYear()} ${data.promoter.name}. All rights reserved.
       </p>
     </div>
   </div>
@@ -282,7 +359,7 @@ ${data.orderUrl ? `View your tickets: ${data.orderUrl}` : ''}
 Questions? Contact ${data.promoter.supportEmail || `support@${data.promoter.slug}.com`}
     `.trim()
 
-    return this.sendEmail({
+    const emailOptions = {
       to: { email: data.customerEmail, name: data.customerName },
       subject: `Order Confirmed: ${data.eventName}`,
       html,
@@ -296,7 +373,23 @@ Questions? Contact ${data.promoter.supportEmail || `support@${data.promoter.slug
         { name: 'promoter', value: data.promoter.slug },
         { name: 'order_id', value: data.orderId },
       ],
-    })
+    }
+
+    // In queue mode, queue for admin review instead of sending
+    if (this.isQueueMode()) {
+      return this.queueEmail('order_confirmation', {
+        ...emailOptions,
+        promoterSlug: data.promoter.slug,
+        metadata: {
+          orderId: data.orderId,
+          eventName: data.eventName,
+          total: data.total,
+          currency: data.currency,
+        },
+      })
+    }
+
+    return this.sendEmail(emailOptions)
   }
 
   /**
@@ -344,7 +437,7 @@ Questions? Contact ${data.promoter.supportEmail || `support@${data.promoter.slug
       </div>
 
       <p style="margin: 0 0 24px; color: #666; font-size: 14px; line-height: 1.5;">
-          For security, please change this password after logging in.
+        ï¿½ For security, please change this password after logging in.
       </p>
 
       <!-- Login Button -->
@@ -362,7 +455,7 @@ Questions? Contact ${data.promoter.supportEmail || `support@${data.promoter.slug
     <!-- Footer -->
     <div style="background-color: #f9fafb; padding: 24px; text-align: center; border-top: 1px solid #eee;">
       <p style="margin: 0; color: #999; font-size: 12px;">
-        © ${new Date().getFullYear()} ${data.promoter.name}. All rights reserved.
+        ï¿½ ${new Date().getFullYear()} ${data.promoter.name}. All rights reserved.
       </p>
     </div>
   </div>
@@ -387,7 +480,7 @@ Log in at: ${data.loginUrl}
 If you didn't request this password reset, please contact us immediately at ${data.promoter.supportEmail || `support@${data.promoter.slug}.com`}.
     `.trim()
 
-    return this.sendEmail({
+    const emailOptions = {
       to: { email: data.customerEmail, name: data.customerName },
       subject: `Your Password Has Been Reset - ${data.promoter.name}`,
       html,
@@ -400,7 +493,21 @@ If you didn't request this password reset, please contact us immediately at ${da
         { name: 'type', value: 'password_reset' },
         { name: 'promoter', value: data.promoter.slug },
       ],
-    })
+    }
+
+    // In queue mode, queue for admin review instead of sending
+    if (this.isQueueMode()) {
+      return this.queueEmail('password_reset', {
+        ...emailOptions,
+        promoterSlug: data.promoter.slug,
+        metadata: {
+          loginUrl: data.loginUrl,
+          // Don't store password in metadata for security
+        },
+      })
+    }
+
+    return this.sendEmail(emailOptions)
   }
 
   /**
@@ -452,7 +559,7 @@ If you didn't request this password reset, please contact us immediately at ${da
     <!-- Footer -->
     <div style="background-color: #f9fafb; padding: 24px; text-align: center; border-top: 1px solid #eee;">
       <p style="margin: 0; color: #999; font-size: 12px;">
-        © ${new Date().getFullYear()} ${data.promoter.name}. All rights reserved.
+        ï¿½ ${new Date().getFullYear()} ${data.promoter.name}. All rights reserved.
       </p>
     </div>
   </div>
@@ -472,7 +579,7 @@ Browse events: ${data.loginUrl}
 Questions? We're here to help at ${data.promoter.supportEmail || `support@${data.promoter.slug}.com`}.
     `.trim()
 
-    return this.sendEmail({
+    const emailOptions = {
       to: { email: data.customerEmail, name: data.customerName },
       subject: `Welcome to ${data.promoter.name}!`,
       html,
@@ -485,7 +592,20 @@ Questions? We're here to help at ${data.promoter.supportEmail || `support@${data
         { name: 'type', value: 'welcome' },
         { name: 'promoter', value: data.promoter.slug },
       ],
-    })
+    }
+
+    // In queue mode, queue for admin review instead of sending
+    if (this.isQueueMode()) {
+      return this.queueEmail('welcome', {
+        ...emailOptions,
+        promoterSlug: data.promoter.slug,
+        metadata: {
+          loginUrl: data.loginUrl,
+        },
+      })
+    }
+
+    return this.sendEmail(emailOptions)
   }
 
   /**
