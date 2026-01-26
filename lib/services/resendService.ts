@@ -179,6 +179,7 @@ class ResendServiceClass {
   isQueueMode(): boolean {
     return EMAIL_MODE !== 'live'
   }
+
   /**
    * Send a raw email with custom content
    */
@@ -251,7 +252,7 @@ class ResendServiceClass {
     <!-- Success Banner -->
     <div style="background-color: #f0fdf4; padding: 24px; text-align: center; border-bottom: 1px solid #bbf7d0;">
       <div style="width: 48px; height: 48px; background-color: ${primaryColor}; border-radius: 50%; margin: 0 auto 12px; display: flex; align-items: center; justify-content: center;">
-        <span style="color: white; font-size: 24px;"></span>
+        <span style="color: white; font-size: 24px;">&#10003;</span>
       </div>
       <h2 style="margin: 0 0 8px; color: #166534; font-size: 20px;">Order Confirmed!</h2>
       <p style="margin: 0; color: #15803d;">Order #${data.orderId.slice(-8).toUpperCase()}</p>
@@ -262,16 +263,16 @@ class ResendServiceClass {
       <h3 style="margin: 0 0 16px; color: #333; font-size: 18px;">${data.eventName}</h3>
       <div style="background-color: #f9fafb; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
         <p style="margin: 0 0 8px; color: #666;">
-          <strong>=� Date:</strong> ${data.eventDate}${data.eventTime ? ` at ${data.eventTime}` : ''}
+          <strong>Date:</strong> ${data.eventDate}${data.eventTime ? ` at ${data.eventTime}` : ''}
         </p>
         ${data.venueName ? `
         <p style="margin: 0 0 8px; color: #666;">
-          <strong>=� Venue:</strong> ${data.venueName}
+          <strong>Venue:</strong> ${data.venueName}
         </p>
         ` : ''}
         ${data.venueAddress ? `
         <p style="margin: 0; color: #666;">
-          <strong>=� Address:</strong> ${data.venueAddress}
+          <strong>Address:</strong> ${data.venueAddress}
         </p>
         ` : ''}
       </div>
@@ -329,7 +330,7 @@ class ResendServiceClass {
         Questions? Contact us at ${data.promoter.supportEmail || `support@${data.promoter.slug}.com`}
       </p>
       <p style="margin: 0; color: #999; font-size: 12px;">
-        � ${new Date().getFullYear()} ${data.promoter.name}. All rights reserved.
+        Copyright ${new Date().getFullYear()} ${data.promoter.name}. All rights reserved.
       </p>
     </div>
   </div>
@@ -437,7 +438,7 @@ Questions? Contact ${data.promoter.supportEmail || `support@${data.promoter.slug
       </div>
 
       <p style="margin: 0 0 24px; color: #666; font-size: 14px; line-height: 1.5;">
-        � For security, please change this password after logging in.
+        Note: For security, please change this password after logging in.
       </p>
 
       <!-- Login Button -->
@@ -455,7 +456,7 @@ Questions? Contact ${data.promoter.supportEmail || `support@${data.promoter.slug
     <!-- Footer -->
     <div style="background-color: #f9fafb; padding: 24px; text-align: center; border-top: 1px solid #eee;">
       <p style="margin: 0; color: #999; font-size: 12px;">
-        � ${new Date().getFullYear()} ${data.promoter.name}. All rights reserved.
+        Copyright ${new Date().getFullYear()} ${data.promoter.name}. All rights reserved.
       </p>
     </div>
   </div>
@@ -559,7 +560,7 @@ If you didn't request this password reset, please contact us immediately at ${da
     <!-- Footer -->
     <div style="background-color: #f9fafb; padding: 24px; text-align: center; border-top: 1px solid #eee;">
       <p style="margin: 0; color: #999; font-size: 12px;">
-        � ${new Date().getFullYear()} ${data.promoter.name}. All rights reserved.
+        Copyright ${new Date().getFullYear()} ${data.promoter.name}. All rights reserved.
       </p>
     </div>
   </div>
