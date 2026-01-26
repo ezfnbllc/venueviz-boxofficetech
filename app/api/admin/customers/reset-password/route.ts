@@ -5,10 +5,12 @@
  *
  * Allows admins to set/reset a customer's password directly.
  * Uses Firebase Admin SDK to update the password.
+ * Sends notification email via Resend when sendEmail is true.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getAdminAuth, getAdminFirestore } from '@/lib/firebase-admin'
+import { ResendService } from '@/lib/services/resendService'
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,39 +33,36 @@ export async function POST(request: NextRequest) {
     const auth = getAdminAuth()
     const db = getAdminFirestore()
 
-    // Get customer document to find firebaseUid if not provided
+    // Get customer document to find firebaseUid and promoter info
     let uid = firebaseUid
     let customerEmail = ''
     let customerName = ''
+    let promoterSlug = ''
+    let promoterId = ''
 
-    if (!uid) {
-      const customerDoc = await db.collection('customers').doc(customerId).get()
-      if (!customerDoc.exists) {
-        return NextResponse.json(
-          { error: 'Customer not found' },
-          { status: 404 }
-        )
-      }
-      const customerData = customerDoc.data()
-      uid = customerData?.firebaseUid
-      customerEmail = customerData?.email || ''
-      customerName = customerData?.firstName || customerData?.name || ''
+    // Always fetch customer to get promoter info for email
+    const customerDoc = await db.collection('customers').doc(customerId).get()
+    if (!customerDoc.exists) {
+      return NextResponse.json(
+        { error: 'Customer not found' },
+        { status: 404 }
+      )
     }
+    const customerData = customerDoc.data()
+    uid = uid || customerData?.firebaseUid
+    customerEmail = customerData?.email || ''
+    customerName = customerData?.firstName || customerData?.name || ''
+    promoterSlug = customerData?.promoterSlug || ''
+    promoterId = customerData?.promoterId || ''
 
     if (!uid) {
       // No Firebase user exists, need to create one
-      const customerDoc = await db.collection('customers').doc(customerId).get()
-      const customerData = customerDoc.data()
-
-      if (!customerData?.email) {
+      if (!customerEmail) {
         return NextResponse.json(
           { error: 'Customer has no email address' },
           { status: 400 }
         )
       }
-
-      customerEmail = customerData.email
-      customerName = customerData.firstName || customerData.name || ''
 
       try {
         // Try to get existing user by email
@@ -88,10 +87,16 @@ export async function POST(request: NextRequest) {
             updatedAt: new Date(),
           })
 
+          // Send email notification if requested
+          if (sendEmail && customerEmail) {
+            await sendPasswordEmail(db, customerEmail, customerName, newPassword, promoterSlug, promoterId)
+          }
+
           return NextResponse.json({
             success: true,
             message: 'Firebase account created and password set',
             userCreated: true,
+            emailSent: sendEmail && customerEmail ? true : false,
           })
         }
         throw error
@@ -111,26 +116,16 @@ export async function POST(request: NextRequest) {
       updatedAt: new Date(),
     })
 
-    // Optionally send password reset email notification
+    // Send password reset email notification
+    let emailSent = false
     if (sendEmail && customerEmail) {
-      // Queue email for sending (you can integrate with your email service)
-      await db.collection('email_queue').add({
-        type: 'password_reset_notification',
-        to: customerEmail,
-        templateData: {
-          firstName: customerName || 'Customer',
-          email: customerEmail,
-          newPassword: newPassword, // Only include if you want to send the password
-        },
-        status: 'pending',
-        createdAt: new Date(),
-        attempts: 0,
-      })
+      emailSent = await sendPasswordEmail(db, customerEmail, customerName, newPassword, promoterSlug, promoterId)
     }
 
     return NextResponse.json({
       success: true,
       message: 'Password updated successfully',
+      emailSent,
     })
 
   } catch (error: any) {
@@ -147,5 +142,73 @@ export async function POST(request: NextRequest) {
       { error: error.message || 'Failed to reset password' },
       { status: 500 }
     )
+  }
+}
+
+/**
+ * Helper to send password reset email with promoter branding
+ */
+async function sendPasswordEmail(
+  db: FirebaseFirestore.Firestore,
+  email: string,
+  name: string,
+  password: string,
+  promoterSlug: string,
+  promoterId: string
+): Promise<boolean> {
+  try {
+    // Get promoter info for branding
+    let promoter = {
+      name: 'BoxOfficeTech',
+      slug: promoterSlug || 'bot',
+      logo: undefined as string | undefined,
+      primaryColor: '#6ac045',
+      supportEmail: undefined as string | undefined,
+    }
+
+    if (promoterId || promoterSlug) {
+      const promoterQuery = promoterId
+        ? await db.collection('promoters').doc(promoterId).get()
+        : await db.collection('promoters').where('slug', '==', promoterSlug).limit(1).get()
+
+      const promoterDoc = promoterId
+        ? promoterQuery
+        : (promoterQuery as FirebaseFirestore.QuerySnapshot).docs[0]
+
+      if (promoterDoc?.exists) {
+        const data = promoterId
+          ? (promoterDoc as FirebaseFirestore.DocumentSnapshot).data()
+          : promoterDoc.data()
+        promoter = {
+          name: data?.name || promoter.name,
+          slug: data?.slug || promoter.slug,
+          logo: data?.logo || data?.branding?.logo,
+          primaryColor: data?.branding?.primaryColor || data?.primaryColor || promoter.primaryColor,
+          supportEmail: data?.email || data?.supportEmail,
+        }
+      }
+    }
+
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://boxofficetech.com'
+    const loginUrl = `${baseUrl}/p/${promoter.slug}/login`
+
+    const result = await ResendService.sendPasswordResetNotification({
+      customerName: name,
+      customerEmail: email,
+      newPassword: password,
+      loginUrl,
+      promoter,
+    })
+
+    if (result.success) {
+      console.log(`[PasswordReset] Email sent successfully to ${email}`)
+    } else {
+      console.error(`[PasswordReset] Failed to send email: ${result.error}`)
+    }
+
+    return result.success
+  } catch (error) {
+    console.error('[PasswordReset] Error sending email:', error)
+    return false
   }
 }
