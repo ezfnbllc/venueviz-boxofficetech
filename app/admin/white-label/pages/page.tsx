@@ -60,6 +60,7 @@ function PagesPageContent() {
   } | null>(null)
   const [initializingPages, setInitializingPages] = useState(false)
   const [populatingDefaults, setPopulatingDefaults] = useState(false)
+  const [migratingLockStatus, setMigratingLockStatus] = useState(false)
 
   const { effectivePromoterId, isAdmin } = usePromoterAccess()
   const { user } = useFirebaseAuth()
@@ -190,6 +191,41 @@ function PagesPageContent() {
          !p.isLocked &&
          (!p.sections || p.sections.length === 0)
   )
+
+  // Check if any pages need lock status migration
+  const pagesNeedingMigration = pages.filter(
+    p => p.type === 'system' && p.isLocked === undefined && p.isCmsEditable === undefined
+  )
+
+  // Migrate page lock status
+  const handleMigrateLockStatus = async () => {
+    if (!tenantId || !user) return
+
+    setMigratingLockStatus(true)
+    try {
+      const response = await fetch('/api/cms/pages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'migratePageLockStatus',
+          tenantId,
+          userId: user.uid,
+        }),
+      })
+
+      const data = await response.json()
+      if (response.ok) {
+        setMessage({ type: 'success', text: data.message })
+        loadData()
+      } else {
+        throw new Error(data.error || 'Failed to migrate page lock status')
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Migration failed' })
+    } finally {
+      setMigratingLockStatus(false)
+    }
+  }
 
   // Populate default sections for existing pages
   const handlePopulateDefaultSections = async () => {
@@ -796,6 +832,50 @@ function PagesPageContent() {
       {/* Page List View */}
       {viewMode === 'list' && (
         <div className="space-y-4">
+          {/* Migration Banner - Update existing pages with lock status */}
+          {pagesNeedingMigration.length > 0 && (
+            <div className="bg-gradient-to-r from-blue-600/10 to-cyan-600/10 border border-blue-500/20 rounded-xl p-6">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-6 h-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-1">
+                    Update Page Security Settings
+                  </h3>
+                  <p className="text-slate-600 dark:text-gray-400 mb-3">
+                    {pagesNeedingMigration.length} page{pagesNeedingMigration.length > 1 ? 's need' : ' needs'} security settings updated.
+                    This will lock core business pages (Home, Events, Checkout) from editing while allowing
+                    static pages (About, Contact, etc.) to be customized.
+                  </p>
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={handleMigrateLockStatus}
+                      disabled={migratingLockStatus}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 text-white rounded-lg transition-colors font-medium flex items-center gap-2"
+                    >
+                      {migratingLockStatus ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-white"></div>
+                          Updating...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                          </svg>
+                          Apply Security Settings
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* System Pages Initialization Banner */}
           {systemPagesStatus && !systemPagesStatus.initialized && selectedThemeId && (
             <div className="bg-gradient-to-r from-purple-600/10 to-blue-600/10 border border-purple-500/20 rounded-xl p-6">

@@ -676,6 +676,81 @@ export async function getSystemPage(
  * @param userId - The user performing the action (for audit)
  * @returns Object with updated and skipped page counts
  */
+/**
+ * List of system page types that are CMS-editable (static content pages)
+ */
+const CMS_EDITABLE_PAGES: SystemPageType[] = ['about', 'contact', 'terms', 'privacy', 'faq']
+
+/**
+ * List of system page types that are locked (core business pages)
+ */
+const LOCKED_PAGES: SystemPageType[] = ['home', 'events', 'event-detail', 'checkout', 'login', 'register', 'account']
+
+/**
+ * Migrate existing system pages to add isLocked and isCmsEditable flags
+ * This updates pages that were created before these flags existed
+ *
+ * @param tenantId - The tenant ID
+ * @param userId - The user performing the action (for audit)
+ * @returns Object with updated and skipped page counts
+ */
+export async function migratePageLockStatus(
+  tenantId: string,
+  userId: string
+): Promise<{
+  updated: string[]
+  skipped: string[]
+  total: number
+}> {
+  const db = getAdminDb()
+  const updated: string[] = []
+  const skipped: string[] = []
+
+  // Get all system pages for this tenant
+  const pagesSnapshot = await db.collection(PAGES_COLLECTION)
+    .where('tenantId', '==', tenantId)
+    .where('type', '==', 'system')
+    .get()
+
+  const batch = db.batch()
+  const now = Timestamp.now()
+
+  for (const doc of pagesSnapshot.docs) {
+    const page = doc.data() as TenantPage
+    const systemType = page.systemType as SystemPageType
+
+    // Check if page already has lock status defined
+    if (page.isLocked !== undefined && page.isCmsEditable !== undefined) {
+      skipped.push(systemType || page.title)
+      continue
+    }
+
+    // Determine lock status based on page type
+    const isCmsEditable = CMS_EDITABLE_PAGES.includes(systemType)
+    const isLocked = LOCKED_PAGES.includes(systemType)
+
+    // Update the page with lock flags
+    batch.update(doc.ref, {
+      isLocked,
+      isCmsEditable,
+      updatedAt: now,
+      updatedBy: userId,
+    })
+    updated.push(systemType || page.title)
+  }
+
+  // Commit all updates
+  if (updated.length > 0) {
+    await batch.commit()
+  }
+
+  return {
+    updated,
+    skipped,
+    total: pagesSnapshot.size,
+  }
+}
+
 export async function populateDefaultSections(
   tenantId: string,
   userId: string

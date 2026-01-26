@@ -37,6 +37,7 @@ import {
   initializeSystemPages,
   areSystemPagesInitialized,
   populateDefaultSections,
+  migratePageLockStatus,
 } from '@/lib/services/systemPageSeederService'
 import { SectionType } from '@/lib/types/cms'
 
@@ -161,6 +162,22 @@ export async function POST(request: NextRequest) {
         const result = await populateDefaultSections(tenantId, userId)
         return NextResponse.json({
           message: `Default sections populated. Updated: ${result.updated.length}, Skipped: ${result.skipped.length}`,
+          ...result,
+        })
+      }
+
+      // Migrate existing pages to add lock status flags
+      case 'migratePageLockStatus': {
+        if (!tenantId) {
+          return NextResponse.json(
+            { error: 'Tenant ID required' },
+            { status: 400 }
+          )
+        }
+
+        const result = await migratePageLockStatus(tenantId, userId)
+        return NextResponse.json({
+          message: `Page lock status migrated. Updated: ${result.updated.length}, Skipped: ${result.skipped.length}`,
           ...result,
         })
       }
