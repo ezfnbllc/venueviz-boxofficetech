@@ -3,6 +3,8 @@
  *
  * GET /api/customers/orders - Get orders for a customer by email and promoter slug
  * Returns orders with event details for the account page.
+ *
+ * Uses simple queries to avoid composite index requirements.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -56,68 +58,91 @@ export async function GET(request: NextRequest) {
     const db = getAdminFirestore()
     const normalizedEmail = email.toLowerCase()
 
-    // Get promoter ID from slug for fallback queries
+    console.log(`[CustomerOrders] Fetching orders for ${normalizedEmail} on tenant ${promoterSlug}`)
+
+    // Get promoter ID from slug
     const promoterSnapshot = await db.collection('promoters')
       .where('slug', '==', promoterSlug)
       .limit(1)
       .get()
 
-    const promoterId = promoterSnapshot.empty ? null : promoterSnapshot.docs[0].id
+    if (promoterSnapshot.empty) {
+      console.log(`[CustomerOrders] Promoter not found: ${promoterSlug}`)
+      return NextResponse.json({
+        success: true,
+        orders: [],
+        upcomingOrders: [],
+        pastOrders: [],
+        totalOrders: 0,
+        debug: { error: 'Promoter not found' }
+      })
+    }
 
-    // Try multiple query strategies since orders might have different fields
-    let ordersSnapshot = await db.collection('orders')
-      .where('promoterSlug', '==', promoterSlug)
-      .where('customerEmail', '==', normalizedEmail)
-      .where('status', 'in', ['completed', 'confirmed'])
-      .orderBy('createdAt', 'desc')
-      .limit(50)
+    const promoterId = promoterSnapshot.docs[0].id
+    console.log(`[CustomerOrders] Promoter ID: ${promoterId}`)
+
+    // Get all events for this promoter to know which event IDs belong to them
+    const eventsSnapshot = await db.collection('events')
+      .where('promoterId', '==', promoterId)
       .get()
 
-    // If no results and we have promoterId, try tenantId
-    if (ordersSnapshot.empty && promoterId) {
-      ordersSnapshot = await db.collection('orders')
-        .where('tenantId', '==', promoterId)
-        .where('customerEmail', '==', normalizedEmail)
-        .where('status', 'in', ['completed', 'confirmed'])
-        .orderBy('createdAt', 'desc')
-        .limit(50)
-        .get()
-    }
+    const promoterEventIds = new Set(eventsSnapshot.docs.map(d => d.id))
+    console.log(`[CustomerOrders] Found ${promoterEventIds.size} events for promoter`)
 
-    // Final fallback: get orders by email and filter by events owned by this promoter
-    if (ordersSnapshot.empty && promoterId) {
-      // Get all events for this promoter
-      const eventsSnapshot = await db.collection('events')
-        .where('promoterId', '==', promoterId)
-        .get()
-      const promoterEventIds = new Set(eventsSnapshot.docs.map(d => d.id))
+    // Simple query: get all orders by customer email (no composite index needed)
+    const allOrdersSnapshot = await db.collection('orders')
+      .where('customerEmail', '==', normalizedEmail)
+      .get()
 
-      // Get all customer orders
-      const allOrdersSnapshot = await db.collection('orders')
-        .where('customerEmail', '==', normalizedEmail)
-        .where('status', 'in', ['completed', 'confirmed'])
-        .orderBy('createdAt', 'desc')
-        .limit(100)
-        .get()
+    console.log(`[CustomerOrders] Found ${allOrdersSnapshot.size} total orders for email`)
 
-      // Filter to only orders for this promoter's events
-      const filteredDocs = allOrdersSnapshot.docs.filter(doc => {
-        const data = doc.data()
-        const eventId = data.eventId || data.items?.[0]?.eventId
-        return eventId && promoterEventIds.has(eventId)
-      }).slice(0, 50)
+    // Filter orders in JavaScript:
+    // 1. Must be completed/confirmed status
+    // 2. Must belong to this promoter (by promoterSlug, tenantId, or eventId)
+    const filteredDocs = allOrdersSnapshot.docs.filter(doc => {
+      const data = doc.data()
 
-      // Create a mock snapshot-like structure
-      ordersSnapshot = {
-        docs: filteredDocs,
-        empty: filteredDocs.length === 0,
-        size: filteredDocs.length,
-      } as any
-    }
+      // Check status
+      const status = data.status?.toLowerCase()
+      if (status !== 'completed' && status !== 'confirmed') {
+        return false
+      }
 
-    // Get unique event IDs
+      // Check if order belongs to this promoter
+      // Method 1: Direct promoterSlug match
+      if (data.promoterSlug === promoterSlug) {
+        return true
+      }
+
+      // Method 2: tenantId matches promoterId
+      if (data.tenantId === promoterId) {
+        return true
+      }
+
+      // Method 3: Event belongs to this promoter
+      const eventId = data.eventId || data.items?.[0]?.eventId
+      if (eventId && promoterEventIds.has(eventId)) {
+        return true
+      }
+
+      return false
+    })
+
+    console.log(`[CustomerOrders] After filtering: ${filteredDocs.length} orders for this tenant`)
+
+    // Sort by createdAt descending
+    filteredDocs.sort((a, b) => {
+      const dateA = a.data().createdAt?.toDate?.() || new Date(0)
+      const dateB = b.data().createdAt?.toDate?.() || new Date(0)
+      return dateB.getTime() - dateA.getTime()
+    })
+
+    // Limit to 50
+    const limitedDocs = filteredDocs.slice(0, 50)
+
+    // Get unique event IDs for enrichment
     const eventIds = new Set<string>()
-    ordersSnapshot.docs.forEach(doc => {
+    limitedDocs.forEach(doc => {
       const data = doc.data()
       if (data.eventId) eventIds.add(data.eventId)
       data.items?.forEach((item: any) => {
@@ -125,7 +150,7 @@ export async function GET(request: NextRequest) {
       })
     })
 
-    // Fetch event details
+    // Fetch event details for enrichment
     const eventsMap = new Map<string, any>()
     for (const eventId of eventIds) {
       const eventDoc = await db.collection('events').doc(eventId).get()
@@ -162,7 +187,7 @@ export async function GET(request: NextRequest) {
     const now = new Date()
 
     // Build response with enriched order data
-    const orders: OrderWithEvent[] = ordersSnapshot.docs.map(doc => {
+    const orders: OrderWithEvent[] = limitedDocs.map(doc => {
       const data = doc.data()
       const eventId = data.eventId || data.items?.[0]?.eventId
       const event = eventId ? eventsMap.get(eventId) : null
@@ -195,7 +220,7 @@ export async function GET(request: NextRequest) {
         tickets: data.tickets || [],
         subtotal: data.subtotal || 0,
         serviceFee: data.serviceFee || 0,
-        total: data.total || 0,
+        total: data.total || data.pricing?.total || 0,
         currency: data.currency || 'usd',
         qrCode: data.qrCode || null,
         createdAt: data.createdAt?.toDate?.()?.toISOString() || null,
@@ -208,6 +233,8 @@ export async function GET(request: NextRequest) {
     const upcomingOrders = orders.filter(o => !o.isPastEvent)
     const pastOrders = orders.filter(o => o.isPastEvent)
 
+    console.log(`[CustomerOrders] Returning ${orders.length} orders (${upcomingOrders.length} upcoming, ${pastOrders.length} past)`)
+
     return NextResponse.json({
       success: true,
       orders,
@@ -216,10 +243,10 @@ export async function GET(request: NextRequest) {
       totalOrders: orders.length,
     })
 
-  } catch (error) {
-    console.error('Error fetching customer orders:', error)
+  } catch (error: any) {
+    console.error('[CustomerOrders] Error:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch orders' },
+      { error: 'Failed to fetch orders', details: error.message },
       { status: 500 }
     )
   }
