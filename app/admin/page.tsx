@@ -54,9 +54,23 @@ export default function AdminDashboard() {
           AdminService.getOrders(),
         ])
 
+        // Create event lookup map
+        const eventsMap = new Map(events.map((e: any) => [e.id, e]))
+
+        // Enrich orders with event data
+        const enrichedOrders = orders.map((order: any) => {
+          const event = eventsMap.get(order.eventId)
+          return {
+            ...order,
+            event,
+            eventName: order.eventName || event?.name || event?.basics?.name,
+            venueName: order.venueName || event?.venueName || event?.basics?.venue?.name,
+          }
+        })
+
         // Apply scope-based filtering
         let filteredEvents = events
-        let filteredOrders = orders
+        let filteredOrders = enrichedOrders
 
         // Determine which promoter to filter by
         const promoterIdToFilter = selectedTenantId || (isPromoter ? promoterId : null)
@@ -68,7 +82,7 @@ export default function AdminDashboard() {
           })
 
           const eventIds = new Set(filteredEvents.map((e: any) => e.id))
-          filteredOrders = orders.filter((order: any) => eventIds.has(order.eventId))
+          filteredOrders = enrichedOrders.filter((order: any) => eventIds.has(order.eventId))
         }
 
         // Calculate stats

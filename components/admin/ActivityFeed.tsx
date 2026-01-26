@@ -35,13 +35,32 @@ export function ActivityFeed({ events, orders, maxItems = 10 }: ActivityFeedProp
     orders.slice(0, 20).forEach(order => {
       const timestamp = order.purchaseDate?.toDate?.() || order.createdAt?.toDate?.() || new Date()
 
-      // Get event details for richer subtitle
+      // Get event from lookup map
       const event = eventMap.get(order.eventId)
-      const eventName = order.eventName || event?.name || event?.basics?.name || 'Event'
-      const venueName = order.venueName || event?.venueName || event?.basics?.venue?.name || ''
 
-      // Format event date if available
-      const eventDate = event?.schedule?.date?.toDate?.() || event?.date?.toDate?.()
+      // Extract event name from multiple possible sources
+      const eventName =
+        order.eventName ||
+        order.event?.name ||
+        order.event?.basics?.name ||
+        event?.name ||
+        event?.basics?.name ||
+        order.tickets?.[0]?.eventName ||
+        'Event'
+
+      // Extract venue name from multiple sources
+      const venueName =
+        order.venueName ||
+        order.event?.venueName ||
+        order.event?.basics?.venue?.name ||
+        event?.venueName ||
+        event?.basics?.venue?.name ||
+        order.tickets?.[0]?.venueName ||
+        ''
+
+      // Format event date - check order first, then event
+      const orderEventDate = order.eventDate?.toDate?.() || order.event?.schedule?.date?.toDate?.()
+      const eventDate = orderEventDate || event?.schedule?.date?.toDate?.() || event?.date?.toDate?.()
       const dateStr = eventDate
         ? eventDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
         : ''
@@ -54,7 +73,7 @@ export function ActivityFeed({ events, orders, maxItems = 10 }: ActivityFeedProp
       items.push({
         id: `order-${order.id}`,
         type: 'order',
-        title: order.customer?.name || order.customerName || 'New Order',
+        title: order.customer?.name || order.customerName || order.buyerName || 'New Order',
         subtitle: subtitleParts.join(' · '),
         amount: order.pricing?.total || order.total || 0,
         timestamp,
