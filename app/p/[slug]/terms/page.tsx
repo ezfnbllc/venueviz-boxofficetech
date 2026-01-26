@@ -1,12 +1,21 @@
 /**
- * Terms of Service Page
+ * Terms of Service Page (CMS-Driven)
+ *
+ * This page renders content from the CMS `tenantPages` collection.
+ * Content is managed through the admin page builder.
+ *
+ * The page fetches sections from the database and renders them
+ * using the SectionRenderer component.
+ *
+ * See: components/public/SectionRenderer.tsx for section rendering logic
+ * See: lib/services/systemPageSeederService.ts for default sections
  */
 
 import { notFound } from 'next/navigation'
 import { Metadata } from 'next'
-import { getPromoterBySlug } from '@/lib/public/publicService'
+import { getPromoterBySlug, getCMSPage } from '@/lib/public/publicService'
 import { Layout } from '@/components/public/Layout'
-import { Card, CardContent } from '@/components/public/Card'
+import { SectionRenderer } from '@/components/public/SectionRenderer'
 
 interface PageProps {
   params: Promise<{ slug: string }>
@@ -20,9 +29,16 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     return { title: 'Not Found' }
   }
 
+  // Try to get SEO from CMS page
+  const cmsPage = await getCMSPage(promoter.id, 'terms')
+
   return {
-    title: `Terms of Service | ${promoter.name}`,
-    description: `Terms of service for ${promoter.name}`,
+    title: cmsPage?.seo?.title || `Terms of Service | ${promoter.name}`,
+    description: cmsPage?.seo?.description || `Terms of service for ${promoter.name}`,
+    keywords: cmsPage?.seo?.keywords,
+    openGraph: cmsPage?.seo?.ogImage ? {
+      images: [cmsPage.seo.ogImage],
+    } : undefined,
   }
 }
 
@@ -33,6 +49,9 @@ export default async function TermsPage({ params }: PageProps) {
   if (!promoter) {
     notFound()
   }
+
+  // Fetch CMS page content
+  const cmsPage = await getCMSPage(promoter.id, 'terms')
 
   return (
     <Layout
@@ -52,69 +71,11 @@ export default async function TermsPage({ params }: PageProps) {
         description: promoter.description,
       }}
     >
-      {/* Page Header */}
-      <section className="bg-[#1d1d1d] py-16">
-        <div className="container mx-auto px-4">
-          <h1 className="text-3xl md:text-4xl font-bold text-white mb-4">
-            Terms of Service
-          </h1>
-          <p className="text-white/80 text-lg">
-            Last updated: {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-          </p>
-        </div>
-      </section>
-
-      {/* Content */}
-      <section className="py-12 bg-white">
-        <div className="container mx-auto px-4 max-w-4xl">
-          <Card>
-            <CardContent className="p-8 prose prose-lg max-w-none">
-              <h2>1. Acceptance of Terms</h2>
-              <p>
-                By accessing and using this website and purchasing tickets through {promoter.name},
-                you accept and agree to be bound by the terms and provision of this agreement.
-              </p>
-
-              <h2>2. Ticket Purchases</h2>
-              <p>
-                All ticket sales are final. Tickets are non-refundable unless the event is cancelled
-                or rescheduled by the organizer. In case of cancellation, refunds will be processed
-                within 14 business days.
-              </p>
-
-              <h2>3. Event Changes</h2>
-              <p>
-                Event dates, times, and venues are subject to change. We will make reasonable efforts
-                to notify ticket holders of any changes via the email address provided at purchase.
-              </p>
-
-              <h2>4. User Conduct</h2>
-              <p>
-                You agree to use this service only for lawful purposes. You are responsible for
-                maintaining the confidentiality of your account information.
-              </p>
-
-              <h2>5. Limitation of Liability</h2>
-              <p>
-                {promoter.name} shall not be liable for any indirect, incidental, special, or
-                consequential damages arising from the use of this service or attendance at events.
-              </p>
-
-              <h2>6. Contact</h2>
-              <p>
-                For questions about these terms, please contact us at{' '}
-                {promoter.contactEmail ? (
-                  <a href={`mailto:${promoter.contactEmail}`} className="text-[#6ac045]">
-                    {promoter.contactEmail}
-                  </a>
-                ) : (
-                  'our contact page'
-                )}.
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
+      {/* Render CMS sections */}
+      <SectionRenderer
+        sections={cmsPage?.sections || []}
+        promoterSlug={slug}
+      />
     </Layout>
   )
 }

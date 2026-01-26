@@ -1,13 +1,21 @@
 /**
- * About Page
- * Static page for promoter information
+ * About Page (CMS-Driven)
+ *
+ * This page renders content from the CMS `tenantPages` collection.
+ * Content is managed through the admin page builder.
+ *
+ * The page fetches sections from the database and renders them
+ * using the SectionRenderer component.
+ *
+ * See: components/public/SectionRenderer.tsx for section rendering logic
+ * See: lib/services/systemPageSeederService.ts for default sections
  */
 
 import { notFound } from 'next/navigation'
 import { Metadata } from 'next'
-import { getPromoterBySlug } from '@/lib/public/publicService'
+import { getPromoterBySlug, getCMSPage } from '@/lib/public/publicService'
 import { Layout } from '@/components/public/Layout'
-import { Card, CardContent } from '@/components/public/Card'
+import { SectionRenderer } from '@/components/public/SectionRenderer'
 
 interface PageProps {
   params: Promise<{ slug: string }>
@@ -21,9 +29,16 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     return { title: 'Not Found' }
   }
 
+  // Try to get SEO from CMS page
+  const cmsPage = await getCMSPage(promoter.id, 'about')
+
   return {
-    title: `About | ${promoter.name}`,
-    description: `Learn more about ${promoter.name}`,
+    title: cmsPage?.seo?.title || `About | ${promoter.name}`,
+    description: cmsPage?.seo?.description || `Learn more about ${promoter.name}`,
+    keywords: cmsPage?.seo?.keywords,
+    openGraph: cmsPage?.seo?.ogImage ? {
+      images: [cmsPage.seo.ogImage],
+    } : undefined,
   }
 }
 
@@ -34,6 +49,9 @@ export default async function AboutPage({ params }: PageProps) {
   if (!promoter) {
     notFound()
   }
+
+  // Fetch CMS page content
+  const cmsPage = await getCMSPage(promoter.id, 'about')
 
   return (
     <Layout
@@ -53,60 +71,11 @@ export default async function AboutPage({ params }: PageProps) {
         description: promoter.description,
       }}
     >
-      {/* Page Header */}
-      <section className="bg-[#1d1d1d] py-16">
-        <div className="container mx-auto px-4">
-          <h1 className="text-3xl md:text-4xl font-bold text-white mb-4">
-            About Us
-          </h1>
-          <p className="text-white/80 text-lg">
-            Learn more about {promoter.name}
-          </p>
-        </div>
-      </section>
-
-      {/* Content */}
-      <section className="py-12 bg-white">
-        <div className="container mx-auto px-4 max-w-4xl">
-          <Card>
-            <CardContent className="p-8">
-              <div className="prose prose-lg max-w-none">
-                {promoter.description ? (
-                  <p className="text-[#717171] whitespace-pre-wrap">{promoter.description}</p>
-                ) : (
-                  <p className="text-[#717171]">
-                    Welcome to {promoter.name}! We are dedicated to bringing you the best events
-                    and experiences. Stay tuned for more information about our mission and story.
-                  </p>
-                )}
-              </div>
-
-              {/* Contact Info */}
-              <div className="mt-8 pt-8 border-t border-[#efefef]">
-                <h2 className="text-xl font-bold text-[#1d1d1d] mb-4">Get in Touch</h2>
-                <div className="space-y-2 text-[#717171]">
-                  {promoter.contactEmail && (
-                    <p>
-                      <strong>Email:</strong>{' '}
-                      <a href={`mailto:${promoter.contactEmail}`} className="text-[#6ac045] hover:underline">
-                        {promoter.contactEmail}
-                      </a>
-                    </p>
-                  )}
-                  {promoter.website && (
-                    <p>
-                      <strong>Website:</strong>{' '}
-                      <a href={promoter.website} target="_blank" rel="noopener noreferrer" className="text-[#6ac045] hover:underline">
-                        {promoter.website}
-                      </a>
-                    </p>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
+      {/* Render CMS sections */}
+      <SectionRenderer
+        sections={cmsPage?.sections || []}
+        promoterSlug={slug}
+      />
     </Layout>
   )
 }

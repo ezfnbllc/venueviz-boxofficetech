@@ -81,17 +81,55 @@ setAllTenants(promoters as PromoterProfile[])
 
 **Route Structure**:
 ```
-/p/[slug]           - Promoter's home page
-/p/[slug]/events    - Event listing
-/p/[slug]/events/[id] - Event detail
-/p/[slug]/about     - About page (CMS-editable)
-/p/[slug]/contact   - Contact page (CMS-editable)
-/p/[slug]/checkout  - Ticket checkout
+/p/[slug]           - Promoter's home page (LOCKED - hardcoded React)
+/p/[slug]/events    - Event listing (LOCKED - hardcoded React)
+/p/[slug]/events/[id] - Event detail (LOCKED - hardcoded React)
+/p/[slug]/about     - About page (CMS-driven)
+/p/[slug]/contact   - Contact page (CMS-driven)
+/p/[slug]/terms     - Terms of service (CMS-driven)
+/p/[slug]/privacy   - Privacy policy (CMS-driven)
+/p/[slug]/faq       - FAQ page (CMS-driven)
+/p/[slug]/checkout  - Ticket checkout (LOCKED - hardcoded React)
 ```
 
 **Key Files**:
 - `app/p/[slug]/` - All public portal pages
 - `components/public/` - Shared public-facing components
+- `components/public/SectionRenderer.tsx` - Renders CMS sections dynamically
+
+### 5. CMS-Driven Public Pages
+
+**Decision**: Static content pages (about, contact, terms, privacy, faq) read content from the CMS database.
+
+**How It Works**:
+1. Public page fetches CMS data: `getCMSPage(promoterId, 'about')`
+2. Returns sections array from `tenantPages` collection
+3. `SectionRenderer` renders sections based on their type (hero, content, contact, etc.)
+
+**Data Flow**:
+```
+/p/bot/about
+    ↓
+getCMSPage(promoterId, 'about')
+    ↓
+tenantPages collection (where tenantId=promoterId, systemType='about')
+    ↓
+SectionRenderer renders sections[]
+```
+
+**Section Types Supported**:
+- `hero` - Full-width banner with headline, subheadline, CTA button
+- `content` - Rich text content block with optional heading/image
+- `contact` - Contact form with configurable fields
+- `map` - Map embed (placeholder)
+- `cta` - Call-to-action section
+- `gallery` - Image gallery grid
+- `testimonials` - Customer testimonials
+
+**Key Files**:
+- `lib/public/publicService.ts` - `getCMSPage()` function
+- `components/public/SectionRenderer.tsx` - Section rendering logic
+- `lib/types/cms.ts` - Section content type definitions
 
 ---
 
@@ -199,6 +237,7 @@ if (page.isLocked || page.isCmsEditable === false) {
 3. **Promoter Collection Fix** - Dashboard now correctly uses `promoters` collection
 4. **Activity Feed Enhancement** - Shows event details for orders
 5. **Default Page Sections** - System pages created with starter content
+6. **CMS-Driven Public Pages** - About, Contact, Terms, Privacy, FAQ now read from CMS database
 
 ---
 
@@ -240,3 +279,9 @@ npm run dev
 ### Activity Feed Missing Event Names
 - Ensure orders are enriched with event data before filtering
 - Check `eventsMap` is built from all events, not filtered subset
+
+### Public Pages Show "No content yet"
+- CMS pages (about, contact, terms, privacy, faq) now read from database
+- Go to Admin → White Label → Pages
+- Click "Add Default Sections" to populate starter content
+- Or manually add sections via the page editor
