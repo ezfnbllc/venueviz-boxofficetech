@@ -25,14 +25,37 @@ export function ActivityFeed({ events, orders, maxItems = 10 }: ActivityFeedProp
   const activities = useMemo(() => {
     const items: ActivityItem[] = []
 
+    // Create event lookup map for order details
+    const eventMap = new Map<string, any>()
+    events.forEach(event => {
+      eventMap.set(event.id, event)
+    })
+
     // Add orders
     orders.slice(0, 20).forEach(order => {
       const timestamp = order.purchaseDate?.toDate?.() || order.createdAt?.toDate?.() || new Date()
+
+      // Get event details for richer subtitle
+      const event = eventMap.get(order.eventId)
+      const eventName = order.eventName || event?.name || event?.basics?.name || 'Event'
+      const venueName = order.venueName || event?.venueName || event?.basics?.venue?.name || ''
+
+      // Format event date if available
+      const eventDate = event?.schedule?.date?.toDate?.() || event?.date?.toDate?.()
+      const dateStr = eventDate
+        ? eventDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        : ''
+
+      // Build subtitle: "Event Name · Dec 25 · Venue"
+      const subtitleParts = [eventName]
+      if (dateStr) subtitleParts.push(dateStr)
+      if (venueName) subtitleParts.push(venueName)
+
       items.push({
         id: `order-${order.id}`,
         type: 'order',
         title: order.customer?.name || order.customerName || 'New Order',
-        subtitle: order.eventName || 'Event Ticket',
+        subtitle: subtitleParts.join(' · '),
         amount: order.pricing?.total || order.total || 0,
         timestamp,
         icon: '🎫',
