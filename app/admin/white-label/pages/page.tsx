@@ -42,6 +42,7 @@ function PagesPageContent() {
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [selectedThemeId, setSelectedThemeId] = useState<string | null>(null)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [publishingPageId, setPublishingPageId] = useState<string | null>(null)
 
   const [createState, setCreateState] = useState<CreatePageState>({
     title: '',
@@ -342,10 +343,19 @@ function PagesPageContent() {
     }
   }
 
+  // Auto-dismiss success messages after 3 seconds
+  useEffect(() => {
+    if (message?.type === 'success') {
+      const timer = setTimeout(() => setMessage(null), 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [message])
+
   // Handle page publish/unpublish
   const handleTogglePublish = async (pageId: string, isPublished: boolean) => {
     if (!user) return
 
+    setPublishingPageId(pageId)
     try {
       const response = await fetch('/api/cms/pages', {
         method: 'POST',
@@ -359,13 +369,15 @@ function PagesPageContent() {
 
       const data = await response.json()
       if (data.page) {
-        setMessage({ type: 'success', text: isPublished ? 'Page unpublished' : 'Page published' })
+        setMessage({ type: 'success', text: isPublished ? 'Page unpublished successfully!' : 'Page published successfully!' })
         loadData()
       } else {
         throw new Error(data.error || 'Operation failed')
       }
     } catch (error) {
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Operation failed' })
+    } finally {
+      setPublishingPageId(null)
     }
   }
 
@@ -622,19 +634,34 @@ function PagesPageContent() {
         </div>
       </div>
 
-      {/* Message */}
+      {/* Message Toast */}
       {message && (
-        <div className={`p-4 rounded-lg ${
+        <div className={`p-4 rounded-xl flex items-center gap-3 animate-in slide-in-from-top-2 duration-300 ${
           message.type === 'success'
             ? 'bg-green-500/20 text-green-400 border border-green-500/30'
             : 'bg-red-500/20 text-red-400 border border-red-500/30'
         }`}>
-          {message.text}
+          {message.type === 'success' ? (
+            <div className="w-6 h-6 rounded-full bg-green-500/30 flex items-center justify-center flex-shrink-0">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+          ) : (
+            <div className="w-6 h-6 rounded-full bg-red-500/30 flex items-center justify-center flex-shrink-0">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+          )}
+          <span className="flex-1 font-medium">{message.text}</span>
           <button
             onClick={() => setMessage(null)}
-            className="float-right text-current hover:opacity-75"
+            className="text-current hover:opacity-75 p-1"
           >
-            &times;
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
         </div>
       )}
@@ -1112,13 +1139,21 @@ function PagesPageContent() {
                           )}
                           <button
                             onClick={() => handleTogglePublish(page.id, page.isPublished)}
-                            className={`px-3 py-1.5 rounded text-sm transition-colors ${
+                            disabled={publishingPageId === page.id}
+                            className={`px-3 py-1.5 rounded text-sm transition-colors flex items-center gap-1.5 ${
                               page.isPublished
-                                ? 'bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400'
-                                : 'bg-green-500/20 hover:bg-green-500/30 text-green-400'
+                                ? 'bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 disabled:opacity-50'
+                                : 'bg-green-500/20 hover:bg-green-500/30 text-green-400 disabled:opacity-50'
                             }`}
                           >
-                            {page.isPublished ? 'Unpublish' : 'Publish'}
+                            {publishingPageId === page.id ? (
+                              <>
+                                <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-current"></div>
+                                {page.isPublished ? 'Unpublishing...' : 'Publishing...'}
+                              </>
+                            ) : (
+                              page.isPublished ? 'Unpublish' : 'Publish'
+                            )}
                           </button>
                           {/* Only show duplicate for editable pages */}
                           {page.isCmsEditable !== false && !page.isLocked && (

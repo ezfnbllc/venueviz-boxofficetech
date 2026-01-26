@@ -35,6 +35,7 @@ export default function PageEditorPage() {
   const [page, setPage] = useState<TenantPage | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [publishing, setPublishing] = useState(false)
   const [activeTab, setActiveTab] = useState<TabType>('builder')
   const [hasChanges, setHasChanges] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -59,6 +60,14 @@ export default function PageEditorPage() {
   })
 
   const { user } = useFirebaseAuth()
+
+  // Auto-dismiss success messages after 3 seconds
+  useEffect(() => {
+    if (message?.type === 'success') {
+      const timer = setTimeout(() => setMessage(null), 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [message])
 
   // Load page data
   const loadPage = useCallback(async () => {
@@ -262,6 +271,7 @@ export default function PageEditorPage() {
   const handleTogglePublish = async () => {
     if (!page || !user) return
 
+    setPublishing(true)
     try {
       const response = await fetch('/api/cms/pages', {
         method: 'POST',
@@ -278,11 +288,13 @@ export default function PageEditorPage() {
         setPage(data.page)
         setMessage({
           type: 'success',
-          text: page.isPublished ? 'Page unpublished' : 'Page published!',
+          text: page.isPublished ? 'Page unpublished successfully!' : 'Page published successfully! Changes are now live.',
         })
       }
     } catch (error) {
       setMessage({ type: 'error', text: 'Operation failed' })
+    } finally {
+      setPublishing(false)
     }
   }
 
@@ -409,13 +421,21 @@ export default function PageEditorPage() {
             {/* Publish/Unpublish Button */}
             <button
               onClick={handleTogglePublish}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              disabled={publishing}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
                 page.isPublished
-                  ? 'bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400'
-                  : 'bg-green-600 hover:bg-green-700 text-white'
+                  ? 'bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 disabled:opacity-50'
+                  : 'bg-green-600 hover:bg-green-700 text-white disabled:opacity-50'
               }`}
             >
-              {page.isPublished ? 'Unpublish' : 'Publish'}
+              {publishing ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-current"></div>
+                  {page.isPublished ? 'Unpublishing...' : 'Publishing...'}
+                </>
+              ) : (
+                page.isPublished ? 'Unpublish' : 'Publish'
+              )}
             </button>
 
             {/* Save Button */}
@@ -461,15 +481,35 @@ export default function PageEditorPage() {
         </div>
       </div>
 
-      {/* Message */}
+      {/* Message Toast */}
       {message && (
-        <div className={`p-3 text-sm ${
+        <div className={`p-4 flex items-center gap-3 ${
           message.type === 'success'
-            ? 'bg-green-500/20 text-green-400'
-            : 'bg-red-500/20 text-red-400'
+            ? 'bg-green-500/20 text-green-400 border-b border-green-500/30'
+            : 'bg-red-500/20 text-red-400 border-b border-red-500/30'
         }`}>
-          {message.text}
-          <button onClick={() => setMessage(null)} className="float-right">&times;</button>
+          {message.type === 'success' ? (
+            <div className="w-6 h-6 rounded-full bg-green-500/30 flex items-center justify-center flex-shrink-0">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+          ) : (
+            <div className="w-6 h-6 rounded-full bg-red-500/30 flex items-center justify-center flex-shrink-0">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+          )}
+          <span className="flex-1 font-medium">{message.text}</span>
+          <button
+            onClick={() => setMessage(null)}
+            className="text-current hover:opacity-75 p-1"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
       )}
 
