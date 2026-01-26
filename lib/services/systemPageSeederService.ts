@@ -4,9 +4,42 @@
  * Auto-creates system page entries for tenants with advanced branding.
  * These pages correspond to the hardcoded React pages in app/p/[slug]/*
  *
- * System pages include:
- * - Home, Events, About, Contact, Privacy, Terms, FAQ
- * - Account pages (login, register, account)
+ * IMPORTANT ARCHITECTURE NOTE:
+ * ----------------------------
+ * There are TWO separate systems for page rendering:
+ *
+ * 1. PUBLIC PAGES (app/p/[slug]/*):
+ *    - Hardcoded React components with business logic
+ *    - Render events, checkout, account functionality
+ *    - NOT driven by CMS sections
+ *
+ * 2. CMS PAGES (tenantPages collection):
+ *    - Database entries for admin tracking and SEO
+ *    - Only EDITABLE pages (about, contact, etc.) use CMS sections
+ *    - Locked pages have empty sections arrays
+ *
+ * PAGE LOCKING SYSTEM:
+ * -------------------
+ * Pages are divided into two categories:
+ *
+ * LOCKED (isCmsEditable: false, isLocked: true):
+ * - home, events, event-detail, checkout, login, register, account
+ * - These pages have complex React components with business logic
+ * - Editing via CMS would break the ticketing flow
+ * - CMS entry exists for admin tracking but sections array is empty
+ *
+ * EDITABLE (isCmsEditable: true, isLocked: false):
+ * - about, contact, terms, privacy, faq
+ * - Simple content pages that tenants can personalize
+ * - Use CMS sections for content (hero, text blocks, forms, etc.)
+ * - Created with default starter sections
+ *
+ * MIGRATION NOTE:
+ * ---------------
+ * Pages created before the locking system exist without isLocked/isCmsEditable flags.
+ * Use migratePageLockStatus() to add these flags to existing pages.
+ *
+ * See: lib/types/cms.ts for TenantPage type definition
  */
 
 import { getAdminDb } from '@/lib/firebase-admin'
@@ -677,12 +710,35 @@ export async function getSystemPage(
  * @returns Object with updated and skipped page counts
  */
 /**
- * List of system page types that are CMS-editable (static content pages)
+ * CMS-EDITABLE PAGES
+ *
+ * These pages can be customized by tenants via the CMS page builder.
+ * They contain static content that is safe to modify without breaking
+ * platform functionality.
+ *
+ * If adding a new system page that should be editable:
+ * 1. Add to this array
+ * 2. Add default sections in getDefaultSectionsForPage()
+ * 3. Set isCmsEditable: true in SYSTEM_PAGES definition
  */
 const CMS_EDITABLE_PAGES: SystemPageType[] = ['about', 'contact', 'terms', 'privacy', 'faq']
 
 /**
- * List of system page types that are locked (core business pages)
+ * LOCKED PAGES (Core Business Pages)
+ *
+ * These pages CANNOT be edited via CMS because they contain:
+ * - Complex React components with event/ticket business logic
+ * - Authentication and checkout flows
+ * - Dynamic data rendering (event listings, order history)
+ *
+ * The actual rendering happens in app/p/[slug]/* React components.
+ * The CMS entry exists for:
+ * - Admin visibility in page list
+ * - SEO settings per tenant
+ * - Navigation configuration
+ *
+ * DO NOT add pages here unless they have hardcoded React components
+ * that would break if modified through CMS.
  */
 const LOCKED_PAGES: SystemPageType[] = ['home', 'events', 'event-detail', 'checkout', 'login', 'register', 'account']
 

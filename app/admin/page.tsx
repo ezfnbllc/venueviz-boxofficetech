@@ -1,5 +1,55 @@
 'use client'
 
+/**
+ * Admin Dashboard
+ *
+ * Modern dashboard with AI insights, charts, activity feed, and scope-aware data.
+ *
+ * MULTI-TENANT DATA SCOPING:
+ * --------------------------
+ * The dashboard adapts based on user role and selected context:
+ *
+ * 1. Master Admin (scope: 'master'):
+ *    - Can see ALL data from all promoters (tenants)
+ *    - Has a dropdown to filter by specific promoter
+ *    - When "All Promoters" selected, shows aggregated data
+ *    - Sees "Events by Promoter" breakdown chart
+ *
+ * 2. Promoter Admin (scope: 'promoter'):
+ *    - Only sees their own promoter's data
+ *    - No promoter dropdown (filtered automatically by promoterId)
+ *    - Cannot see other promoters' events or orders
+ *
+ * TERMINOLOGY NOTE:
+ * -----------------
+ * "Tenant" and "Promoter" are used interchangeably:
+ * - allTenants = array of PromoterProfile objects
+ * - selectedTenantId = selected promoter's ID
+ * - See: lib/hooks/useTenantContext.ts for details
+ *
+ * DATA FLOW:
+ * ----------
+ * 1. Load ALL events and orders via AdminService
+ * 2. Create eventsMap for enriching orders with event details
+ * 3. Enrich orders (add eventName, venueName from event data)
+ * 4. Apply scope-based filtering (if promoter selected)
+ * 5. Calculate stats from filtered data
+ * 6. Generate AI insights based on filtered data
+ *
+ * ORDER ENRICHMENT:
+ * -----------------
+ * Orders are stored with eventId but not full event details.
+ * We enrich them before filtering so activity feed shows event names.
+ * ```
+ * const eventsMap = new Map(events.map(e => [e.id, e]))
+ * const enrichedOrders = orders.map(order => ({
+ *   ...order,
+ *   event: eventsMap.get(order.eventId),
+ *   eventName: order.eventName || event?.name,
+ * }))
+ * ```
+ */
+
 import { useState, useEffect } from 'react'
 import { useFirebaseAuth } from '@/lib/firebase-auth'
 import { AdminService } from '@/lib/admin/adminService'
@@ -49,38 +99,52 @@ export default function AdminDashboard() {
     const loadDashboardData = async () => {
       setLoading(true)
       try {
+        // Step 1: Load ALL events and orders (no filtering yet)
+        // We need all events for the eventsMap even if we filter later
         const [events, orders] = await Promise.all([
           AdminService.getEvents(),
           AdminService.getOrders(),
         ])
 
-        // Create event lookup map
+        // Step 2: Create event lookup map for order enrichment
+        // This is needed BEFORE filtering so enriched orders have event details
         const eventsMap = new Map(events.map((e: any) => [e.id, e]))
 
-        // Enrich orders with event data
+        // Step 3: Enrich orders with event data
+        // Orders only store eventId - we add eventName/venueName for display
+        // Multiple fallback paths handle different data structures
         const enrichedOrders = orders.map((order: any) => {
           const event = eventsMap.get(order.eventId)
           return {
             ...order,
             event,
+            // Fallback chain: order field -> event.name -> event.basics.name
             eventName: order.eventName || event?.name || event?.basics?.name,
             venueName: order.venueName || event?.venueName || event?.basics?.venue?.name,
           }
         })
 
-        // Apply scope-based filtering
+        // Step 4: Apply scope-based filtering
+        // Start with all data, then filter if promoter is selected
         let filteredEvents = events
         let filteredOrders = enrichedOrders
 
-        // Determine which promoter to filter by
+        // Determine promoter filter:
+        // - selectedTenantId: Master admin selected a specific promoter
+        // - promoterId: Promoter admin is logged in (always filters to their data)
+        // - null: Master admin with "All Promoters" selected (no filter)
         const promoterIdToFilter = selectedTenantId || (isPromoter ? promoterId : null)
 
         if (promoterIdToFilter) {
+          // Filter events by promoter
+          // Events can have promoterId in different locations depending on creation method
           filteredEvents = events.filter((event: any) => {
             const eventPromoterId = event.promoter?.promoterId || event.promoterId
             return eventPromoterId === promoterIdToFilter
           })
 
+          // Filter orders by their event's promoter
+          // An order belongs to a promoter if its event belongs to that promoter
           const eventIds = new Set(filteredEvents.map((e: any) => e.id))
           filteredOrders = enrichedOrders.filter((order: any) => eventIds.has(order.eventId))
         }

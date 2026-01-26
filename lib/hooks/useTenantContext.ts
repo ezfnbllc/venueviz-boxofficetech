@@ -1,13 +1,26 @@
 /**
  * Tenant Context Hook
  *
- * Determines the user's access scope based on their role:
- * - Master Admin: Can view all tenants (promoters)
- * - Tenant Admin: Can only view their assigned tenant (promoter)
- * - Promoter: Can only view their promoter's data
+ * IMPORTANT TERMINOLOGY:
+ * ----------------------
+ * In this system, "TENANTS" and "PROMOTERS" are used INTERCHANGEABLY.
+ * - "Promoter" = Business term (event promoters/organizers who sell tickets)
+ * - "Tenant" = Technical term (multi-tenant architecture)
+ * - Both refer to the SAME entity
  *
- * Note: In this system, "tenants" and "promoters" are used interchangeably.
- * The data is stored in the `promoters` collection.
+ * DATA STORAGE:
+ * - Business data (name, email, slug, commission) stored in `promoters` collection
+ * - Theme/branding config stored in `tenants` collection (links via promoterId)
+ *
+ * USER SCOPES:
+ * - 'master': Platform admin - can view ALL promoters' data
+ * - 'promoter': Promoter admin - can only view THEIR promoter's data
+ * - 'none': No special access
+ *
+ * USAGE:
+ * - Master admins see a dropdown to select which promoter to view
+ * - When "All Promoters" selected, dashboard shows aggregated data
+ * - When specific promoter selected, dashboard filters to that promoter
  */
 
 import { useState, useEffect, useMemo } from 'react'
@@ -74,6 +87,8 @@ export function useTenantContext(): TenantContext {
 
       try {
         // Master admins can see all promoters (tenants)
+        // NOTE: We load from `promoters` collection, NOT `tenants` collection
+        // The `tenants` collection only stores theme config, not business data
         if (scope === 'master') {
           const promoters = await PromoterService.getPromoters()
           setAllTenants(promoters as PromoterProfile[])
