@@ -54,15 +54,66 @@ export async function GET(request: NextRequest) {
     }
 
     const db = getAdminFirestore()
+    const normalizedEmail = email.toLowerCase()
 
-    // Fetch orders for this customer on this tenant
-    const ordersSnapshot = await db.collection('orders')
+    // Get promoter ID from slug for fallback queries
+    const promoterSnapshot = await db.collection('promoters')
+      .where('slug', '==', promoterSlug)
+      .limit(1)
+      .get()
+
+    const promoterId = promoterSnapshot.empty ? null : promoterSnapshot.docs[0].id
+
+    // Try multiple query strategies since orders might have different fields
+    let ordersSnapshot = await db.collection('orders')
       .where('promoterSlug', '==', promoterSlug)
-      .where('customerEmail', '==', email.toLowerCase())
+      .where('customerEmail', '==', normalizedEmail)
       .where('status', 'in', ['completed', 'confirmed'])
       .orderBy('createdAt', 'desc')
       .limit(50)
       .get()
+
+    // If no results and we have promoterId, try tenantId
+    if (ordersSnapshot.empty && promoterId) {
+      ordersSnapshot = await db.collection('orders')
+        .where('tenantId', '==', promoterId)
+        .where('customerEmail', '==', normalizedEmail)
+        .where('status', 'in', ['completed', 'confirmed'])
+        .orderBy('createdAt', 'desc')
+        .limit(50)
+        .get()
+    }
+
+    // Final fallback: get orders by email and filter by events owned by this promoter
+    if (ordersSnapshot.empty && promoterId) {
+      // Get all events for this promoter
+      const eventsSnapshot = await db.collection('events')
+        .where('promoterId', '==', promoterId)
+        .get()
+      const promoterEventIds = new Set(eventsSnapshot.docs.map(d => d.id))
+
+      // Get all customer orders
+      const allOrdersSnapshot = await db.collection('orders')
+        .where('customerEmail', '==', normalizedEmail)
+        .where('status', 'in', ['completed', 'confirmed'])
+        .orderBy('createdAt', 'desc')
+        .limit(100)
+        .get()
+
+      // Filter to only orders for this promoter's events
+      const filteredDocs = allOrdersSnapshot.docs.filter(doc => {
+        const data = doc.data()
+        const eventId = data.eventId || data.items?.[0]?.eventId
+        return eventId && promoterEventIds.has(eventId)
+      }).slice(0, 50)
+
+      // Create a mock snapshot-like structure
+      ordersSnapshot = {
+        docs: filteredDocs,
+        empty: filteredDocs.length === 0,
+        size: filteredDocs.length,
+      } as any
+    }
 
     // Get unique event IDs
     const eventIds = new Set<string>()
