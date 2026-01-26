@@ -191,8 +191,16 @@ export async function POST(request: NextRequest) {
 
           // Send order confirmation email
           const updatedOrderData = (await orderDoc.ref.get()).data()
-          if (updatedOrderData?.customerEmail && updatedOrderData?.promoterSlug) {
-            await sendOrderConfirmationEmail(db, orderDoc.id, updatedOrderData)
+          if (updatedOrderData?.customerEmail) {
+            try {
+              await sendOrderConfirmationEmail(db, orderDoc.id, updatedOrderData)
+              console.log(`[Webhook] Order confirmation email queued for ${updatedOrderData.customerEmail}`)
+            } catch (emailError) {
+              console.error('[Webhook] Failed to queue order confirmation email:', emailError)
+              // Don't fail the webhook - order is still confirmed
+            }
+          } else {
+            console.warn(`[Webhook] No customer email for order ${orderDoc.id}, skipping confirmation email`)
           }
 
           // Auto-create customer account if guest checkout
@@ -651,14 +659,31 @@ async function sendOrderConfirmationEmail(
       supportEmail: undefined as string | undefined,
     }
 
-    if (orderData.promoterSlug) {
+    // Try to get promoter info from slug or promoterId
+    const promoterSlug = orderData.promoterSlug
+    const promoterId = orderData.promoterId || orderData.tenantId
+
+    if (promoterSlug) {
       const promoterSnapshot = await db.collection('promoters')
-        .where('slug', '==', orderData.promoterSlug)
+        .where('slug', '==', promoterSlug)
         .limit(1)
         .get()
 
       if (!promoterSnapshot.empty) {
         const promoterData = promoterSnapshot.docs[0].data()
+        promoter = {
+          name: promoterData.name || promoter.name,
+          slug: promoterData.slug || promoter.slug,
+          logo: promoterData.logo || promoterData.branding?.logo,
+          primaryColor: promoterData.branding?.primaryColor || promoterData.primaryColor || promoter.primaryColor,
+          supportEmail: promoterData.email || promoterData.supportEmail,
+        }
+      }
+    } else if (promoterId) {
+      // Fallback: try to get promoter by ID
+      const promoterDoc = await db.collection('promoters').doc(promoterId).get()
+      if (promoterDoc.exists) {
+        const promoterData = promoterDoc.data()!
         promoter = {
           name: promoterData.name || promoter.name,
           slug: promoterData.slug || promoter.slug,
