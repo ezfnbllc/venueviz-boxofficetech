@@ -19,6 +19,10 @@ export default function CustomersManagement() {
   const [filterTier, setFilterTier] = useState('all')
   const [sortBy, setSortBy] = useState('totalSpent')
   const [editValues, setEditValues] = useState<any>({})
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [passwordLoading, setPasswordLoading] = useState(false)
+  const [passwordMessage, setPasswordMessage] = useState<{type: 'success' | 'error', text: string} | null>(null)
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -238,6 +242,65 @@ export default function CustomersManagement() {
         console.error('Error removing tag:', error)
       }
     }
+  }
+
+  const handleResetPassword = async () => {
+    if (!selectedCustomer || !newPassword) return
+
+    if (newPassword.length < 6) {
+      setPasswordMessage({ type: 'error', text: 'Password must be at least 6 characters' })
+      return
+    }
+
+    setPasswordLoading(true)
+    setPasswordMessage(null)
+
+    try {
+      const response = await fetch('/api/admin/customers/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerId: selectedCustomer.id,
+          firebaseUid: selectedCustomer.firebaseUid,
+          newPassword,
+          sendEmail: false,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        setPasswordMessage({ type: 'success', text: data.message || 'Password updated successfully!' })
+        setNewPassword('')
+        // Update local state to reflect the user now has a Firebase account
+        if (data.userCreated) {
+          setSelectedCustomer({ ...selectedCustomer, isGuest: false, needsPasswordReset: false })
+          setCustomers(customers.map(c =>
+            c.id === selectedCustomer.id ? { ...c, isGuest: false, needsPasswordReset: false } : c
+          ))
+        }
+        setTimeout(() => {
+          setShowPasswordModal(false)
+          setPasswordMessage(null)
+        }, 2000)
+      } else {
+        setPasswordMessage({ type: 'error', text: data.error || 'Failed to reset password' })
+      }
+    } catch (error) {
+      console.error('Error resetting password:', error)
+      setPasswordMessage({ type: 'error', text: 'Network error. Please try again.' })
+    } finally {
+      setPasswordLoading(false)
+    }
+  }
+
+  const generateRandomPassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%'
+    let password = ''
+    for (let i = 0; i < 12; i++) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length))
+    }
+    setNewPassword(password)
   }
 
   const formatCurrency = (amount: any) => {
@@ -862,31 +925,59 @@ export default function CustomersManagement() {
               </div>
 
               {/* Account Information */}
-              {(selectedCustomer.uid || selectedCustomer.firebaseUid || selectedCustomer.stripeCustomerId || selectedCustomer.promoterSlug) && (
-                <div className="bg-slate-100 dark:bg-slate-900 rounded-xl p-4 mb-6 border border-slate-200 dark:border-slate-700">
-                  <h3 className="font-semibold mb-3 text-blue-600 dark:text-accent-400">Account Information</h3>
-                  <div className="grid md:grid-cols-2 gap-4">
-                    {(selectedCustomer.uid || selectedCustomer.firebaseUid) && (
-                      <div>
-                        <p className="text-sm text-slate-500 dark:text-slate-400">Firebase UID</p>
-                        <p className="font-mono text-sm text-slate-900 dark:text-white">{selectedCustomer.firebaseUid || selectedCustomer.uid}</p>
-                      </div>
-                    )}
-                    {selectedCustomer.promoterSlug && (
-                      <div>
-                        <p className="text-sm text-slate-500 dark:text-slate-400">Tenant</p>
-                        <p className="font-mono text-sm text-slate-900 dark:text-white">{selectedCustomer.promoterSlug}</p>
-                      </div>
-                    )}
-                    {selectedCustomer.stripeCustomerId && (
-                      <div>
-                        <p className="text-sm text-slate-500 dark:text-slate-400">Stripe Customer ID</p>
-                        <p className="font-mono text-sm text-slate-900 dark:text-white">{selectedCustomer.stripeCustomerId}</p>
-                      </div>
-                    )}
-                  </div>
+              <div className="bg-slate-100 dark:bg-slate-900 rounded-xl p-4 mb-6 border border-slate-200 dark:border-slate-700">
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="font-semibold text-blue-600 dark:text-accent-400">Account Information</h3>
+                  <button
+                    onClick={() => {
+                      setShowPasswordModal(true)
+                      setNewPassword('')
+                      setPasswordMessage(null)
+                    }}
+                    className="px-3 py-1 bg-orange-600 text-white rounded-lg text-sm hover:bg-orange-700 flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                    </svg>
+                    {selectedCustomer.firebaseUid ? 'Reset Password' : 'Set Password'}
+                  </button>
                 </div>
-              )}
+                <div className="grid md:grid-cols-2 gap-4">
+                  {(selectedCustomer.uid || selectedCustomer.firebaseUid) ? (
+                    <div>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">Firebase UID</p>
+                      <p className="font-mono text-sm text-slate-900 dark:text-white">{selectedCustomer.firebaseUid || selectedCustomer.uid}</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">Firebase Account</p>
+                      <p className="text-sm text-yellow-600 dark:text-yellow-400">No account - click &quot;Set Password&quot; to create one</p>
+                    </div>
+                  )}
+                  {selectedCustomer.promoterSlug && (
+                    <div>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">Tenant</p>
+                      <p className="font-mono text-sm text-slate-900 dark:text-white">{selectedCustomer.promoterSlug}</p>
+                    </div>
+                  )}
+                  {selectedCustomer.stripeCustomerId && (
+                    <div>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">Stripe Customer ID</p>
+                      <p className="font-mono text-sm text-slate-900 dark:text-white">{selectedCustomer.stripeCustomerId}</p>
+                    </div>
+                  )}
+                  {selectedCustomer.needsPasswordReset && (
+                    <div className="md:col-span-2">
+                      <p className="text-sm text-orange-600 dark:text-orange-400 flex items-center gap-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        User needs to reset their password (auto-generated account)
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
 
               {/* Timestamps */}
               <div className="bg-slate-100 dark:bg-slate-900 rounded-xl p-4 mb-6 border border-slate-200 dark:border-slate-700">
@@ -922,6 +1013,103 @@ export default function CustomersManagement() {
                   className="px-4 py-2 bg-green-600/20 text-green-400 border border-green-600/30 rounded-lg hover:bg-green-600/30"
                 >
                   Print Details
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Password Reset Modal */}
+        {showPasswordModal && selectedCustomer && (
+          <div className="fixed inset-0 bg-black/60 dark:bg-black/80 flex items-center justify-center p-4 z-[60]">
+            <div className="bg-white dark:bg-slate-800 rounded-xl p-6 w-full max-w-md shadow-2xl border border-slate-200 dark:border-slate-700">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white">
+                  {selectedCustomer.firebaseUid ? 'Reset Password' : 'Set Password'}
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowPasswordModal(false)
+                    setNewPassword('')
+                    setPasswordMessage(null)
+                  }}
+                  className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white text-2xl"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                {selectedCustomer.firebaseUid
+                  ? `Setting a new password for ${selectedCustomer.email}`
+                  : `Creating a login account for ${selectedCustomer.email}`}
+              </p>
+
+              {passwordMessage && (
+                <div className={`p-3 rounded-lg mb-4 ${
+                  passwordMessage.type === 'success'
+                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                    : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                }`}>
+                  {passwordMessage.text}
+                </div>
+              )}
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  New Password
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Enter new password (min 6 characters)"
+                    className="flex-1 px-3 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
+                  />
+                  <button
+                    onClick={generateRandomPassword}
+                    className="px-3 py-2 bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 text-sm"
+                    title="Generate random password"
+                  >
+                    Generate
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Minimum 6 characters. Click Generate for a strong random password.
+                </p>
+              </div>
+
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => {
+                    setShowPasswordModal(false)
+                    setNewPassword('')
+                    setPasswordMessage(null)
+                  }}
+                  className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600"
+                  disabled={passwordLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleResetPassword}
+                  disabled={passwordLoading || !newPassword || newPassword.length < 6}
+                  className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {passwordLoading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      {selectedCustomer.firebaseUid ? 'Update Password' : 'Create Account'}
+                    </>
+                  )}
                 </button>
               </div>
             </div>

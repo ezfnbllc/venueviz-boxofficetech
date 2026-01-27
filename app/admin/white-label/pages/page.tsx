@@ -42,6 +42,7 @@ function PagesPageContent() {
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [selectedThemeId, setSelectedThemeId] = useState<string | null>(null)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [publishingPageId, setPublishingPageId] = useState<string | null>(null)
 
   const [createState, setCreateState] = useState<CreatePageState>({
     title: '',
@@ -50,6 +51,17 @@ function PagesPageContent() {
     creating: false,
     error: null,
   })
+
+  // System pages initialization state
+  const [systemPagesStatus, setSystemPagesStatus] = useState<{
+    initialized: boolean
+    existing: number
+    total: number
+    missing: string[]
+  } | null>(null)
+  const [initializingPages, setInitializingPages] = useState(false)
+  const [populatingDefaults, setPopulatingDefaults] = useState(false)
+  const [migratingLockStatus, setMigratingLockStatus] = useState(false)
 
   const { effectivePromoterId, isAdmin } = usePromoterAccess()
   const { user } = useFirebaseAuth()
@@ -121,6 +133,130 @@ function PagesPageContent() {
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  // Check system pages status
+  const checkSystemPagesStatus = useCallback(async () => {
+    if (!tenantId) return
+
+    try {
+      const response = await fetch(`/api/cms/pages?action=checkSystemPages&tenantId=${tenantId}`)
+      const data = await response.json()
+      setSystemPagesStatus(data)
+    } catch (error) {
+      console.error('Error checking system pages:', error)
+    }
+  }, [tenantId])
+
+  useEffect(() => {
+    if (tenantId && themes.length > 0) {
+      checkSystemPagesStatus()
+    }
+  }, [tenantId, themes.length, checkSystemPagesStatus])
+
+  // Initialize system pages
+  const handleInitializeSystemPages = async () => {
+    if (!tenantId || !user || !selectedThemeId) return
+
+    setInitializingPages(true)
+    try {
+      const response = await fetch('/api/cms/pages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'initializeSystemPages',
+          tenantId,
+          themeId: selectedThemeId,
+          userId: user.uid,
+        }),
+      })
+
+      const data = await response.json()
+      if (response.ok) {
+        setMessage({ type: 'success', text: data.message })
+        loadData()
+        checkSystemPagesStatus()
+      } else {
+        throw new Error(data.error || 'Failed to initialize pages')
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Initialization failed' })
+    } finally {
+      setInitializingPages(false)
+    }
+  }
+
+  // Count CMS-editable pages with empty sections (exclude locked/core pages)
+  const pagesWithEmptySections = pages.filter(
+    p => p.type === 'system' &&
+         p.isCmsEditable !== false &&
+         !p.isLocked &&
+         (!p.sections || p.sections.length === 0)
+  )
+
+  // Check if any pages need lock status migration
+  const pagesNeedingMigration = pages.filter(
+    p => p.type === 'system' && p.isLocked === undefined && p.isCmsEditable === undefined
+  )
+
+  // Migrate page lock status
+  const handleMigrateLockStatus = async () => {
+    if (!tenantId || !user) return
+
+    setMigratingLockStatus(true)
+    try {
+      const response = await fetch('/api/cms/pages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'migratePageLockStatus',
+          tenantId,
+          userId: user.uid,
+        }),
+      })
+
+      const data = await response.json()
+      if (response.ok) {
+        setMessage({ type: 'success', text: data.message })
+        loadData()
+      } else {
+        throw new Error(data.error || 'Failed to migrate page lock status')
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Migration failed' })
+    } finally {
+      setMigratingLockStatus(false)
+    }
+  }
+
+  // Populate default sections for existing pages
+  const handlePopulateDefaultSections = async () => {
+    if (!tenantId || !user) return
+
+    setPopulatingDefaults(true)
+    try {
+      const response = await fetch('/api/cms/pages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'populateDefaultSections',
+          tenantId,
+          userId: user.uid,
+        }),
+      })
+
+      const data = await response.json()
+      if (response.ok) {
+        setMessage({ type: 'success', text: data.message })
+        loadData()
+      } else {
+        throw new Error(data.error || 'Failed to populate default sections')
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Population failed' })
+    } finally {
+      setPopulatingDefaults(false)
+    }
+  }
 
   // Generate slug from title
   const generateSlug = (title: string) => {
@@ -207,10 +343,19 @@ function PagesPageContent() {
     }
   }
 
+  // Auto-dismiss success messages after 3 seconds
+  useEffect(() => {
+    if (message?.type === 'success') {
+      const timer = setTimeout(() => setMessage(null), 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [message])
+
   // Handle page publish/unpublish
   const handleTogglePublish = async (pageId: string, isPublished: boolean) => {
     if (!user) return
 
+    setPublishingPageId(pageId)
     try {
       const response = await fetch('/api/cms/pages', {
         method: 'POST',
@@ -224,13 +369,15 @@ function PagesPageContent() {
 
       const data = await response.json()
       if (data.page) {
-        setMessage({ type: 'success', text: isPublished ? 'Page unpublished' : 'Page published' })
+        setMessage({ type: 'success', text: isPublished ? 'Page unpublished successfully!' : 'Page published successfully!' })
         loadData()
       } else {
         throw new Error(data.error || 'Operation failed')
       }
     } catch (error) {
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Operation failed' })
+    } finally {
+      setPublishingPageId(null)
     }
   }
 
@@ -487,19 +634,34 @@ function PagesPageContent() {
         </div>
       </div>
 
-      {/* Message */}
+      {/* Message Toast */}
       {message && (
-        <div className={`p-4 rounded-lg ${
+        <div className={`p-4 rounded-xl flex items-center gap-3 animate-in slide-in-from-top-2 duration-300 ${
           message.type === 'success'
             ? 'bg-green-500/20 text-green-400 border border-green-500/30'
             : 'bg-red-500/20 text-red-400 border border-red-500/30'
         }`}>
-          {message.text}
+          {message.type === 'success' ? (
+            <div className="w-6 h-6 rounded-full bg-green-500/30 flex items-center justify-center flex-shrink-0">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+          ) : (
+            <div className="w-6 h-6 rounded-full bg-red-500/30 flex items-center justify-center flex-shrink-0">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+          )}
+          <span className="flex-1 font-medium">{message.text}</span>
           <button
             onClick={() => setMessage(null)}
-            className="float-right text-current hover:opacity-75"
+            className="text-current hover:opacity-75 p-1"
           >
-            &times;
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
         </div>
       )}
@@ -697,6 +859,142 @@ function PagesPageContent() {
       {/* Page List View */}
       {viewMode === 'list' && (
         <div className="space-y-4">
+          {/* Migration Banner - Update existing pages with lock status */}
+          {pagesNeedingMigration.length > 0 && (
+            <div className="bg-gradient-to-r from-blue-600/10 to-cyan-600/10 border border-blue-500/20 rounded-xl p-6">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-6 h-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-1">
+                    Update Page Security Settings
+                  </h3>
+                  <p className="text-slate-600 dark:text-gray-400 mb-3">
+                    {pagesNeedingMigration.length} page{pagesNeedingMigration.length > 1 ? 's need' : ' needs'} security settings updated.
+                    This will lock core business pages (Home, Events, Checkout) from editing while allowing
+                    static pages (About, Contact, etc.) to be customized.
+                  </p>
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={handleMigrateLockStatus}
+                      disabled={migratingLockStatus}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 text-white rounded-lg transition-colors font-medium flex items-center gap-2"
+                    >
+                      {migratingLockStatus ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-white"></div>
+                          Updating...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                          </svg>
+                          Apply Security Settings
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* System Pages Initialization Banner */}
+          {systemPagesStatus && !systemPagesStatus.initialized && selectedThemeId && (
+            <div className="bg-gradient-to-r from-purple-600/10 to-blue-600/10 border border-purple-500/20 rounded-xl p-6">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-full bg-purple-500/20 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-6 h-6 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-1">
+                    Initialize System Pages
+                  </h3>
+                  <p className="text-slate-600 dark:text-gray-400 mb-3">
+                    Set up the core pages for your site: Home, Events, About, Contact, Terms, Privacy, and more.
+                    These pages will be automatically configured with your theme settings.
+                  </p>
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={handleInitializeSystemPages}
+                      disabled={initializingPages}
+                      className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-600/50 text-white rounded-lg transition-colors font-medium flex items-center gap-2"
+                    >
+                      {initializingPages ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-white"></div>
+                          Initializing...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                          Initialize {systemPagesStatus.total - systemPagesStatus.existing} Pages
+                        </>
+                      )}
+                    </button>
+                    <span className="text-sm text-slate-500 dark:text-gray-400">
+                      {systemPagesStatus.existing} of {systemPagesStatus.total} pages exist
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Populate Default Sections Banner */}
+          {pagesWithEmptySections.length > 0 && (
+            <div className="bg-gradient-to-r from-amber-600/10 to-orange-600/10 border border-amber-500/20 rounded-xl p-6">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-6 h-6 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-1">
+                    Add Default Content
+                  </h3>
+                  <p className="text-slate-600 dark:text-gray-400 mb-3">
+                    {pagesWithEmptySections.length} system page{pagesWithEmptySections.length > 1 ? 's have' : ' has'} no content sections.
+                    You can add starter content (hero sections, text blocks, etc.) to help you get started quickly.
+                  </p>
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={handlePopulateDefaultSections}
+                      disabled={populatingDefaults}
+                      className="px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-600/50 text-white rounded-lg transition-colors font-medium flex items-center gap-2"
+                    >
+                      {populatingDefaults ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-white"></div>
+                          Adding Content...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                          </svg>
+                          Add Default Sections
+                        </>
+                      )}
+                    </button>
+                    <span className="text-sm text-slate-500 dark:text-gray-400">
+                      Pages: {pagesWithEmptySections.map(p => p.title).join(', ')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {pages.length === 0 ? (
             <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl p-12 border border-slate-200 dark:border-white/10 text-center">
               <svg className="w-16 h-16 text-slate-300 dark:text-gray-600 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -706,14 +1004,37 @@ function PagesPageContent() {
                 No Pages Yet
               </h3>
               <p className="text-slate-600 dark:text-gray-400 mb-6">
-                Create your first page to get started.
+                Initialize system pages or create a custom page to get started.
               </p>
-              <button
-                onClick={() => setViewMode('create')}
-                className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
-              >
-                Create Your First Page
-              </button>
+              <div className="flex justify-center gap-4">
+                {systemPagesStatus && !systemPagesStatus.initialized && selectedThemeId && (
+                  <button
+                    onClick={handleInitializeSystemPages}
+                    disabled={initializingPages}
+                    className="px-6 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-600/50 text-white rounded-lg transition-colors flex items-center gap-2"
+                  >
+                    {initializingPages ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-white"></div>
+                        Initializing...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        Initialize System Pages
+                      </>
+                    )}
+                  </button>
+                )}
+                <button
+                  onClick={() => setViewMode('create')}
+                  className="px-6 py-3 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-700 dark:text-white rounded-lg transition-colors"
+                >
+                  Create Custom Page
+                </button>
+              </div>
             </div>
           ) : (
             <div className="bg-white dark:bg-white/5 backdrop-blur-xl rounded-xl border border-slate-200 dark:border-white/10 overflow-hidden">
@@ -747,15 +1068,34 @@ function PagesPageContent() {
                       className="border-b border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
                     >
                       <td className="py-4 px-6">
-                        <div>
-                          <p className="text-slate-900 dark:text-white font-medium">
-                            {page.title}
-                          </p>
-                          {page.showInNav && (
-                            <p className="text-xs text-slate-500 dark:text-gray-400 mt-1">
-                              Shown in navigation
+                        <div className="flex items-center gap-2">
+                          {/* Locked icon for core business pages */}
+                          {page.isLocked || page.isCmsEditable === false ? (
+                            <svg className="w-4 h-4 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" title="Core page - editing locked">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            </svg>
+                          ) : page.isCmsEditable ? (
+                            <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" title="Editable page">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                            </svg>
+                          ) : null}
+                          <div>
+                            <p className="text-slate-900 dark:text-white font-medium">
+                              {page.title}
                             </p>
-                          )}
+                            <div className="flex items-center gap-2 mt-1">
+                              {page.showInNav && (
+                                <span className="text-xs text-slate-500 dark:text-gray-400">
+                                  Shown in navigation
+                                </span>
+                              )}
+                              {(page.isLocked || page.isCmsEditable === false) && (
+                                <span className="text-xs text-orange-400 bg-orange-500/10 px-1.5 py-0.5 rounded">
+                                  Core Page
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </td>
                       <td className="py-4 px-6">
@@ -781,35 +1121,61 @@ function PagesPageContent() {
                       </td>
                       <td className="py-4 px-6">
                         <div className="flex justify-end gap-2">
-                          <a
-                            href={`/admin/white-label/pages/${page.id}`}
-                            className="px-3 py-1.5 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-700 dark:text-white rounded text-sm transition-colors"
-                          >
-                            Edit
-                          </a>
+                          {/* Edit button - only for CMS-editable pages */}
+                          {page.isCmsEditable !== false && !page.isLocked ? (
+                            <a
+                              href={`/admin/white-label/pages/${page.id}`}
+                              className="px-3 py-1.5 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-700 dark:text-white rounded text-sm transition-colors"
+                            >
+                              Edit
+                            </a>
+                          ) : (
+                            <span
+                              className="px-3 py-1.5 bg-slate-500/10 text-slate-400 rounded text-sm cursor-not-allowed"
+                              title="Core business page - content is managed by platform code"
+                            >
+                              Locked
+                            </span>
+                          )}
                           <button
                             onClick={() => handleTogglePublish(page.id, page.isPublished)}
-                            className={`px-3 py-1.5 rounded text-sm transition-colors ${
+                            disabled={publishingPageId === page.id}
+                            className={`px-3 py-1.5 rounded text-sm transition-colors flex items-center gap-1.5 ${
                               page.isPublished
-                                ? 'bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400'
-                                : 'bg-green-500/20 hover:bg-green-500/30 text-green-400'
+                                ? 'bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 disabled:opacity-50'
+                                : 'bg-green-500/20 hover:bg-green-500/30 text-green-400 disabled:opacity-50'
                             }`}
                           >
-                            {page.isPublished ? 'Unpublish' : 'Publish'}
+                            {publishingPageId === page.id ? (
+                              <>
+                                <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-current"></div>
+                                {page.isPublished ? 'Unpublishing...' : 'Publishing...'}
+                              </>
+                            ) : (
+                              page.isPublished ? 'Unpublish' : 'Publish'
+                            )}
                           </button>
-                          <button
-                            onClick={() => handleDuplicate(page.id, page.title)}
-                            className="px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded text-sm transition-colors"
-                            title="Duplicate page"
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                            </svg>
-                          </button>
+                          {/* Only show duplicate for editable pages */}
+                          {page.isCmsEditable !== false && !page.isLocked && (
+                            <button
+                              onClick={() => handleDuplicate(page.id, page.title)}
+                              className="px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded text-sm transition-colors"
+                              title="Duplicate page"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                            </button>
+                          )}
                           <button
                             onClick={() => handleDelete(page.id)}
-                            className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded text-sm transition-colors"
-                            title="Delete page"
+                            disabled={page.isProtected}
+                            className={`px-3 py-1.5 rounded text-sm transition-colors ${
+                              page.isProtected
+                                ? 'bg-slate-500/10 text-slate-400 cursor-not-allowed'
+                                : 'bg-red-500/20 hover:bg-red-500/30 text-red-400'
+                            }`}
+                            title={page.isProtected ? 'System pages cannot be deleted' : 'Delete page'}
                           >
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

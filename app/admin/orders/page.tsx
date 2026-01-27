@@ -11,6 +11,8 @@ export default function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedOrder, setSelectedOrder] = useState<any>(null)
+  const [emailSending, setEmailSending] = useState(false)
+  const [emailMessage, setEmailMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   useEffect(() => {
     loadData()
@@ -95,8 +97,42 @@ export default function OrdersPage() {
     window.print()
   }
 
-  const emailTicket = (ticket: any) => {
-    alert('Email functionality coming soon!')
+  const emailTicket = async (orderId: string) => {
+    if (emailSending) return
+
+    setEmailSending(true)
+    setEmailMessage(null)
+
+    try {
+      const response = await fetch('/api/admin/orders/resend-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setEmailMessage({
+          type: 'success',
+          text: data.queued
+            ? 'Email queued for review. Check the Email Queue to send it.'
+            : 'Email sent successfully!',
+        })
+      } else {
+        setEmailMessage({
+          type: 'error',
+          text: data.error || 'Failed to send email',
+        })
+      }
+    } catch (error: any) {
+      setEmailMessage({
+        type: 'error',
+        text: error.message || 'Failed to send email',
+      })
+    } finally {
+      setEmailSending(false)
+    }
   }
 
   if (loading) {
@@ -276,19 +312,54 @@ export default function OrdersPage() {
         return (
           <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-              <div className="sticky top-0 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 p-6 flex justify-between items-center">
-                <div>
-                  <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Order Details</h2>
-                  <p className="text-slate-500 dark:text-slate-400">#{selectedOrder.orderId || selectedOrder.id.slice(0, 8)}</p>
+              <div className="sticky top-0 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 p-6">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Order Details</h2>
+                    <p className="text-slate-500 dark:text-slate-400">#{selectedOrder.orderId || selectedOrder.id.slice(0, 8)}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => emailTicket(selectedOrder.id)}
+                      disabled={emailSending}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded text-sm text-white shadow-lg shadow-blue-500/25 flex items-center gap-2"
+                    >
+                      {emailSending ? (
+                        <>
+                          <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Sending...
+                        </>
+                      ) : (
+                        'Resend Confirmation Email'
+                      )}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedOrder(null)
+                        setEmailMessage(null)
+                      }}
+                      className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    >
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
-                <button
-                  onClick={() => setSelectedOrder(null)}
-                  className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+
+                {/* Email message */}
+                {emailMessage && (
+                  <div className={`mt-4 p-3 rounded-lg text-sm ${
+                    emailMessage.type === 'success'
+                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800'
+                      : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
+                  }`}>
+                    {emailMessage.text}
+                  </div>
+                )}
               </div>
 
               <div className="p-6">
@@ -393,13 +464,7 @@ export default function OrdersPage() {
                               onClick={() => printTicket(ticket)}
                               className="flex-1 px-3 py-2 btn-accent rounded text-sm"
                             >
-                              🖨️ Print
-                            </button>
-                            <button
-                              onClick={() => emailTicket(ticket)}
-                              className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm text-white shadow-lg shadow-blue-500/25"
-                            >
-                              📧 Email
+                              Print
                             </button>
                           </div>
                         </div>

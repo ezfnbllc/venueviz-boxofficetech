@@ -12,6 +12,7 @@ import Stripe from 'stripe'
 import { getAdminFirestore, getAdminAuth } from '@/lib/firebase-admin'
 import { FieldValue } from 'firebase-admin/firestore'
 import crypto from 'crypto'
+import { ResendService } from '@/lib/services/resendService'
 
 /**
  * Generate a random secure password
@@ -187,6 +188,20 @@ export async function POST(request: NextRequest) {
           })
 
           console.log(`Order ${orderDoc.id} confirmed (Risk: ${riskLevel}, Score: ${riskScore})`)
+
+          // Send order confirmation email
+          const updatedOrderData = (await orderDoc.ref.get()).data()
+          if (updatedOrderData?.customerEmail) {
+            try {
+              await sendOrderConfirmationEmail(db, orderDoc.id, updatedOrderData)
+              console.log(`[Webhook] Order confirmation email queued for ${updatedOrderData.customerEmail}`)
+            } catch (emailError) {
+              console.error('[Webhook] Failed to queue order confirmation email:', emailError)
+              // Don't fail the webhook - order is still confirmed
+            }
+          } else {
+            console.warn(`[Webhook] No customer email for order ${orderDoc.id}, skipping confirmation email`)
+          }
 
           // Auto-create customer account if guest checkout
           const orderData = orderDoc.data()
@@ -624,6 +639,167 @@ async function generateTickets(
   }
 
   return tickets
+}
+
+/**
+ * Send order confirmation email with tickets
+ */
+async function sendOrderConfirmationEmail(
+  db: FirebaseFirestore.Firestore,
+  orderId: string,
+  orderData: FirebaseFirestore.DocumentData
+): Promise<void> {
+  try {
+    // Get promoter info for branding
+    let promoter = {
+      name: 'BoxOfficeTech',
+      slug: orderData.promoterSlug || 'bot',
+      logo: undefined as string | undefined,
+      primaryColor: '#6ac045',
+      supportEmail: undefined as string | undefined,
+    }
+
+    // Try to get promoter info from slug or promoterId
+    const promoterSlug = orderData.promoterSlug
+    const promoterId = orderData.promoterId || orderData.tenantId
+
+    if (promoterSlug) {
+      const promoterSnapshot = await db.collection('promoters')
+        .where('slug', '==', promoterSlug)
+        .limit(1)
+        .get()
+
+      if (!promoterSnapshot.empty) {
+        const promoterData = promoterSnapshot.docs[0].data()
+        promoter = {
+          name: promoterData.name || promoter.name,
+          slug: promoterData.slug || promoter.slug,
+          logo: promoterData.logo || promoterData.branding?.logo,
+          primaryColor: promoterData.branding?.primaryColor || promoterData.primaryColor || promoter.primaryColor,
+          supportEmail: promoterData.email || promoterData.supportEmail,
+        }
+      }
+    } else if (promoterId) {
+      // Fallback: try to get promoter by ID
+      const promoterDoc = await db.collection('promoters').doc(promoterId).get()
+      if (promoterDoc.exists) {
+        const promoterData = promoterDoc.data()!
+        promoter = {
+          name: promoterData.name || promoter.name,
+          slug: promoterData.slug || promoter.slug,
+          logo: promoterData.logo || promoterData.branding?.logo,
+          primaryColor: promoterData.branding?.primaryColor || promoterData.primaryColor || promoter.primaryColor,
+          supportEmail: promoterData.email || promoterData.supportEmail,
+        }
+      }
+    }
+
+    // Get event details
+    const eventId = orderData.eventId || orderData.items?.[0]?.eventId
+    let eventName = orderData.items?.[0]?.eventName || 'Your Event'
+    let eventDate = ''
+    let eventTime = ''
+    let venueName = ''
+    let venueAddress = ''
+
+    if (eventId) {
+      const eventDoc = await db.collection('events').doc(eventId).get()
+      if (eventDoc.exists) {
+        const eventData = eventDoc.data()
+        eventName = eventData?.name || eventData?.basics?.name || eventName
+
+        // Parse event date
+        const firstPerformance = eventData?.schedule?.performances?.[0]
+        if (firstPerformance?.date) {
+          const rawDate = firstPerformance.date
+          let dateObj: Date | null = null
+          if (rawDate?.toDate) dateObj = rawDate.toDate()
+          else if (rawDate?._seconds) dateObj = new Date(rawDate._seconds * 1000)
+          else if (rawDate) dateObj = new Date(rawDate)
+
+          if (dateObj) {
+            eventDate = dateObj.toLocaleDateString('en-US', {
+              weekday: 'long',
+              month: 'long',
+              day: 'numeric',
+              year: 'numeric',
+            })
+          }
+          eventTime = firstPerformance.startTime || ''
+        } else if (eventData?.startDate) {
+          const rawDate = eventData.startDate
+          let dateObj: Date | null = null
+          if (rawDate?.toDate) dateObj = rawDate.toDate()
+          else if (rawDate?._seconds) dateObj = new Date(rawDate._seconds * 1000)
+          else if (rawDate) dateObj = new Date(rawDate)
+
+          if (dateObj) {
+            eventDate = dateObj.toLocaleDateString('en-US', {
+              weekday: 'long',
+              month: 'long',
+              day: 'numeric',
+              year: 'numeric',
+            })
+          }
+          eventTime = eventData.startTime || ''
+        }
+
+        // Venue info
+        if (eventData?.venue) {
+          venueName = eventData.venue.name || ''
+          const parts = []
+          if (eventData.venue.street) parts.push(eventData.venue.street)
+          if (eventData.venue.city) parts.push(eventData.venue.city)
+          if (eventData.venue.state) parts.push(eventData.venue.state)
+          if (eventData.venue.zip) parts.push(eventData.venue.zip)
+          venueAddress = parts.join(', ')
+        }
+      }
+    }
+
+    // Build tickets array from order items
+    const tickets = (orderData.items || []).map((item: any) => ({
+      tierName: item.ticketType || item.tierName || 'General Admission',
+      quantity: item.quantity || 1,
+      price: item.price || 0,
+    }))
+
+    // Calculate totals
+    const subtotal = orderData.subtotal || orderData.pricing?.subtotal || 0
+    const serviceFee = orderData.serviceFee || orderData.pricing?.serviceFee || 0
+    const total = orderData.total || orderData.pricing?.total || 0
+
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://boxofficetech.com'
+    const orderUrl = `${baseUrl}/p/${promoter.slug}/orders/${orderId}`
+
+    const result = await ResendService.sendOrderConfirmation({
+      orderId,
+      customerName: orderData.customerName || 'Valued Customer',
+      customerEmail: orderData.customerEmail,
+      eventName,
+      eventDate: eventDate || 'Date TBD',
+      eventTime: eventTime || undefined,
+      venueName: venueName || undefined,
+      venueAddress: venueAddress || undefined,
+      tickets,
+      subtotal,
+      serviceFee,
+      total,
+      currency: orderData.currency || 'usd',
+      qrCodeUrl: orderData.qrCode ? `${baseUrl}/api/qr/${orderData.qrCode}` : undefined,
+      orderUrl,
+      promoter,
+    })
+
+    if (result.success) {
+      console.log(`[OrderConfirmation] Email sent to ${orderData.customerEmail} for order ${orderId}`)
+    } else {
+      console.error(`[OrderConfirmation] Failed to send email: ${result.error}`)
+    }
+  } catch (error) {
+    console.error('[OrderConfirmation] Error sending email:', error)
+    // Don't throw - order is already confirmed, email is supplementary
+  }
 }
 
 // Disable body parser for webhooks (need raw body for signature verification)

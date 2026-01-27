@@ -761,6 +761,85 @@ export async function getPromoterAffiliateEvents(
   }
 }
 
+// =============================================================================
+// CMS PAGE FUNCTIONS
+// =============================================================================
+
+/**
+ * Public CMS Page interface
+ * Simplified version of TenantPage for public rendering
+ */
+export interface PublicCMSPage {
+  id: string
+  title: string
+  slug: string
+  description?: string
+  sections: any[] // PageSection[] from cms.ts
+  seo?: {
+    title?: string
+    description?: string
+    keywords?: string[]
+    ogImage?: string
+  }
+}
+
+/**
+ * Get CMS page for a promoter by system type (about, contact, terms, privacy, faq)
+ *
+ * This function fetches the page data from the tenantPages collection
+ * for CMS-editable pages that render dynamic content.
+ *
+ * @param promoterId - The promoter's ID
+ * @param systemType - The system page type (about, contact, terms, privacy, faq)
+ * @returns The CMS page with sections, or null if not found
+ */
+export async function getCMSPage(
+  promoterId: string,
+  systemType: string
+): Promise<PublicCMSPage | null> {
+  try {
+    const db = getAdminDb()
+    console.log(`[PublicService] Fetching CMS page: promoterId=${promoterId}, systemType=${systemType}`)
+
+    // Query tenantPages collection
+    // Note: tenantId in tenantPages = promoterId (they're interchangeable)
+    const snapshot = await db.collection('tenantPages')
+      .where('tenantId', '==', promoterId)
+      .where('type', '==', 'system')
+      .where('systemType', '==', systemType)
+      .where('status', '==', 'published')
+      .limit(1)
+      .get()
+
+    if (snapshot.empty) {
+      console.log(`[PublicService] No CMS page found for ${systemType}`)
+      return null
+    }
+
+    const doc = snapshot.docs[0]
+    const data = doc.data()
+
+    console.log(`[PublicService] Found CMS page: id=${doc.id}, sections=${data.sections?.length || 0}`)
+
+    return {
+      id: doc.id,
+      title: data.title || '',
+      slug: data.slug || systemType,
+      description: data.description,
+      sections: data.sections || [],
+      seo: data.seo ? {
+        title: data.seo.title,
+        description: data.seo.description,
+        keywords: data.seo.keywords,
+        ogImage: data.seo.ogImage,
+      } : undefined,
+    }
+  } catch (error) {
+    console.error(`Error fetching CMS page ${systemType}:`, error)
+    return null
+  }
+}
+
 /**
  * Get venue by ID
  */

@@ -198,16 +198,20 @@ export function Header({
               <>
                 {isLoggedIn ? (
                   <div className="flex items-center space-x-3">
-                    <span className="text-sm text-[var(--color-text-secondary,#717171)]">{userName}</span>
+                    <Link href={`${baseUrl}/account`}>
+                      <span className="text-sm text-[var(--color-text-secondary,#717171)] hover:text-[var(--color-primary,#6ac045)] cursor-pointer">{userName}</span>
+                    </Link>
                     <Button variant="ghost" size="sm" onClick={onSignOut}>
                       Sign Out
                     </Button>
                   </div>
                 ) : (
                   <>
-                    <Button variant="ghost" size="sm" onClick={onSignIn}>
-                      Sign In
-                    </Button>
+                    <Link href={`${baseUrl}/login`}>
+                      <Button variant="ghost" size="sm">
+                        Sign In
+                      </Button>
+                    </Link>
                     <Link href={`${baseUrl}/register`}>
                       <Button variant="primary" size="sm">
                         Sign Up
@@ -280,14 +284,23 @@ export function Header({
               {showAuth && (
                 <div className="pt-4 mt-4 border-t border-[var(--color-border,#efefef)] px-4 space-y-2">
                   {isLoggedIn ? (
-                    <Button variant="outline" className="w-full" onClick={onSignOut}>
-                      Sign Out
-                    </Button>
+                    <>
+                      <Link href={`${baseUrl}/account`} className="block">
+                        <Button variant="outline" className="w-full">
+                          My Account
+                        </Button>
+                      </Link>
+                      <Button variant="outline" className="w-full" onClick={onSignOut}>
+                        Sign Out
+                      </Button>
+                    </>
                   ) : (
                     <>
-                      <Button variant="outline" className="w-full" onClick={onSignIn}>
-                        Sign In
-                      </Button>
+                      <Link href={`${baseUrl}/login`} className="block">
+                        <Button variant="outline" className="w-full">
+                          Sign In
+                        </Button>
+                      </Link>
                       <Link href={`${baseUrl}/register`} className="block">
                         <Button variant="primary" className="w-full">
                           Sign Up

@@ -226,19 +226,94 @@ export interface DetectedSlot {
 // PAGE TYPES
 // ============================================================================
 
+/**
+ * Page Types:
+ * - 'static': User-created static content pages
+ * - 'dynamic': Pages with dynamic data (e.g., event listings)
+ * - 'system': Auto-created pages required for platform functionality
+ * - 'custom': Fully custom pages with arbitrary HTML/CSS/JS
+ * - 'landing': Marketing/promotional landing pages
+ */
+export type PageType = 'static' | 'dynamic' | 'system' | 'custom' | 'landing'
+
+/**
+ * System Page Types
+ *
+ * These are the core pages that every tenant portal needs.
+ * Divided into two categories:
+ *
+ * LOCKED (Core Business Pages) - Cannot be edited via CMS:
+ * - home, events, event-detail, checkout, login, register, account
+ * - These pages have complex business logic and React components
+ *
+ * EDITABLE (Static Content Pages) - Can be customized via CMS:
+ * - about, contact, terms, privacy, faq
+ * - Simple content pages tenants can personalize
+ *
+ * See: lib/services/systemPageSeederService.ts for page definitions
+ */
+export type SystemPageType =
+  | 'home'
+  | 'events'
+  | 'event-detail'
+  | 'cart'
+  | 'checkout'
+  | 'about'
+  | 'contact'
+  | 'privacy'
+  | 'terms'
+  | 'faq'
+  | 'venues'
+  | 'venue-detail'
+  | 'account'
+  | 'login'
+  | 'register'
+
+/**
+ * TenantPage - CMS Page Definition
+ *
+ * Each tenant (promoter) has their own set of pages stored in the `tenantPages` collection.
+ *
+ * PAGE LOCKING SYSTEM:
+ * -------------------
+ * Three flags control what can be done with a page:
+ *
+ * 1. isProtected: Prevents DELETION (all system pages are protected)
+ * 2. isLocked: Prevents EDITING via CMS (core business pages)
+ * 3. isCmsEditable: Explicitly allows CMS editing (static content pages)
+ *
+ * Check logic in page editor:
+ * ```
+ * if (page.isLocked || page.isCmsEditable === false) {
+ *   // Block editing - show "Core Page - Editing Locked" message
+ * }
+ * ```
+ *
+ * Check logic for delete:
+ * ```
+ * if (page.isProtected) {
+ *   // Block deletion - system pages cannot be removed
+ * }
+ * ```
+ *
+ * TERMINOLOGY NOTE:
+ * -----------------
+ * tenantId refers to the promoter's ID. In this system, "tenant" and "promoter"
+ * are used interchangeably. See: lib/hooks/useTenantContext.ts for details.
+ */
 export interface TenantPage {
   id: string
-  tenantId: string
+  tenantId: string                       // Promoter ID (tenant = promoter in this system)
   themeId: string
 
   // Page Info
   title: string
-  slug: string                         // URL path e.g., "about-us"
+  slug: string                           // URL path e.g., "about-us", "events/:eventId"
   description?: string
 
   // Multi-language Support
-  defaultLanguage: string              // e.g., "en"
-  availableLanguages: string[]         // e.g., ["en", "es", "fr"]
+  defaultLanguage: string                // e.g., "en"
+  availableLanguages: string[]           // e.g., ["en", "es", "fr"]
   translations: {
     [langCode: string]: PageTranslation
   }
@@ -246,15 +321,40 @@ export interface TenantPage {
   // SEO (default language)
   seo: PageSEO
 
-  // Page Type
-  type: 'static' | 'dynamic' | 'system'
-  systemType?: 'home' | 'events' | 'event-detail' | 'cart' | 'checkout'
+  // Page Type & Protection
+  type: PageType
+  systemType?: SystemPageType            // Only set for type: 'system' pages
+
+  /**
+   * isProtected: TRUE = Page cannot be deleted
+   * All system pages have this set to true to prevent accidental removal.
+   * User-created custom pages can be deleted.
+   */
+  isProtected?: boolean
+
+  /**
+   * isLocked: TRUE = Page cannot be edited via CMS
+   * Core business pages (home, events, checkout, etc.) are locked because they
+   * contain complex React components and business logic that would break if
+   * modified through the CMS page builder.
+   */
+  isLocked?: boolean
+
+  /**
+   * isCmsEditable: TRUE = Page CAN be edited via CMS page builder
+   * Static content pages (about, contact, terms, privacy, faq) are editable
+   * because they are simple content pages tenants can personalize.
+   *
+   * Check both flags: (page.isLocked || page.isCmsEditable === false)
+   * This handles pages created before isCmsEditable flag existed.
+   */
+  isCmsEditable?: boolean
 
   // Template
   templateId: string
 
   // Content Blocks (default language)
-  sections: PageSection[]
+  sections: PageSection[]                // CMS sections - only editable pages use these
 
   // Status
   status: 'draft' | 'published' | 'scheduled'
@@ -262,15 +362,15 @@ export interface TenantPage {
   scheduledFor?: Timestamp
 
   // Navigation
-  showInNav: boolean
-  navOrder?: number
-  navLabel?: string
-  parentPageId?: string                // For subpages
+  showInNav: boolean                     // Show in main nav menu
+  navOrder?: number                      // Order in nav (lower = earlier)
+  navLabel?: string                      // Override title for nav display
+  parentPageId?: string                  // For hierarchical subpages
 
   createdAt: Timestamp
   updatedAt: Timestamp
-  createdBy: string
-  updatedBy: string
+  createdBy: string                      // User ID who created
+  updatedBy: string                      // User ID who last modified
 }
 
 export interface PageSEO {
