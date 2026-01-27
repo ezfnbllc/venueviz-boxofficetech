@@ -3,7 +3,7 @@
  *
  * Displays order confirmation after successful payment.
  * Shows order details, tickets, and calendar integration options.
- * Uses shared orderService for core platform functionality.
+ * Queues confirmation email if not already sent.
  */
 
 import { Metadata } from 'next'
@@ -27,6 +27,122 @@ import {
   type OrderData,
   type EventDetails,
 } from '@/lib/services/orderService'
+import { ResendService } from '@/lib/services/resendService'
+
+/**
+ * Queue order confirmation email if not already queued
+ */
+async function queueConfirmationEmailIfNeeded(
+  orderId: string,
+  order: OrderData,
+  event: EventDetails | null,
+  slug: string
+): Promise<void> {
+  try {
+    const db = getAdminFirestore()
+
+    // Check if email already queued for this order
+    const existingEmail = await db.collection('email_queue')
+      .where('type', '==', 'order_confirmation')
+      .where('metadata.orderId', '==', orderId)
+      .limit(1)
+      .get()
+
+    if (!existingEmail.empty) {
+      console.log(`[Confirmation] Email already queued for order ${orderId}`)
+      return
+    }
+
+    // Check if order has customerEmail
+    if (!order.customerEmail) {
+      console.log(`[Confirmation] No customer email for order ${orderId}`)
+      return
+    }
+
+    // Get promoter info
+    let promoter = {
+      name: 'BoxOfficeTech',
+      slug: slug,
+      logo: undefined as string | undefined,
+      primaryColor: '#6ac045',
+      supportEmail: undefined as string | undefined,
+      website: undefined as string | undefined,
+    }
+
+    const promoterSnapshot = await db.collection('promoters')
+      .where('slug', '==', slug)
+      .limit(1)
+      .get()
+
+    if (!promoterSnapshot.empty) {
+      const promoterData = promoterSnapshot.docs[0].data()
+      promoter = {
+        name: promoterData.name || promoter.name,
+        slug: promoterData.slug || promoter.slug,
+        logo: promoterData.logo || promoterData.branding?.logo,
+        primaryColor: promoterData.branding?.primaryColor || promoterData.primaryColor || promoter.primaryColor,
+        supportEmail: promoterData.email || promoterData.supportEmail,
+        website: promoterData.website,
+      }
+    }
+
+    // Build ticket details
+    const tickets = (order.items || []).map((item: any) => ({
+      tierName: item.ticketType || item.tierName || 'General Admission',
+      quantity: item.quantity || 1,
+      price: item.price || 0,
+    }))
+
+    // Get event details
+    const eventName = event?.name || order.items?.[0]?.eventName || 'Event'
+    let eventDate = 'Date TBD'
+    let eventTime: string | undefined
+
+    if (event?.startDate) {
+      const dateObj = event.startDate instanceof Date ? event.startDate : new Date(event.startDate)
+      eventDate = dateObj.toLocaleDateString('en-US', {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      })
+      eventTime = event.startTime
+    }
+
+    const venueName = event?.venue?.name
+    const venueAddress = event?.venue ? formatVenueLocation(event.venue) : undefined
+
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://boxofficetech.com'
+
+    // Queue the email
+    const result = await ResendService.sendOrderConfirmation({
+      orderId,
+      customerName: order.customerName || 'Valued Customer',
+      customerEmail: order.customerEmail,
+      eventName,
+      eventDate,
+      eventTime,
+      venueName,
+      venueAddress,
+      tickets,
+      subtotal: order.subtotal || order.total || 0,
+      serviceFee: order.serviceFee || 0,
+      total: order.total || 0,
+      currency: 'usd',
+      orderUrl: `${baseUrl}/p/${slug}/account/orders/${orderId}`,
+      promoter,
+    })
+
+    if (result.success) {
+      console.log(`[Confirmation] Email queued for order ${orderId}`)
+    } else {
+      console.error(`[Confirmation] Failed to queue email: ${result.error}`)
+    }
+  } catch (error) {
+    console.error('[Confirmation] Error queuing email:', error)
+    // Don't throw - email is supplementary
+  }
+}
 
 /**
  * Fetch payment method details from Stripe
@@ -160,6 +276,11 @@ export default async function ConfirmationPage({ params, searchParams }: PagePro
   // Fetch full event details from Firestore
   const eventId = order.eventId || primaryEvent?.eventId
   const event = eventId ? await getEventDetails(eventId) : null
+
+  // Queue confirmation email if payment succeeded and not already queued
+  if (resolvedSearchParams.redirect_status === 'succeeded') {
+    await queueConfirmationEmailIfNeeded(orderId, order, event, slug)
+  }
 
   // Format event date (the actual event date, not purchase date)
   const formattedEventDate = formatEventDate(event?.startDate, {
