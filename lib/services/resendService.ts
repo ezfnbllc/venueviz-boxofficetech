@@ -78,6 +78,7 @@ export interface OrderEmailData {
     logo?: string
     primaryColor?: string
     supportEmail?: string
+    website?: string
   }
 }
 
@@ -92,6 +93,7 @@ export interface PasswordResetEmailData {
     logo?: string
     primaryColor?: string
     supportEmail?: string
+    website?: string
   }
 }
 
@@ -105,6 +107,7 @@ export interface WelcomeEmailData {
     logo?: string
     primaryColor?: string
     supportEmail?: string
+    website?: string
   }
 }
 
@@ -219,10 +222,27 @@ class ResendServiceClass {
   }
 
   /**
+   * Get support email - uses configured email or generates from website domain
+   */
+  private getSupportEmail(promoter: { supportEmail?: string; website?: string; slug: string }): string {
+    if (promoter.supportEmail) return promoter.supportEmail
+    if (promoter.website) {
+      try {
+        const url = new URL(promoter.website.startsWith('http') ? promoter.website : `https://${promoter.website}`)
+        return `support@${url.hostname.replace(/^www\./, '')}`
+      } catch {
+        // Invalid URL, fall back
+      }
+    }
+    return DEFAULT_FROM_EMAIL
+  }
+
+  /**
    * Send order confirmation email with tickets
    */
   async sendOrderConfirmation(data: OrderEmailData): Promise<EmailResult> {
     const primaryColor = data.promoter.primaryColor || '#6ac045'
+    const supportEmail = this.getSupportEmail(data.promoter)
     const ticketRows = data.tickets.map(t => `
       <tr>
         <td style="padding: 12px; border-bottom: 1px solid #eee;">${t.tierName}</td>
@@ -327,7 +347,7 @@ class ResendServiceClass {
     <!-- Footer -->
     <div style="background-color: #f9fafb; padding: 24px; text-align: center; border-top: 1px solid #eee;">
       <p style="margin: 0 0 8px; color: #666; font-size: 14px;">
-        Questions? Contact us at ${data.promoter.supportEmail || `support@${data.promoter.slug}.com`}
+        Questions? Contact us at ${supportEmail}
       </p>
       <p style="margin: 0; color: #999; font-size: 12px;">
         Copyright ${new Date().getFullYear()} ${data.promoter.name}. All rights reserved.
@@ -357,7 +377,7 @@ Total: $${data.total.toFixed(2)} ${data.currency.toUpperCase()}
 
 ${data.orderUrl ? `View your tickets: ${data.orderUrl}` : ''}
 
-Questions? Contact ${data.promoter.supportEmail || `support@${data.promoter.slug}.com`}
+Questions? Contact ${supportEmail}
     `.trim()
 
     const emailOptions = {
@@ -366,7 +386,7 @@ Questions? Contact ${data.promoter.supportEmail || `support@${data.promoter.slug
       html,
       text,
       from: {
-        email: data.promoter.supportEmail || DEFAULT_FROM_EMAIL,
+        email: supportEmail,
         name: data.promoter.name,
       },
       tags: [
@@ -398,6 +418,7 @@ Questions? Contact ${data.promoter.supportEmail || `support@${data.promoter.slug
    */
   async sendPasswordResetNotification(data: PasswordResetEmailData): Promise<EmailResult> {
     const primaryColor = data.promoter.primaryColor || '#6ac045'
+    const supportEmail = this.getSupportEmail(data.promoter)
 
     const html = `
 <!DOCTYPE html>
@@ -449,7 +470,7 @@ Questions? Contact ${data.promoter.supportEmail || `support@${data.promoter.slug
       </div>
 
       <p style="margin: 0; color: #999; font-size: 14px; line-height: 1.5;">
-        If you didn't request this password reset, please contact us immediately at ${data.promoter.supportEmail || `support@${data.promoter.slug}.com`}.
+        If you didn't request this password reset, please contact us immediately at ${supportEmail}.
       </p>
     </div>
 
@@ -478,7 +499,7 @@ For security, please change this password after logging in.
 
 Log in at: ${data.loginUrl}
 
-If you didn't request this password reset, please contact us immediately at ${data.promoter.supportEmail || `support@${data.promoter.slug}.com`}.
+If you didn't request this password reset, please contact us immediately at ${supportEmail}.
     `.trim()
 
     const emailOptions = {
@@ -487,7 +508,7 @@ If you didn't request this password reset, please contact us immediately at ${da
       html,
       text,
       from: {
-        email: data.promoter.supportEmail || DEFAULT_FROM_EMAIL,
+        email: supportEmail,
         name: data.promoter.name,
       },
       tags: [
@@ -516,6 +537,7 @@ If you didn't request this password reset, please contact us immediately at ${da
    */
   async sendWelcomeEmail(data: WelcomeEmailData): Promise<EmailResult> {
     const primaryColor = data.promoter.primaryColor || '#6ac045'
+    const supportEmail = this.getSupportEmail(data.promoter)
 
     const html = `
 <!DOCTYPE html>
@@ -553,7 +575,7 @@ If you didn't request this password reset, please contact us immediately at ${da
       </div>
 
       <p style="margin: 0; color: #999; font-size: 14px; line-height: 1.5;">
-        Questions? We're here to help at ${data.promoter.supportEmail || `support@${data.promoter.slug}.com`}.
+        Questions? We're here to help at ${supportEmail}.
       </p>
     </div>
 
@@ -577,7 +599,7 @@ Your account has been created successfully. You can now browse events, purchase 
 
 Browse events: ${data.loginUrl}
 
-Questions? We're here to help at ${data.promoter.supportEmail || `support@${data.promoter.slug}.com`}.
+Questions? We're here to help at ${supportEmail}.
     `.trim()
 
     const emailOptions = {
@@ -586,7 +608,7 @@ Questions? We're here to help at ${data.promoter.supportEmail || `support@${data
       html,
       text,
       from: {
-        email: data.promoter.supportEmail || DEFAULT_FROM_EMAIL,
+        email: supportEmail,
         name: data.promoter.name,
       },
       tags: [

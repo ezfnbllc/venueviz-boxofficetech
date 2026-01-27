@@ -657,6 +657,7 @@ async function sendOrderConfirmationEmail(
       logo: undefined as string | undefined,
       primaryColor: '#6ac045',
       supportEmail: undefined as string | undefined,
+      website: undefined as string | undefined,
     }
 
     // Try to get promoter info from slug or promoterId
@@ -677,6 +678,7 @@ async function sendOrderConfirmationEmail(
           logo: promoterData.logo || promoterData.branding?.logo,
           primaryColor: promoterData.branding?.primaryColor || promoterData.primaryColor || promoter.primaryColor,
           supportEmail: promoterData.email || promoterData.supportEmail,
+          website: promoterData.website,
         }
       }
     } else if (promoterId) {
@@ -690,6 +692,7 @@ async function sendOrderConfirmationEmail(
           logo: promoterData.logo || promoterData.branding?.logo,
           primaryColor: promoterData.branding?.primaryColor || promoterData.primaryColor || promoter.primaryColor,
           supportEmail: promoterData.email || promoterData.supportEmail,
+          website: promoterData.website,
         }
       }
     }

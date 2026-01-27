@@ -56,6 +56,7 @@ export async function POST(request: NextRequest) {
       logo: undefined as string | undefined,
       primaryColor: '#6ac045',
       supportEmail: undefined as string | undefined,
+      website: undefined as string | undefined,
     }
 
     const promoterId = order.promoterId || eventData?.promoterId
@@ -69,6 +70,7 @@ export async function POST(request: NextRequest) {
           logo: promoterData.logo || promoterData.branding?.logo,
           primaryColor: promoterData.branding?.primaryColor || promoter.primaryColor,
           supportEmail: promoterData.email,
+          website: promoterData.website,
         }
       }
     }
