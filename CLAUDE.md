@@ -145,6 +145,8 @@ SectionRenderer renders sections[]
 | `events` | Event listings | promoterId, basics, tickets, venue |
 | `orders` | Ticket purchases | eventId, customerId, tickets, total |
 | `users` | User accounts | email, role, promoterId (if promoter) |
+| `email_queue` | Queued transactional emails | type, status, to, subject, html, promoterSlug |
+| `customers` | Tenant customer accounts | promoterId, email, firebaseUid, orderCount |
 
 ### Indexes Required
 - `tenantPages`: composite index on `(tenantId, type, systemType)`
@@ -170,6 +172,26 @@ SectionRenderer renders sections[]
 - Generates AI-powered dashboard insights
 - Scope-aware (master vs promoter)
 
+### ResendService (`lib/services/resendService.ts`)
+- Transactional email sending via Resend API
+- **Queue Mode** (default): Emails stored in `email_queue` for admin review
+- **Live Mode**: Emails sent immediately (set `EMAIL_SEND_MODE=live`)
+- Tenant-branded templates with promoter logo/colors
+- Support email derived from promoter's `website` field
+
+**Email Types**:
+- `order_confirmation` - Sent after successful payment (via Stripe webhook)
+- `password_reset` - Sent when admin resets customer password
+- `welcome` - Sent to new guest accounts after first purchase
+
+**Support Email Logic**:
+```typescript
+// Priority: supportEmail > website domain > default
+if (promoter.supportEmail) return promoter.supportEmail
+if (promoter.website) return `support@${extractDomain(promoter.website)}`
+return DEFAULT_FROM_EMAIL // tickets@boxofficetech.com
+```
+
 ---
 
 ## UI Components
@@ -189,6 +211,13 @@ SectionRenderer renders sections[]
 ### Activity Feed (`components/admin/ActivityFeed.tsx`)
 - Combines events and orders in timeline
 - Shows enriched order details (event name, date, venue)
+
+### Email Queue (`app/admin/email-queue/page.tsx`)
+- View/manage queued transactional emails
+- Preview email content before sending
+- Send individual or bulk emails
+- Cancel unwanted emails
+- Retry failed emails
 
 ---
 
@@ -238,6 +267,8 @@ if (page.isLocked || page.isCmsEditable === false) {
 4. **Activity Feed Enhancement** - Shows event details for orders
 5. **Default Page Sections** - System pages created with starter content
 6. **CMS-Driven Public Pages** - About, Contact, Terms, Privacy, FAQ now read from CMS database
+7. **Email Queue System** - Transactional emails via Resend with queue mode for testing
+8. **Resend Email from Orders** - Admin can resend order confirmation emails
 
 ---
 
@@ -251,6 +282,10 @@ npm run dev
 ### Key Environment Variables
 - Firebase config (NEXT_PUBLIC_FIREBASE_*)
 - OpenAI API key (for AI insights)
+- `RESEND_API_KEY` - Resend API key for transactional emails
+- `EMAIL_SEND_MODE` - `queue` (default) or `live`
+- `STRIPE_SECRET_KEY` - Stripe API key
+- `STRIPE_WEBHOOK_SECRET` - Stripe webhook signature secret
 
 ### Testing Tenant Context
 1. Log in as master admin
@@ -285,3 +320,14 @@ npm run dev
 - Go to Admin → White Label → Pages
 - Click "Add Default Sections" to populate starter content
 - Or manually add sections via the page editor
+
+### Order Confirmation Emails Not Queued
+- Stripe webhook must be configured for the correct URL
+- Preview deployments use different URLs than production
+- Check Stripe Dashboard → Webhooks → ensure endpoint URL matches deployment
+- Use "Resend Confirmation Email" button on Orders page to manually queue
+
+### Email Shows Wrong Support Address
+- Support email derived from promoter's `website` field
+- Set promoter's `website` in Admin → Promoters → Edit
+- Falls back to `tickets@boxofficetech.com` if not set
