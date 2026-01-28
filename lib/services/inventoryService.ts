@@ -121,35 +121,48 @@ function buildGAInventory(
   const ticketTypes = eventData.ticketTypes || []
   const pricingTiers = eventData.pricing?.tiers || []
 
-  // Build tier map (id -> tier info)
+  // Build tier map (id -> tier info) and name-to-id mapping
   const tierMap: Map<string, { name: string; capacity: number }> = new Map()
+  const nameToIdMap: Map<string, string> = new Map() // Maps tier name -> tier ID
 
   ticketTypes.forEach((tt: any) => {
-    tierMap.set(tt.id, {
-      name: tt.name || tt.id,
+    const tierId = tt.id
+    const tierName = tt.name || tt.id
+    tierMap.set(tierId, {
+      name: tierName,
       capacity: tt.capacity || tt.available || tt.quantity || 0,
     })
+    // Map the name to this tier ID (case-insensitive for better matching)
+    nameToIdMap.set(tierName.toLowerCase(), tierId)
   })
 
   pricingTiers.forEach((tier: any) => {
     const tierId = tier.id || `tier-${tier.name}`
+    const tierName = tier.name || tierId
     if (!tierMap.has(tierId)) {
       tierMap.set(tierId, {
-        name: tier.name || tierId,
+        name: tierName,
         capacity: tier.capacity || tier.quantity || tier.available || 0,
       })
+    }
+    // Map the name to this tier ID (case-insensitive for better matching)
+    if (!nameToIdMap.has(tierName.toLowerCase())) {
+      nameToIdMap.set(tierName.toLowerCase(), tierId)
     }
   })
 
   // Count sold tickets per tier
+  // Orders store ticketType as the tier NAME, so we need to map it back to tier ID
   const soldCounts: Map<string, number> = new Map()
   ordersSnapshot.docs.forEach(doc => {
     const order = doc.data()
     if (order.items && Array.isArray(order.items)) {
       order.items.forEach((item: any) => {
         if (!item.seatInfo) {
-          const ticketTypeId = item.ticketType || 'general'
-          soldCounts.set(ticketTypeId, (soldCounts.get(ticketTypeId) || 0) + (item.quantity || 1))
+          const ticketTypeName = item.ticketType || item.tierName || 'general'
+          // Try to find the tier ID by name, otherwise use the name directly
+          const tierId = nameToIdMap.get(ticketTypeName.toLowerCase()) || ticketTypeName
+          soldCounts.set(tierId, (soldCounts.get(tierId) || 0) + (item.quantity || 1))
         }
       })
     }
@@ -162,7 +175,9 @@ function buildGAInventory(
     const heldUntil = hold.heldUntil?.toDate?.() || new Date(hold.heldUntil)
     if (heldUntil > now) {
       const ticketTypeId = hold.ticketTypeId || 'general'
-      heldCounts.set(ticketTypeId, (heldCounts.get(ticketTypeId) || 0) + (hold.quantity || 1))
+      // Also try mapping by name for holds
+      const tierId = nameToIdMap.get(ticketTypeId.toLowerCase()) || ticketTypeId
+      heldCounts.set(tierId, (heldCounts.get(tierId) || 0) + (hold.quantity || 1))
     }
   })
 
@@ -184,9 +199,14 @@ function buildGAInventory(
 
   tierMap.forEach((tier, tierId) => {
     const capacity = tier.capacity
-    const sold = soldCounts.get(tierId) || 0
+    // Look up sold by tier ID, and also by tier name as fallback
+    const soldById = soldCounts.get(tierId) || 0
+    const soldByName = soldCounts.get(tier.name) || 0
+    const sold = soldById + soldByName
     const blocked = blockedCounts.get(tierId) || 0
-    const held = heldCounts.get(tierId) || 0
+    const heldById = heldCounts.get(tierId) || 0
+    const heldByName = heldCounts.get(tier.name) || 0
+    const held = heldById + heldByName
     const available = Math.max(0, capacity - sold - blocked - held)
 
     gaTiers.push({
