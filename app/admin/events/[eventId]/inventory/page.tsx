@@ -12,6 +12,22 @@ const AdminSeatingChart = dynamic(
   { ssr: false, loading: () => <div className="flex items-center justify-center h-96"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-accent-500"></div></div> }
 )
 
+interface ActivityLog {
+  id: string
+  eventId: string
+  action: string
+  type: string
+  seatIds?: string[]
+  tierId?: string
+  tierName?: string
+  quantity?: number
+  reason?: string
+  performedBy: string
+  performedByName: string
+  performedAt: string
+  details?: Record<string, any>
+}
+
 export default function InventoryManagementPage() {
   const router = useRouter()
   const params = useParams()
@@ -28,6 +44,10 @@ export default function InventoryManagementPage() {
   const [blockedSeats, setBlockedSeats] = useState<string[]>([])
   const [heldSeats, setHeldSeats] = useState<string[]>([])
   const [loadingSeats, setLoadingSeats] = useState(false)
+
+  // Activity log state
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([])
+  const [loadingLogs, setLoadingLogs] = useState(false)
 
   // Modal state
   const [blockModal, setBlockModal] = useState<{ open: boolean; tier: TierInventory | null }>({ open: false, tier: null })
@@ -88,8 +108,9 @@ export default function InventoryManagementPage() {
       const data = await res.json()
       throw new Error(data.error || 'Failed to block seats')
     }
-    // Refresh seat data
+    // Refresh seat data and activity logs
     await loadSeatingData()
+    await loadActivityLogs()
   }
 
   const handleUnblockSeats = async (seatIds: string[]) => {
@@ -102,9 +123,25 @@ export default function InventoryManagementPage() {
       const data = await res.json()
       throw new Error(data.error || 'Failed to unblock seats')
     }
-    // Refresh seat data
+    // Refresh seat data and activity logs
     await loadSeatingData()
+    await loadActivityLogs()
   }
+
+  const loadActivityLogs = useCallback(async () => {
+    setLoadingLogs(true)
+    try {
+      const res = await fetch(`/api/events/${eventId}/inventory/activity?limit=50`)
+      if (res.ok) {
+        const data = await res.json()
+        setActivityLogs(data.logs || [])
+      }
+    } catch (err) {
+      console.error('Error loading activity logs:', err)
+    } finally {
+      setLoadingLogs(false)
+    }
+  }, [eventId])
 
   useEffect(() => {
     if (eventId) {
@@ -112,6 +149,13 @@ export default function InventoryManagementPage() {
       loadSeatingData()
     }
   }, [eventId, loadSeatingData])
+
+  // Load activity logs when the tab is switched to logs
+  useEffect(() => {
+    if (activeTab === 'logs' && eventId) {
+      loadActivityLogs()
+    }
+  }, [activeTab, eventId, loadActivityLogs])
 
   const handleBlockSubmit = async (tierId: string, quantity: number, reason: string) => {
     try {
@@ -306,7 +350,11 @@ export default function InventoryManagementPage() {
             />
           )}
           {activeTab === 'logs' && (
-            <ActivityLogPlaceholder />
+            <ActivityLogSection
+              logs={activityLogs}
+              loading={loadingLogs}
+              onRefresh={loadActivityLogs}
+            />
           )}
         </div>
       </div>
@@ -740,16 +788,194 @@ function ReservedSeatingSection({
   )
 }
 
-function ActivityLogPlaceholder() {
+function ActivityLogSection({
+  logs,
+  loading,
+  onRefresh,
+}: {
+  logs: ActivityLog[]
+  loading: boolean
+  onRefresh: () => void
+}) {
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+  }
+
+  const getActionIcon = (action: string) => {
+    switch (action) {
+      case 'bulk_block':
+        return '🔒'
+      case 'bulk_unblock':
+        return '🔓'
+      case 'sale':
+        return '💳'
+      case 'capacity_adjust':
+        return '📊'
+      case 'block':
+        return '🔒'
+      case 'unblock':
+        return '🔓'
+      default:
+        return '📝'
+    }
+  }
+
+  const getActionLabel = (action: string) => {
+    switch (action) {
+      case 'bulk_block':
+        return 'Seats Blocked'
+      case 'bulk_unblock':
+        return 'Seats Unblocked'
+      case 'sale':
+        return 'Ticket Sale'
+      case 'capacity_adjust':
+        return 'Capacity Adjusted'
+      case 'block':
+        return 'Tickets Blocked'
+      case 'unblock':
+        return 'Tickets Unblocked'
+      default:
+        return action.charAt(0).toUpperCase() + action.slice(1).replace(/_/g, ' ')
+    }
+  }
+
+  const getActionColor = (action: string) => {
+    switch (action) {
+      case 'bulk_block':
+      case 'block':
+        return 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
+      case 'bulk_unblock':
+      case 'unblock':
+        return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+      case 'sale':
+        return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+      case 'capacity_adjust':
+        return 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+      default:
+        return 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-accent-500"></div>
+      </div>
+    )
+  }
+
+  if (logs.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <div className="text-4xl mb-4">📋</div>
+        <h3 className="text-lg font-medium text-slate-900 dark:text-white mb-2">
+          No Activity Yet
+        </h3>
+        <p className="text-slate-500 dark:text-slate-400">
+          Activity will appear here when seats are blocked/unblocked or tickets are sold.
+        </p>
+      </div>
+    )
+  }
+
   return (
-    <div className="text-center py-12">
-      <div className="text-4xl mb-4">📋</div>
-      <h3 className="text-lg font-medium text-slate-900 dark:text-white mb-2">
-        Activity Log
-      </h3>
-      <p className="text-slate-500 dark:text-slate-400">
-        Inventory activity logging will be available in a future update.
-      </p>
+    <div>
+      {/* Header with refresh button */}
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300">
+          Recent Activity ({logs.length})
+        </h3>
+        <button
+          onClick={onRefresh}
+          disabled={loading}
+          className="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg transition-colors disabled:opacity-50"
+        >
+          Refresh
+        </button>
+      </div>
+
+      {/* Activity list */}
+      <div className="space-y-3 max-h-[500px] overflow-y-auto">
+        {logs.map((log) => (
+          <div
+            key={log.id}
+            className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4 border border-slate-200 dark:border-slate-600"
+          >
+            <div className="flex items-start gap-3">
+              {/* Icon */}
+              <div className="text-2xl">{getActionIcon(log.action)}</div>
+
+              {/* Content */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getActionColor(log.action)}`}>
+                    {getActionLabel(log.action)}
+                  </span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    {log.type === 'reserved' ? 'Reserved Seating' : 'General Admission'}
+                  </span>
+                </div>
+
+                {/* Details */}
+                <div className="mt-1 text-sm text-slate-700 dark:text-slate-300">
+                  {log.seatIds && log.seatIds.length > 0 && (
+                    <p>
+                      <span className="font-medium">{log.seatIds.length} seat{log.seatIds.length !== 1 ? 's' : ''}</span>
+                      {log.seatIds.length <= 5 && (
+                        <span className="text-slate-500 dark:text-slate-400 ml-1">
+                          ({log.seatIds.join(', ')})
+                        </span>
+                      )}
+                    </p>
+                  )}
+                  {log.quantity && !log.seatIds && (
+                    <p>
+                      <span className="font-medium">{log.quantity} ticket{log.quantity !== 1 ? 's' : ''}</span>
+                      {log.tierName && (
+                        <span className="text-slate-500 dark:text-slate-400 ml-1">
+                          - {log.tierName}
+                        </span>
+                      )}
+                    </p>
+                  )}
+                  {log.reason && (
+                    <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">
+                      {log.reason}
+                    </p>
+                  )}
+                  {log.details?.ticketTypes && (
+                    <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">
+                      {log.details.ticketTypes.map((t: any) => `${t.name} x${t.quantity}`).join(', ')}
+                    </p>
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="mt-2 flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+                  <span>{formatDate(log.performedAt)}</span>
+                  <span>•</span>
+                  <span>by {log.performedByName}</span>
+                  {log.details?.total && (
+                    <>
+                      <span>•</span>
+                      <span className="text-green-600 dark:text-green-400 font-medium">
+                        ${log.details.total.toFixed(2)}
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
