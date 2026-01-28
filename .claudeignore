@@ -1,0 +1,20 @@
+# Large/unnecessary directories
+barren-theme/
+node_modules/
+.next/
+dist/
+build/
+coverage/
+.vercel/
+
+# Large files
+*.zip
+*.tar.gz
+*.log
+*.map
+
+# Git
+.git/
+
+# Generated files
+*.tsbuildinfo
