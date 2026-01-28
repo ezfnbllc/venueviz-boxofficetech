@@ -64,10 +64,10 @@ export async function GET(
       })
     }
 
-    // Count sold tickets from completed orders
+    // Count sold tickets from orders (pending, completed, confirmed all count as sold)
     const ordersSnapshot = await db.collection('orders')
       .where('eventId', '==', eventId)
-      .where('status', 'in', ['completed', 'confirmed'])
+      .where('status', 'in', ['completed', 'confirmed', 'pending'])
       .get()
 
     const soldCounts: Record<string, number> = {}
