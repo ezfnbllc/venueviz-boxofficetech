@@ -197,6 +197,9 @@ export default function InteractiveSeatingChart({
   // Touch handling for pinch zoom
   const [lastTouchDistance, setLastTouchDistance] = useState<number | null>(null)
 
+  // Track previous holds count to detect expiration
+  const prevHoldsCountRef = useRef<number>(0)
+
   // Fetch seat availability on mount and periodically
   useEffect(() => {
     if (!eventId) return
@@ -210,7 +213,20 @@ export default function InteractiveSeatingChart({
         setSoldSeats(data.soldSeats || [])
         setHeldSeats(data.heldSeats || [])
         setBlockedSeats(data.blockedSeats || [])
+
+        const newHoldsCount = data.myHolds?.length || 0
+        const hadHolds = prevHoldsCountRef.current > 0
+
+        // Check if holds expired (we had holds but now they're gone)
+        if (hadHolds && newHoldsCount === 0) {
+          // Clear selection when holds expire
+          setSelectedSeats([])
+          onSeatSelection([])
+          setHoldError('Your seat hold has expired. Please select your seats again.')
+        }
+
         setMyHolds(data.myHolds || [])
+        prevHoldsCountRef.current = newHoldsCount
         setIsLoadingAvailability(false)
 
         // If we have existing holds, notify parent of expiry time
@@ -233,7 +249,7 @@ export default function InteractiveSeatingChart({
     const intervalId = setInterval(fetchAvailability, 10000)
 
     return () => clearInterval(intervalId)
-  }, [eventId, sessionId, onHoldCreated])
+  }, [eventId, sessionId, onHoldCreated, onSeatSelection])
 
   // Create holds for selected seats
   const createSeatHolds = useCallback(async (seats: SelectedSeat[]) => {
