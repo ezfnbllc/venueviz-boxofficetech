@@ -80,7 +80,7 @@ export async function getEventInventorySummary(eventId: string): Promise<EventIn
 
     // Filter to valid order statuses in memory
     const validStatuses = new Set(['pending', 'completed', 'confirmed'])
-    const ordersSnapshot = {
+    const ordersSnapshot: { docs: FirebaseFirestore.QueryDocumentSnapshot[] } = {
       docs: allOrdersSnapshot.docs.filter(doc => {
         const status = doc.data().status
         return validStatuses.has(status)
@@ -102,7 +102,7 @@ export async function getEventInventorySummary(eventId: string): Promise<EventIn
       .where('eventId', '==', eventId)
       .get()
 
-    const blocksSnapshot = {
+    const blocksSnapshot: { docs: FirebaseFirestore.QueryDocumentSnapshot[] } = {
       docs: allBlocksSnapshot.docs.filter(doc => doc.data().status === 'active')
     }
 
@@ -146,6 +146,11 @@ export async function getEventInventorySummary(eventId: string): Promise<EventIn
   }
 }
 
+// Type for filtered snapshot results (simpler than full QuerySnapshot)
+interface FilteredSnapshot {
+  docs: FirebaseFirestore.QueryDocumentSnapshot[]
+}
+
 /**
  * Build GA inventory summary
  */
@@ -153,9 +158,9 @@ function buildGAInventory(
   eventId: string,
   eventName: string,
   eventData: any,
-  ordersSnapshot: FirebaseFirestore.QuerySnapshot,
+  ordersSnapshot: FilteredSnapshot,
   holdsSnapshot: FirebaseFirestore.QuerySnapshot,
-  blocksSnapshot: FirebaseFirestore.QuerySnapshot,
+  blocksSnapshot: FilteredSnapshot,
   now: Date
 ): EventInventorySummary {
   const ticketTypes = eventData.ticketTypes || []
@@ -315,9 +320,9 @@ function buildReservedSeatingInventory(
   eventName: string,
   eventData: any,
   layoutData: any | null,
-  ordersSnapshot: FirebaseFirestore.QuerySnapshot,
+  ordersSnapshot: FilteredSnapshot,
   holdsSnapshot: FirebaseFirestore.QuerySnapshot,
-  blocksSnapshot: FirebaseFirestore.QuerySnapshot,
+  blocksSnapshot: FilteredSnapshot,
   now: Date
 ): EventInventorySummary {
   // Get sections from layout data (fetched from layouts collection)
