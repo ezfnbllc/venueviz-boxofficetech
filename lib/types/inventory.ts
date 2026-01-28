@@ -157,6 +157,8 @@ export interface SectionInventory {
 export interface EventInventorySummary {
   eventId: string
   eventName: string
+  venueId?: string
+  venueName?: string
   seatingType: 'general' | 'reserved'
 
   // Aggregate totals

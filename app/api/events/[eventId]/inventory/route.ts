@@ -33,7 +33,11 @@ async function verifyAdmin(request: NextRequest): Promise<{ userId: string; user
     const userData = userDoc.data()
 
     // Check if user is admin or has appropriate role
-    if (!userData || !['master', 'admin', 'promoter'].includes(userData.role)) {
+    // Accept: master, admin, superadmin, promoter roles, or isMaster flag
+    const validRoles = ['master', 'admin', 'superadmin', 'promoter']
+    const hasValidRole = userData && (validRoles.includes(userData.role) || userData.isMaster === true)
+
+    if (!hasValidRole) {
       return null
     }
 

@@ -262,9 +262,15 @@ function buildGAInventory(
     totalHeld = held
   }
 
+  // Get venue info
+  const venueId = eventData.venue?.id || eventData.venueId
+  const venueName = eventData.venue?.name || eventData.venueName
+
   return {
     eventId,
     eventName,
+    venueId,
+    venueName,
     seatingType: 'general',
     totalCapacity,
     totalSold,
@@ -411,9 +417,15 @@ function buildReservedSeatingInventory(
     totalHeld += sectionHeld
   })
 
+  // Get venue info
+  const venueId = eventData.venue?.id || eventData.venueId
+  const venueName = eventData.venue?.name || eventData.venueName
+
   return {
     eventId,
     eventName,
+    venueId,
+    venueName,
     seatingType: 'reserved',
     totalCapacity,
     totalSold,

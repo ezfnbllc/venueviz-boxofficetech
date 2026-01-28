@@ -1,6 +1,6 @@
 'use client'
 import {useState, useEffect, useCallback, useRef} from 'react'
-import {useRouter} from 'next/navigation'
+import {useRouter, useSearchParams} from 'next/navigation'
 import {AdminService} from '@/lib/admin/adminService'
 import {StorageService} from '@/lib/storage/storageService'
 import {auth} from '@/lib/firebase'
@@ -18,8 +18,10 @@ interface VenueSuggestion {
 
 export default function VenuesManagement() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [venues, setVenues] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [autoOpenProcessed, setAutoOpenProcessed] = useState(false)
   const [showWizard, setShowWizard] = useState(false)
   const [showLayoutBuilder, setShowLayoutBuilder] = useState(false)
   const [editingVenue, setEditingVenue] = useState<any>(null)
@@ -72,6 +74,24 @@ export default function VenuesManagement() {
     })
     return () => unsubscribe()
   }, [router])
+
+  // Auto-open layout builder if openLayout query param is present
+  useEffect(() => {
+    if (!loading && venues.length > 0 && !autoOpenProcessed) {
+      const openLayoutId = searchParams.get('openLayout')
+      if (openLayoutId) {
+        const venue = venues.find(v => v.id === openLayoutId)
+        if (venue) {
+          setSelectedVenue(venue)
+          setShowLayoutBuilder(true)
+        }
+        setAutoOpenProcessed(true)
+        // Clear the query param from URL
+        const newUrl = window.location.pathname
+        window.history.replaceState({}, '', newUrl)
+      }
+    }
+  }, [loading, venues, searchParams, autoOpenProcessed])
 
   const loadVenues = async () => {
     try {
