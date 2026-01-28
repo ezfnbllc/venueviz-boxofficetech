@@ -54,7 +54,10 @@ export default function InventoryManagementPage() {
       const eventRes = await fetch(`/api/events/${eventId}`)
       if (eventRes.ok) {
         const eventData = await eventRes.json()
-        if (eventData.seatingLayout) {
+        // Check for layout (from event API) or seatingLayout (alternative field name)
+        if (eventData.layout) {
+          setSeatingLayout(eventData.layout)
+        } else if (eventData.seatingLayout) {
           setSeatingLayout(eventData.seatingLayout)
         }
       }

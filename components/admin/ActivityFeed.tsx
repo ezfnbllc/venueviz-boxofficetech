@@ -183,12 +183,14 @@ interface StatsSummaryProps {
   stats: {
     totalEvents: number
     totalOrders: number
+    totalTickets: number
     totalRevenue: number
     totalCustomers: number
   }
   previousPeriod?: {
     totalEvents: number
     totalOrders: number
+    totalTickets: number
     totalRevenue: number
     totalCustomers: number
   }
@@ -210,9 +212,9 @@ export function StatsSummary({ stats, previousPeriod }: StatsSummaryProps) {
       gradient: 'from-blue-500 to-blue-600',
     },
     {
-      label: 'Orders',
-      value: stats.totalOrders,
-      change: previousPeriod ? calculateChange(stats.totalOrders, previousPeriod.totalOrders) : null,
+      label: 'Tickets Sold',
+      value: stats.totalTickets,
+      change: previousPeriod ? calculateChange(stats.totalTickets, previousPeriod.totalTickets) : null,
       icon: '🎫',
       gradient: 'from-green-500 to-green-600',
     },
