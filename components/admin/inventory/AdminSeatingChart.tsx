@@ -283,7 +283,7 @@ export default function AdminSeatingChart({
     const seatId = getConsistentSeatId(seat, section)
 
     if (isSeatSold(seat, section)) return '#374151' // gray-700 - sold
-    if (isSeatBlocked(seat, section)) return '#f97316' // orange-500 - blocked
+    if (isSeatBlocked(seat, section)) return '#9ca3af' // gray-400 - blocked
     if (isSeatHeld(seat, section)) return '#eab308' // yellow-500 - held by customer
     if (isSeatSelected(seatId)) return '#3b82f6' // blue-500 - selected
     if (hoveredSeat === seatId) return '#60a5fa' // blue-400 - hovered
@@ -361,7 +361,7 @@ export default function AdminSeatingChart({
           </div>
         ))}
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded-full bg-orange-500" />
+          <div className="w-3 h-3 rounded-full bg-gray-400" />
           <span className="text-slate-600 dark:text-slate-400">Blocked</span>
         </div>
         <div className="flex items-center gap-1.5">
