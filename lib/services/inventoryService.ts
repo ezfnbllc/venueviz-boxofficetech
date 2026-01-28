@@ -72,20 +72,10 @@ export async function getEventInventorySummary(eventId: string): Promise<EventIn
     }
 
     // Get sold counts from orders
-    // Include pending (payment in progress), confirmed, and completed statuses
-    // Filter status in memory to avoid composite index requirement
-    const allOrdersSnapshot = await db.collection('orders')
+    // Include all orders for this event - filter status in processing if needed
+    const ordersSnapshot = await db.collection('orders')
       .where('eventId', '==', eventId)
       .get()
-
-    // Filter to valid order statuses in memory
-    const validStatuses = new Set(['pending', 'completed', 'confirmed'])
-    const ordersSnapshot: { docs: FirebaseFirestore.QueryDocumentSnapshot[] } = {
-      docs: allOrdersSnapshot.docs.filter(doc => {
-        const status = doc.data().status
-        return validStatuses.has(status)
-      })
-    }
 
     // Get temporary holds (checkout holds)
     const ticketHoldsSnapshot = await db.collection('ticket_holds')
@@ -97,14 +87,9 @@ export async function getEventInventorySummary(eventId: string): Promise<EventIn
       .get()
 
     // Get inventory blocks (admin-managed)
-    // Filter status in memory to avoid composite index requirement
-    const allBlocksSnapshot = await db.collection(INVENTORY_BLOCKS_COLLECTION)
+    const blocksSnapshot = await db.collection(INVENTORY_BLOCKS_COLLECTION)
       .where('eventId', '==', eventId)
       .get()
-
-    const blocksSnapshot: { docs: FirebaseFirestore.QueryDocumentSnapshot[] } = {
-      docs: allBlocksSnapshot.docs.filter(doc => doc.data().status === 'active')
-    }
 
     if (seatingType === 'reserved') {
       // For reserved seating, we need to fetch the layout from layouts collection
@@ -146,11 +131,6 @@ export async function getEventInventorySummary(eventId: string): Promise<EventIn
   }
 }
 
-// Type for filtered snapshot results (simpler than full QuerySnapshot)
-interface FilteredSnapshot {
-  docs: FirebaseFirestore.QueryDocumentSnapshot[]
-}
-
 /**
  * Build GA inventory summary
  */
@@ -158,9 +138,9 @@ function buildGAInventory(
   eventId: string,
   eventName: string,
   eventData: any,
-  ordersSnapshot: FilteredSnapshot,
+  ordersSnapshot: FirebaseFirestore.QuerySnapshot,
   holdsSnapshot: FirebaseFirestore.QuerySnapshot,
-  blocksSnapshot: FilteredSnapshot,
+  blocksSnapshot: FirebaseFirestore.QuerySnapshot,
   now: Date
 ): EventInventorySummary {
   const ticketTypes = eventData.ticketTypes || []
@@ -198,9 +178,14 @@ function buildGAInventory(
 
   // Count sold tickets per tier
   // Orders store ticketType as the tier NAME, so we need to map it back to tier ID
+  // Only count orders with valid statuses (pending, confirmed, completed)
+  const validStatuses = new Set(['pending', 'completed', 'confirmed'])
   const soldCounts: Map<string, number> = new Map()
   ordersSnapshot.docs.forEach(doc => {
     const order = doc.data()
+    // Skip orders that don't have a valid status
+    if (!validStatuses.has(order.status)) return
+
     if (order.items && Array.isArray(order.items)) {
       order.items.forEach((item: any) => {
         if (!item.seatInfo) {
@@ -227,10 +212,11 @@ function buildGAInventory(
   })
 
   // Count blocked tickets per tier (admin-managed)
+  // Only count active blocks
   const blockedCounts: Map<string, number> = new Map()
   blocksSnapshot.docs.forEach(doc => {
     const block = doc.data() as GAInventoryBlock
-    if (block.type === 'ga') {
+    if (block.type === 'ga' && block.status === 'active') {
       blockedCounts.set(block.tierId, (blockedCounts.get(block.tierId) || 0) + block.quantity)
     }
   })
@@ -320,9 +306,9 @@ function buildReservedSeatingInventory(
   eventName: string,
   eventData: any,
   layoutData: any | null,
-  ordersSnapshot: FilteredSnapshot,
+  ordersSnapshot: FirebaseFirestore.QuerySnapshot,
   holdsSnapshot: FirebaseFirestore.QuerySnapshot,
-  blocksSnapshot: FilteredSnapshot,
+  blocksSnapshot: FirebaseFirestore.QuerySnapshot,
   now: Date
 ): EventInventorySummary {
   // Get sections from layout data (fetched from layouts collection)
@@ -330,9 +316,14 @@ function buildReservedSeatingInventory(
   const sections = layoutData?.sections || eventData.venue?.availableSections || []
 
   // Build set of sold seats
+  // Only count orders with valid statuses (pending, confirmed, completed)
+  const validStatuses = new Set(['pending', 'completed', 'confirmed'])
   const soldSeats: Set<string> = new Set()
   ordersSnapshot.docs.forEach(doc => {
     const order = doc.data()
+    // Skip orders that don't have a valid status
+    if (!validStatuses.has(order.status)) return
+
     if (order.items && Array.isArray(order.items)) {
       order.items.forEach((item: any) => {
         if (item.seatInfo) {
@@ -363,10 +354,11 @@ function buildReservedSeatingInventory(
   })
 
   // Build map of blocked seats (admin-managed)
+  // Only count active blocks
   const blockedSeats: Map<string, { reason: string; blockId: string }> = new Map()
   blocksSnapshot.docs.forEach(doc => {
     const block = doc.data() as ReservedInventoryBlock
-    if (block.type === 'reserved') {
+    if (block.type === 'reserved' && block.status === 'active') {
       blockedSeats.set(block.seatId, {
         reason: block.reason,
         blockId: doc.id,
