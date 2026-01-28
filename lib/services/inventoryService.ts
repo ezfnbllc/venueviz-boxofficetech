@@ -66,6 +66,9 @@ export async function getEventInventorySummary(eventId: string): Promise<EventIn
       seatingType = 'reserved'
     } else if (eventData.layoutType === 'seating_chart') {
       seatingType = 'reserved'
+    } else if (eventData.layoutId || eventData.venue?.layoutId) {
+      // If event has a layout assigned, it's reserved seating
+      seatingType = 'reserved'
     } else if (eventData.venue?.availableSections?.some((s: any) => s.rows?.length > 0)) {
       // If sections have rows defined, it's reserved seating
       seatingType = 'reserved'
