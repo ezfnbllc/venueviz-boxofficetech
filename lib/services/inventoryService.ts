@@ -73,10 +73,19 @@ export async function getEventInventorySummary(eventId: string): Promise<EventIn
 
     // Get sold counts from orders
     // Include pending (payment in progress), confirmed, and completed statuses
-    const ordersSnapshot = await db.collection('orders')
+    // Filter status in memory to avoid composite index requirement
+    const allOrdersSnapshot = await db.collection('orders')
       .where('eventId', '==', eventId)
-      .where('status', 'in', ['pending', 'completed', 'confirmed'])
       .get()
+
+    // Filter to valid order statuses in memory
+    const validStatuses = new Set(['pending', 'completed', 'confirmed'])
+    const ordersSnapshot = {
+      docs: allOrdersSnapshot.docs.filter(doc => {
+        const status = doc.data().status
+        return validStatuses.has(status)
+      })
+    }
 
     // Get temporary holds (checkout holds)
     const ticketHoldsSnapshot = await db.collection('ticket_holds')
@@ -88,10 +97,14 @@ export async function getEventInventorySummary(eventId: string): Promise<EventIn
       .get()
 
     // Get inventory blocks (admin-managed)
-    const blocksSnapshot = await db.collection(INVENTORY_BLOCKS_COLLECTION)
+    // Filter status in memory to avoid composite index requirement
+    const allBlocksSnapshot = await db.collection(INVENTORY_BLOCKS_COLLECTION)
       .where('eventId', '==', eventId)
-      .where('status', '==', 'active')
       .get()
+
+    const blocksSnapshot = {
+      docs: allBlocksSnapshot.docs.filter(doc => doc.data().status === 'active')
+    }
 
     if (seatingType === 'reserved') {
       // For reserved seating, we need to fetch the layout from layouts collection
