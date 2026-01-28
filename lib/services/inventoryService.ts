@@ -59,9 +59,10 @@ export async function getEventInventorySummary(eventId: string): Promise<EventIn
     const seatingType = eventData.venue?.seatingType || 'general'
 
     // Get sold counts from orders
+    // Include pending (payment in progress), confirmed, and completed statuses
     const ordersSnapshot = await db.collection('orders')
       .where('eventId', '==', eventId)
-      .where('status', 'in', ['completed', 'confirmed'])
+      .where('status', 'in', ['pending', 'completed', 'confirmed'])
       .get()
 
     // Get temporary holds (checkout holds)
