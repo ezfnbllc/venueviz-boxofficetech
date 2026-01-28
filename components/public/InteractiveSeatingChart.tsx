@@ -480,22 +480,14 @@ export default function InteractiveSeatingChart({
         releaseSeatHolds()
       }
     } else {
-      // Check if seat is adjacent to current selection (or if it's the first seat)
-      // Also check if the seat is in a different row - if so, only allow if no seats selected in current rows
+      // Check if seat is adjacent to current selection within the same row
+      // (no gaps allowed within a row, but selecting across rows is OK)
       const seatsInSameRow = selectedSeats.filter(s => s.sectionId === section.id && s.row === seat.row)
 
-      if (selectedSeats.length > 0) {
-        // If there are selected seats in the same row, new seat must be adjacent
-        if (seatsInSameRow.length > 0 && !isAdjacentToSelection(seat, section)) {
-          setHoldError('Please select consecutive seats without gaps.')
-          return
-        }
-
-        // If selecting in a different row/section than existing selections, that's not allowed
-        if (seatsInSameRow.length === 0) {
-          setHoldError('Please select all seats in the same row. Clear your selection to choose a different row.')
-          return
-        }
+      // If there are already selected seats in this row, the new seat must be adjacent to them
+      if (seatsInSameRow.length > 0 && !isAdjacentToSelection(seat, section)) {
+        setHoldError('Please select consecutive seats without gaps in the same row.')
+        return
       }
 
       // Select (if under max)
