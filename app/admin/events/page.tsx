@@ -7,6 +7,13 @@ import { AdminService } from '@/lib/admin/adminService'
 import { usePromoterFiltering } from '@/lib/hooks/usePromoterFiltering'
 import StatusMultiSelect from '@/components/admin/StatusMultiSelect'
 
+interface InventorySummary {
+  totalCapacity: number
+  totalSold: number
+  totalBlocked: number
+  totalAvailable: number
+}
+
 export default function EventsPage() {
   const router = useRouter()
   const { user, isAdmin } = useFirebaseAuth()
@@ -16,6 +23,7 @@ export default function EventsPage() {
   const [currentPromoterId, setCurrentPromoterId] = useState<string>()
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string[]>(['active', 'published'])
+  const [inventoryData, setInventoryData] = useState<Record<string, InventorySummary>>({})
 
   const { activePromoterIds, shouldFilter } = usePromoterFiltering(isAdmin, currentPromoterId)
 
@@ -71,6 +79,43 @@ export default function EventsPage() {
 
     setFilteredEvents(events)
   }, [allEvents, searchTerm, statusFilter, activePromoterIds, shouldFilter, isAdmin])
+
+  // Load inventory data for filtered events
+  useEffect(() => {
+    const loadInventoryData = async () => {
+      const newInventoryData: Record<string, InventorySummary> = {}
+
+      // Load inventory for each event (limit concurrent requests)
+      const batchSize = 5
+      for (let i = 0; i < filteredEvents.length; i += batchSize) {
+        const batch = filteredEvents.slice(i, i + batchSize)
+        await Promise.all(
+          batch.map(async (event) => {
+            try {
+              const response = await fetch(`/api/events/${event.id}/inventory`)
+              if (response.ok) {
+                const data = await response.json()
+                newInventoryData[event.id] = {
+                  totalCapacity: data.totalCapacity || 0,
+                  totalSold: data.totalSold || 0,
+                  totalBlocked: data.totalBlocked || 0,
+                  totalAvailable: data.totalAvailable || 0,
+                }
+              }
+            } catch (error) {
+              console.error(`Error loading inventory for event ${event.id}:`, error)
+            }
+          })
+        )
+      }
+
+      setInventoryData(prev => ({ ...prev, ...newInventoryData }))
+    }
+
+    if (filteredEvents.length > 0) {
+      loadInventoryData()
+    }
+  }, [filteredEvents])
 
   const handleCreateEvent = () => {
     router.push('/admin/events/new')
@@ -208,6 +253,51 @@ export default function EventsPage() {
                     Delete
                   </button>
                 </div>
+
+                {/* Inventory Summary Row */}
+                {inventoryData[event.id] && (
+                  <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                    <div className="grid grid-cols-4 gap-2 text-center">
+                      <div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">Capacity</div>
+                        <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                          {inventoryData[event.id].totalCapacity.toLocaleString()}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">Sold</div>
+                        <div className="text-sm font-semibold text-green-600 dark:text-green-400">
+                          {inventoryData[event.id].totalSold.toLocaleString()}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">Blocked</div>
+                        <div className="text-sm font-semibold text-yellow-600 dark:text-yellow-400">
+                          {inventoryData[event.id].totalBlocked.toLocaleString()}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">Available</div>
+                        <div className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+                          {inventoryData[event.id].totalAvailable.toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
+                    {/* Mini progress bar */}
+                    {inventoryData[event.id].totalCapacity > 0 && (
+                      <div className="mt-2 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden flex">
+                        <div
+                          className="bg-green-500 h-full"
+                          style={{ width: `${(inventoryData[event.id].totalSold / inventoryData[event.id].totalCapacity) * 100}%` }}
+                        />
+                        <div
+                          className="bg-yellow-500 h-full"
+                          style={{ width: `${(inventoryData[event.id].totalBlocked / inventoryData[event.id].totalCapacity) * 100}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           ))}
