@@ -60,17 +60,14 @@ export async function getEventInventorySummary(eventId: string): Promise<EventIn
     // Determine seating type - check multiple fields for compatibility
     // Events can have seatingType set directly, or layoutType indicating seating chart
     let seatingType: 'general' | 'reserved' = 'general'
-    if (eventData.venue?.seatingType === 'reserved') {
-      seatingType = 'reserved'
-    } else if (eventData.venue?.layoutType === 'seating_chart') {
-      seatingType = 'reserved'
-    } else if (eventData.layoutType === 'seating_chart') {
-      seatingType = 'reserved'
-    } else if (eventData.layoutId || eventData.venue?.layoutId) {
-      // If event has a layout assigned, it's reserved seating
-      seatingType = 'reserved'
-    } else if (eventData.venue?.availableSections?.some((s: any) => s.rows?.length > 0)) {
-      // If sections have rows defined, it's reserved seating
+
+    // Check all possible indicators of reserved seating
+    const hasReservedSeatingType = eventData.venue?.seatingType === 'reserved'
+    const hasSeatingChartLayoutType = eventData.venue?.layoutType === 'seating_chart' || eventData.layoutType === 'seating_chart'
+    const hasLayoutId = !!(eventData.layoutId || eventData.venue?.layoutId)
+    const hasSectionsWithRows = eventData.venue?.availableSections?.some((s: any) => s.rows?.length > 0)
+
+    if (hasReservedSeatingType || hasSeatingChartLayoutType || hasLayoutId || hasSectionsWithRows) {
       seatingType = 'reserved'
     }
 
