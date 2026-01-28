@@ -72,13 +72,18 @@ export async function GET(
 
     const soldCounts: Record<string, number> = {}
     let totalSold = 0
+    let reservedSeatsSold = 0
 
     ordersSnapshot.docs.forEach(doc => {
       const order = doc.data()
       if (order.items && Array.isArray(order.items)) {
         order.items.forEach((item: any) => {
-          // Only count non-reserved seating items (GA tickets)
-          if (!item.seatInfo) {
+          if (item.seatInfo) {
+            // Reserved seating - count each seat
+            reservedSeatsSold += 1
+            totalSold += 1
+          } else {
+            // GA tickets
             const ticketTypeId = item.ticketType || item.tierId || 'general'
             soldCounts[ticketTypeId] = (soldCounts[ticketTypeId] || 0) + (item.quantity || 1)
             totalSold += item.quantity || 1
@@ -89,6 +94,11 @@ export async function GET(
       if (!order.items && order.ticketCount) {
         totalSold += order.ticketCount
         soldCounts['general'] = (soldCounts['general'] || 0) + order.ticketCount
+      }
+      // Handle seats array (alternative format for reserved seating)
+      if (order.seats && Array.isArray(order.seats)) {
+        reservedSeatsSold += order.seats.length
+        totalSold += order.seats.length
       }
     })
 
@@ -157,7 +167,7 @@ export async function GET(
     // Use event's total capacity if specified (may differ from sum of tiers)
     const eventTotalCapacity = eventData.totalCapacity || eventData.ticketsAvailable || totalCapacity
 
-    const inventory: EventInventory = {
+    const inventory: EventInventory & { reservedSeatsSold?: number } = {
       eventId,
       eventName: eventData.name || 'Unnamed Event',
       totalCapacity: eventTotalCapacity,
@@ -167,6 +177,7 @@ export async function GET(
       totalAvailable: Math.max(0, eventTotalCapacity - totalSold - totalBlocked - totalHeld),
       tiers,
       lastUpdated: now,
+      reservedSeatsSold, // Include reserved seating count
     }
 
     return NextResponse.json(inventory)
