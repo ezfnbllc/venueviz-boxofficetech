@@ -56,7 +56,20 @@ export async function getEventInventorySummary(eventId: string): Promise<EventIn
 
     const eventData = eventDoc.data()!
     const eventName = eventData.name || eventData.basics?.name || 'Untitled Event'
-    const seatingType = eventData.venue?.seatingType || 'general'
+
+    // Determine seating type - check multiple fields for compatibility
+    // Events can have seatingType set directly, or layoutType indicating seating chart
+    let seatingType: 'general' | 'reserved' = 'general'
+    if (eventData.venue?.seatingType === 'reserved') {
+      seatingType = 'reserved'
+    } else if (eventData.venue?.layoutType === 'seating_chart') {
+      seatingType = 'reserved'
+    } else if (eventData.layoutType === 'seating_chart') {
+      seatingType = 'reserved'
+    } else if (eventData.venue?.availableSections?.some((s: any) => s.rows?.length > 0)) {
+      // If sections have rows defined, it's reserved seating
+      seatingType = 'reserved'
+    }
 
     // Get sold counts from orders
     // Include pending (payment in progress), confirmed, and completed statuses
