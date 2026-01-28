@@ -54,6 +54,7 @@ interface AdminSeatingChartProps {
   eventId: string
   soldSeats: string[]
   blockedSeats: string[]
+  heldSeats: string[]
   onBlockSeats: (seatIds: string[], reason: string) => Promise<void>
   onUnblockSeats: (seatIds: string[]) => Promise<void>
 }
@@ -99,6 +100,7 @@ export default function AdminSeatingChart({
   eventId,
   soldSeats,
   blockedSeats,
+  heldSeats,
   onBlockSeats,
   onUnblockSeats,
 }: AdminSeatingChartProps) {
@@ -168,6 +170,11 @@ export default function AdminSeatingChart({
     return blockedSeats.includes(consistentId)
   }, [blockedSeats, getConsistentSeatId])
 
+  const isSeatHeld = useCallback((seat: Seat, section: Section): boolean => {
+    const consistentId = getConsistentSeatId(seat, section)
+    return heldSeats.includes(consistentId)
+  }, [heldSeats, getConsistentSeatId])
+
   const isSeatSelected = useCallback((seatId: string): boolean => {
     return selectedSeats.includes(seatId)
   }, [selectedSeats])
@@ -175,26 +182,26 @@ export default function AdminSeatingChart({
   const handleSeatClick = useCallback((seat: Seat, section: Section) => {
     const seatId = getConsistentSeatId(seat, section)
 
-    // Can't select sold seats
-    if (isSeatSold(seat, section)) return
+    // Can't select sold or held seats (held seats are in customer carts)
+    if (isSeatSold(seat, section) || isSeatHeld(seat, section)) return
 
     if (selectedSeats.includes(seatId)) {
       setSelectedSeats(prev => prev.filter(id => id !== seatId))
     } else {
       setSelectedSeats(prev => [...prev, seatId])
     }
-  }, [getConsistentSeatId, isSeatSold, selectedSeats])
+  }, [getConsistentSeatId, isSeatSold, isSeatHeld, selectedSeats])
 
   const handleBlockSelected = async () => {
     if (selectedSeats.length === 0 || !blockReason) return
 
-    // Only block seats that aren't already blocked or sold
+    // Only block seats that aren't already blocked, sold, or held
     const seatsToBlock = selectedSeats.filter(seatId => {
-      return !blockedSeats.includes(seatId) && !soldSeats.includes(seatId)
+      return !blockedSeats.includes(seatId) && !soldSeats.includes(seatId) && !heldSeats.includes(seatId)
     })
 
     if (seatsToBlock.length === 0) {
-      alert('All selected seats are already blocked or sold')
+      alert('All selected seats are already blocked, sold, or currently held by customers')
       return
     }
 
@@ -277,6 +284,7 @@ export default function AdminSeatingChart({
 
     if (isSeatSold(seat, section)) return '#374151' // gray-700 - sold
     if (isSeatBlocked(seat, section)) return '#f97316' // orange-500 - blocked
+    if (isSeatHeld(seat, section)) return '#eab308' // yellow-500 - held by customer
     if (isSeatSelected(seatId)) return '#3b82f6' // blue-500 - selected
     if (hoveredSeat === seatId) return '#60a5fa' // blue-400 - hovered
 
@@ -284,10 +292,10 @@ export default function AdminSeatingChart({
     const categoryId = seat.category || section.pricing
     const priceCategory = layout.priceCategories.find(pc => pc.id === categoryId)
     return priceCategory?.color || '#22c55e' // green-500 default (available)
-  }, [getConsistentSeatId, isSeatSold, isSeatBlocked, isSeatSelected, hoveredSeat, layout.priceCategories])
+  }, [getConsistentSeatId, isSeatSold, isSeatBlocked, isSeatHeld, isSeatSelected, hoveredSeat, layout.priceCategories])
 
   const selectedBlockedCount = selectedSeats.filter(id => blockedSeats.includes(id)).length
-  const selectedAvailableCount = selectedSeats.filter(id => !blockedSeats.includes(id) && !soldSeats.includes(id)).length
+  const selectedAvailableCount = selectedSeats.filter(id => !blockedSeats.includes(id) && !soldSeats.includes(id) && !heldSeats.includes(id)).length
 
   return (
     <div className="flex flex-col h-full">
@@ -359,6 +367,10 @@ export default function AdminSeatingChart({
         <div className="flex items-center gap-1.5">
           <div className="w-3 h-3 rounded-full bg-gray-700" />
           <span className="text-slate-600 dark:text-slate-400">Sold</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 rounded-full bg-yellow-500" />
+          <span className="text-slate-600 dark:text-slate-400">Held</span>
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-3 h-3 rounded-full bg-blue-500" />

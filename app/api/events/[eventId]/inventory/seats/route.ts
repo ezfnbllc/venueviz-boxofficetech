@@ -29,17 +29,57 @@ export async function GET(
       if (order.items && Array.isArray(order.items)) {
         order.items.forEach((item: any) => {
           if (item.seatInfo) {
-            // Seat info format: sectionId-row-number
-            const seatId = `${item.seatInfo.sectionId}-${item.seatInfo.row}-${item.seatInfo.number}`
-            soldSeats.push(seatId)
+            // Seat info format: sectionId-row-seat (note: orders store as 'seat' not 'number')
+            const seatId = `${item.seatInfo.sectionId}-${item.seatInfo.row}-${item.seatInfo.seat || item.seatInfo.number}`
+            if (!soldSeats.includes(seatId)) {
+              soldSeats.push(seatId)
+            }
+          }
+        })
+      }
+      // Also check tickets array (another format used in some orders)
+      if (order.tickets && Array.isArray(order.tickets)) {
+        order.tickets.forEach((ticket: any) => {
+          if (ticket.seatInfo) {
+            const seatId = `${ticket.seatInfo.sectionId}-${ticket.seatInfo.row}-${ticket.seatInfo.seat || ticket.seatInfo.number}`
+            if (!soldSeats.includes(seatId)) {
+              soldSeats.push(seatId)
+            }
           }
         })
       }
       // Also check seats array
       if (order.seats && Array.isArray(order.seats)) {
         order.seats.forEach((seat: any) => {
-          const seatId = seat.id || `${seat.sectionId}-${seat.row}-${seat.number}`
-          soldSeats.push(seatId)
+          const seatId = seat.id || `${seat.sectionId}-${seat.row}-${seat.seat || seat.number}`
+          if (!soldSeats.includes(seatId)) {
+            soldSeats.push(seatId)
+          }
+        })
+      }
+    })
+
+    // Get held seats (user temporary holds during checkout)
+    const now = new Date()
+    const holdsSnapshot = await db.collection('seat_holds')
+      .where('eventId', '==', eventId)
+      .get()
+
+    const heldSeats: string[] = []
+    const holdDetails: any[] = []
+    holdsSnapshot.docs.forEach(doc => {
+      const hold = doc.data()
+      const heldUntil = hold.heldUntil?.toDate?.() || new Date(hold.heldUntil)
+
+      // Only include non-expired holds
+      if (heldUntil > now) {
+        heldSeats.push(hold.seatId)
+        holdDetails.push({
+          id: doc.id,
+          seatId: hold.seatId,
+          sessionId: hold.sessionId,
+          heldUntil,
+          createdAt: hold.createdAt?.toDate?.() || hold.createdAt,
         })
       }
     })
@@ -72,6 +112,8 @@ export async function GET(
       soldSeats,
       blockedSeats,
       blockDetails,
+      heldSeats,
+      holdDetails,
     })
 
   } catch (error) {
@@ -117,10 +159,92 @@ export async function POST(
       )
     }
 
-    const batch = db.batch()
-    const blockedAt = new Date()
+    const now = new Date()
 
+    // Check for conflicts - seats that are held by users or already sold
+    const conflicts: { seatId: string; reason: string }[] = []
+
+    // Check for user holds on these seats
+    const holdsSnapshot = await db.collection('seat_holds')
+      .where('eventId', '==', eventId)
+      .get()
+
+    const activeHolds = new Map<string, any>()
+    holdsSnapshot.docs.forEach(doc => {
+      const hold = doc.data()
+      const heldUntil = hold.heldUntil?.toDate?.() || new Date(hold.heldUntil)
+      if (heldUntil > now) {
+        activeHolds.set(hold.seatId, hold)
+      }
+    })
+
+    // Check for sold seats
+    const ordersSnapshot = await db.collection('orders')
+      .where('eventId', '==', eventId)
+      .where('status', 'in', ['completed', 'confirmed', 'pending'])
+      .get()
+
+    const soldSeats = new Set<string>()
+    ordersSnapshot.docs.forEach(doc => {
+      const order = doc.data()
+      if (order.items && Array.isArray(order.items)) {
+        order.items.forEach((item: any) => {
+          if (item.seatInfo) {
+            const seatId = `${item.seatInfo.sectionId}-${item.seatInfo.row}-${item.seatInfo.seat || item.seatInfo.number}`
+            soldSeats.add(seatId)
+          }
+        })
+      }
+      if (order.tickets && Array.isArray(order.tickets)) {
+        order.tickets.forEach((ticket: any) => {
+          if (ticket.seatInfo) {
+            const seatId = `${ticket.seatInfo.sectionId}-${ticket.seatInfo.row}-${ticket.seatInfo.seat || ticket.seatInfo.number}`
+            soldSeats.add(seatId)
+          }
+        })
+      }
+    })
+
+    // Check for already blocked seats
+    const existingBlocksSnapshot = await db.collection('inventory_blocks')
+      .where('eventId', '==', eventId)
+      .where('type', '==', 'reserved')
+      .get()
+
+    const alreadyBlocked = new Set<string>()
+    existingBlocksSnapshot.docs.forEach(doc => {
+      const block = doc.data()
+      if (block.seatId) {
+        alreadyBlocked.add(block.seatId)
+      }
+    })
+
+    // Filter out seats with conflicts
+    const seatsToBlock: string[] = []
     for (const seatId of seatIds) {
+      if (soldSeats.has(seatId)) {
+        conflicts.push({ seatId, reason: 'Seat is already sold' })
+      } else if (activeHolds.has(seatId)) {
+        conflicts.push({ seatId, reason: 'Seat is currently held by a customer' })
+      } else if (alreadyBlocked.has(seatId)) {
+        conflicts.push({ seatId, reason: 'Seat is already blocked' })
+      } else {
+        seatsToBlock.push(seatId)
+      }
+    }
+
+    // If all seats have conflicts, return error
+    if (seatsToBlock.length === 0 && conflicts.length > 0) {
+      return NextResponse.json({
+        error: 'Cannot block seats due to conflicts',
+        conflicts,
+      }, { status: 409 })
+    }
+
+    const batch = db.batch()
+    const blockedAt = now
+
+    for (const seatId of seatsToBlock) {
       // Parse seatId format: sectionId-row-number
       const parts = seatId.split('-')
       const sectionId = parts.slice(0, -2).join('-') // Handle section IDs with dashes
@@ -142,25 +266,31 @@ export async function POST(
       })
     }
 
-    // Log the action
-    const logRef = db.collection('inventory_logs').doc()
-    batch.set(logRef, {
-      eventId,
-      action: 'bulk_block',
-      type: 'reserved',
-      seatIds,
-      reason,
-      performedBy: 'admin',
-      performedByName: 'Admin User',
-      performedAt: blockedAt,
-    })
+    // Log the action (only if we actually blocked some seats)
+    if (seatsToBlock.length > 0) {
+      const logRef = db.collection('inventory_logs').doc()
+      batch.set(logRef, {
+        eventId,
+        action: 'bulk_block',
+        type: 'reserved',
+        seatIds: seatsToBlock,
+        reason,
+        performedBy: 'admin',
+        performedByName: 'Admin User',
+        performedAt: blockedAt,
+      })
+    }
 
     await batch.commit()
 
     return NextResponse.json({
       success: true,
-      blockedCount: seatIds.length,
-      message: `Successfully blocked ${seatIds.length} seat(s)`,
+      blockedCount: seatsToBlock.length,
+      blockedSeats: seatsToBlock,
+      conflicts: conflicts.length > 0 ? conflicts : undefined,
+      message: conflicts.length > 0
+        ? `Blocked ${seatsToBlock.length} seat(s). ${conflicts.length} seat(s) skipped due to conflicts.`
+        : `Successfully blocked ${seatsToBlock.length} seat(s)`,
     })
 
   } catch (error) {

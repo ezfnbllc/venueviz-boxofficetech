@@ -119,13 +119,20 @@ function processSeatsForSection(section: Section, priceCategories: PriceCategory
 
   // If seats already exist, ensure they have category and price
   if (section.seats && section.seats.length > 0) {
-    return section.seats.map(seat => ({
-      ...seat,
-      // Use seat's own category, or fall back to section's pricing
-      category: seat.category || sectionCategoryId,
-      // Use seat's own price, or look up from category, or use section price
-      price: seat.price || priceCategories.find(pc => pc.id === (seat.category || sectionCategoryId))?.price || sectionPrice,
-    }))
+    return section.seats.map(seat => {
+      // Determine the category for this seat
+      const categoryId = seat.category || sectionCategoryId
+      // Look up price from category - this is the authoritative price source
+      const categoryPrice = priceCategories.find(pc => pc.id === categoryId)?.price
+
+      return {
+        ...seat,
+        // Use seat's own category, or fall back to section's pricing
+        category: categoryId,
+        // IMPORTANT: Always use category price if available - don't use seat.price as it may be stale/default
+        price: categoryPrice ?? sectionPrice,
+      }
+    })
   }
 
   // Generate seats based on section configuration
@@ -177,6 +184,7 @@ export default function InteractiveSeatingChart({
   // Seat availability state
   const [soldSeats, setSoldSeats] = useState<string[]>(propSoldSeats || [])
   const [heldSeats, setHeldSeats] = useState<string[]>([])
+  const [blockedSeats, setBlockedSeats] = useState<string[]>([])
   const [myHolds, setMyHolds] = useState<SeatHoldInfo[]>([])
   const [isLoadingAvailability, setIsLoadingAvailability] = useState(true)
   const [holdError, setHoldError] = useState<string | null>(null)
@@ -201,6 +209,7 @@ export default function InteractiveSeatingChart({
         const data = await response.json()
         setSoldSeats(data.soldSeats || [])
         setHeldSeats(data.heldSeats || [])
+        setBlockedSeats(data.blockedSeats || [])
         setMyHolds(data.myHolds || [])
         setIsLoadingAvailability(false)
 
@@ -373,10 +382,16 @@ export default function InteractiveSeatingChart({
     return !myHolds.some(h => h.seatId === consistentId)
   }, [heldSeats, myHolds, getConsistentSeatId])
 
-  // Check if seat is unavailable (sold or held by others)
+  // Check if seat is blocked by admin
+  const isSeatBlocked = useCallback((seat: Seat, section: Section): boolean => {
+    const consistentId = getConsistentSeatId(seat, section)
+    return blockedSeats.includes(consistentId)
+  }, [blockedSeats, getConsistentSeatId])
+
+  // Check if seat is unavailable (sold, held by others, or blocked by admin)
   const isSeatUnavailable = useCallback((seat: Seat, section: Section): boolean => {
-    return isSeatSold(seat, section) || isSeatHeldByOther(seat, section)
-  }, [isSeatSold, isSeatHeldByOther])
+    return isSeatSold(seat, section) || isSeatHeldByOther(seat, section) || isSeatBlocked(seat, section)
+  }, [isSeatSold, isSeatHeldByOther, isSeatBlocked])
 
   // Check if seat is selected (uses original seat.id for selection tracking)
   const isSeatSelected = useCallback((seatId: string): boolean => {
@@ -387,10 +402,11 @@ export default function InteractiveSeatingChart({
   const handleSeatClick = useCallback(async (seat: Seat, section: Section) => {
     if (isSeatUnavailable(seat, section) || seat.status === 'sold' || seat.status === 'blocked' || seat.status === 'disabled') return
 
-    // Get price from seat or look up from category
+    // Get price from category (authoritative source) - seat.price may be stale/default
     const categoryId = seat.category || section.pricing
     const priceCategory = getPriceCategory(categoryId)
-    const seatPrice = seat.price || priceCategory?.price || 0
+    // Always prefer category price over seat.price
+    const seatPrice = priceCategory?.price ?? seat.price ?? 0
 
     const isAlreadySelected = selectedSeats.some(s => s.id === seat.id)
 
@@ -535,7 +551,8 @@ export default function InteractiveSeatingChart({
         if (seat) {
           const categoryId = seat.category || section.pricing
           const priceCategory = getPriceCategory(categoryId)
-          const seatPrice = seat.price || priceCategory?.price || 0
+          // Always prefer category price over seat.price
+          const seatPrice = priceCategory?.price ?? seat.price ?? 0
           newSelection.push({
             id: seat.id,
             sectionId: section.id,
@@ -675,7 +692,7 @@ export default function InteractiveSeatingChart({
   const getSeatColor = useCallback((seat: Seat, section: Section): string => {
     if (isSeatSold(seat, section) || seat.status === 'sold') return '#374151' // gray-700 - sold
     if (isSeatHeldByOther(seat, section)) return '#6b7280' // gray-500 - held by others
-    if (seat.status === 'blocked' || seat.status === 'disabled') return '#4b5563' // gray-600
+    if (isSeatBlocked(seat, section) || seat.status === 'blocked' || seat.status === 'disabled') return '#4b5563' // gray-600 - blocked
     if (isSeatSelected(seat.id)) return '#22c55e' // green-500 - selected
     if (showAIRecommendation && aiRecommendedSeats.includes(seat.id)) return '#f59e0b' // amber-500 - AI pick
     if (hoveredSeat === seat.id) return '#60a5fa' // blue-400 - hovered
@@ -684,7 +701,7 @@ export default function InteractiveSeatingChart({
     const categoryId = seat.category || section.pricing
     const priceCategory = getPriceCategory(categoryId)
     return priceCategory?.color || '#8b5cf6' // purple-500 default
-  }, [isSeatSold, isSeatHeldByOther, isSeatSelected, showAIRecommendation, aiRecommendedSeats, hoveredSeat, getPriceCategory])
+  }, [isSeatSold, isSeatHeldByOther, isSeatBlocked, isSeatSelected, showAIRecommendation, aiRecommendedSeats, hoveredSeat, getPriceCategory])
 
   return (
     <div className={`flex flex-col ${className}`}>
@@ -772,6 +789,10 @@ export default function InteractiveSeatingChart({
           <div className="flex items-center gap-1.5">
             <div className="w-4 h-4 rounded bg-gray-500" />
             <span className="text-gray-700">Reserved</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-4 h-4 rounded bg-gray-600" />
+            <span className="text-gray-700">Blocked</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="w-4 h-4 rounded bg-amber-500" />
@@ -913,12 +934,16 @@ export default function InteractiveSeatingChart({
                 if (seat) {
                   const categoryId = seat.category || section.pricing
                   const priceCategory = getPriceCategory(categoryId)
-                  const seatPrice = seat.price || priceCategory?.price || 0
+                  // Always prefer category price over seat.price
+                  const seatPrice = priceCategory?.price ?? seat.price ?? 0
                   return (
                     <>
                       <div className="font-semibold text-gray-900">{section.name}</div>
                       <div className="text-gray-600">Row {seat.row}, Seat {seat.number}</div>
                       <div className="text-green-600 font-medium">${seatPrice.toFixed(2)}</div>
+                      {priceCategory && (
+                        <div className="text-gray-500 text-xs">{priceCategory.name}</div>
+                      )}
                     </>
                   )
                 }

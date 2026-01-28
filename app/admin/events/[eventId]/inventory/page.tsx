@@ -26,6 +26,7 @@ export default function InventoryManagementPage() {
   const [seatingLayout, setSeatingLayout] = useState<any>(null)
   const [soldSeats, setSoldSeats] = useState<string[]>([])
   const [blockedSeats, setBlockedSeats] = useState<string[]>([])
+  const [heldSeats, setHeldSeats] = useState<string[]>([])
   const [loadingSeats, setLoadingSeats] = useState(false)
 
   // Modal state
@@ -62,12 +63,13 @@ export default function InventoryManagementPage() {
         }
       }
 
-      // Load seat inventory (sold and blocked)
+      // Load seat inventory (sold, blocked, and held)
       const seatsRes = await fetch(`/api/events/${eventId}/inventory/seats`)
       if (seatsRes.ok) {
         const seatsData = await seatsRes.json()
         setSoldSeats(seatsData.soldSeats || [])
         setBlockedSeats(seatsData.blockedSeats || [])
+        setHeldSeats(seatsData.heldSeats || [])
       }
     } catch (err) {
       console.error('Error loading seating data:', err)
@@ -297,6 +299,7 @@ export default function InventoryManagementPage() {
               eventId={eventId}
               soldSeats={soldSeats}
               blockedSeats={blockedSeats}
+              heldSeats={heldSeats}
               loading={loadingSeats}
               onBlockSeats={handleBlockSeats}
               onUnblockSeats={handleUnblockSeats}
@@ -683,6 +686,7 @@ function ReservedSeatingSection({
   eventId,
   soldSeats,
   blockedSeats,
+  heldSeats,
   loading,
   onBlockSeats,
   onUnblockSeats,
@@ -691,6 +695,7 @@ function ReservedSeatingSection({
   eventId: string
   soldSeats: string[]
   blockedSeats: string[]
+  heldSeats: string[]
   loading: boolean
   onBlockSeats: (seatIds: string[], reason: string) => Promise<void>
   onUnblockSeats: (seatIds: string[]) => Promise<void>
@@ -727,6 +732,7 @@ function ReservedSeatingSection({
         eventId={eventId}
         soldSeats={soldSeats}
         blockedSeats={blockedSeats}
+        heldSeats={heldSeats}
         onBlockSeats={onBlockSeats}
         onUnblockSeats={onUnblockSeats}
       />
