@@ -94,10 +94,23 @@ export async function getEventInventorySummary(eventId: string): Promise<EventIn
       .get()
 
     if (seatingType === 'reserved') {
+      // For reserved seating, we need to fetch the layout from layouts collection
+      // The event's availableSections only contains summary data without seat details
+      const layoutId = eventData.layoutId || eventData.venue?.layoutId
+      let layoutData = null
+
+      if (layoutId) {
+        const layoutDoc = await db.collection('layouts').doc(layoutId).get()
+        if (layoutDoc.exists) {
+          layoutData = layoutDoc.data()
+        }
+      }
+
       return buildReservedSeatingInventory(
         eventId,
         eventName,
         eventData,
+        layoutData,
         ordersSnapshot,
         seatHoldsSnapshot,
         blocksSnapshot,
@@ -288,13 +301,15 @@ function buildReservedSeatingInventory(
   eventId: string,
   eventName: string,
   eventData: any,
+  layoutData: any | null,
   ordersSnapshot: FirebaseFirestore.QuerySnapshot,
   holdsSnapshot: FirebaseFirestore.QuerySnapshot,
   blocksSnapshot: FirebaseFirestore.QuerySnapshot,
   now: Date
 ): EventInventorySummary {
-  // Get sections from venue layout
-  const sections = eventData.venue?.availableSections || []
+  // Get sections from layout data (fetched from layouts collection)
+  // The layout contains full seat details, unlike availableSections which is just a summary
+  const sections = layoutData?.sections || eventData.venue?.availableSections || []
 
   // Build set of sold seats
   const soldSeats: Set<string> = new Set()
@@ -363,8 +378,11 @@ function buildReservedSeatingInventory(
       const rowSeats = row.seats || []
 
       rowSeats.forEach((seat: any) => {
-        const seatNumber = seat.label || seat.number || seat.id
-        const seatId = `${sectionId}-${rowLabel}-${seatNumber}`
+        const seatNumber = String(seat.number || seat.label || seat.id || '')
+        // Use seat.id if it's a full seatId (contains dashes), otherwise construct it
+        const seatId = (seat.id && seat.id.includes('-'))
+          ? seat.id
+          : `${sectionId}-${rowLabel}-${seatNumber}`
 
         let status: SeatStatus = 'available'
         let blockReason: string | undefined
@@ -420,12 +438,14 @@ function buildReservedSeatingInventory(
   // Get venue info
   const venueId = eventData.venue?.id || eventData.venueId
   const venueName = eventData.venue?.name || eventData.venueName
+  const layoutId = eventData.layoutId || eventData.venue?.layoutId
 
   return {
     eventId,
     eventName,
     venueId,
     venueName,
+    layoutId,
     seatingType: 'reserved',
     totalCapacity,
     totalSold,

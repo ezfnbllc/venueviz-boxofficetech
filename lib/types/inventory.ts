@@ -159,6 +159,7 @@ export interface EventInventorySummary {
   eventName: string
   venueId?: string
   venueName?: string
+  layoutId?: string  // For reserved seating - ID of the layout in layouts collection
   seatingType: 'general' | 'reserved'
 
   // Aggregate totals
