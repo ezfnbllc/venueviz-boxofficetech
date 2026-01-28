@@ -222,10 +222,11 @@ class ResendServiceClass {
   }
 
   /**
-   * Get support email - uses configured email or generates from website domain
+   * Get support email for FROM address - uses website domain (must be verified in Resend)
+   * The promoter's contact email is NOT used for sending since that domain may not be verified
    */
   private getSupportEmail(promoter: { supportEmail?: string; website?: string; slug: string }): string {
-    if (promoter.supportEmail) return promoter.supportEmail
+    // Priority: website domain (verified in Resend) > default
     if (promoter.website) {
       try {
         const url = new URL(promoter.website.startsWith('http') ? promoter.website : `https://${promoter.website}`)
