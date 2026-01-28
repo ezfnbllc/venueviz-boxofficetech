@@ -77,6 +77,7 @@ interface SelectedSeat {
   number: string | number
   price: number
   priceCategoryName: string
+  priceCategoryColor: string
 }
 
 interface SeatHoldInfo {
@@ -450,6 +451,7 @@ export default function InteractiveSeatingChart({
           number: seat.number,
           price: seatPrice,
           priceCategoryName: priceCategory?.name || 'Standard',
+          priceCategoryColor: priceCategory?.color || '#8b5cf6',
         }]
       } else {
         newSelection = [...selectedSeats, {
@@ -460,6 +462,7 @@ export default function InteractiveSeatingChart({
           number: seat.number,
           price: seatPrice,
           priceCategoryName: priceCategory?.name || 'Standard',
+          priceCategoryColor: priceCategory?.color || '#8b5cf6',
         }]
       }
 
@@ -577,6 +580,7 @@ export default function InteractiveSeatingChart({
             number: seat.number,
             price: seatPrice,
             priceCategoryName: priceCategory?.name || 'Standard',
+            priceCategoryColor: priceCategory?.color || '#8b5cf6',
           })
         }
       })
