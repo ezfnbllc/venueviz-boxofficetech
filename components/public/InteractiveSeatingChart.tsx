@@ -415,6 +415,41 @@ export default function InteractiveSeatingChart({
     return selectedSeats.some(s => s.id === seatId)
   }, [selectedSeats])
 
+  // Check if a seat is adjacent to any selected seat (same section, same row, seat number differs by 1)
+  const isAdjacentToSelection = useCallback((seat: Seat, section: Section): boolean => {
+    if (selectedSeats.length === 0) return true // First selection is always allowed
+
+    const seatNumber = typeof seat.number === 'string' ? parseInt(seat.number) : seat.number
+
+    return selectedSeats.some(selected => {
+      // Must be in the same section and row
+      if (selected.sectionId !== section.id || selected.row !== seat.row) return false
+
+      const selectedNumber = typeof selected.number === 'string' ? parseInt(selected.number) : selected.number
+      // Adjacent means seat numbers differ by exactly 1
+      return Math.abs(seatNumber - selectedNumber) === 1
+    })
+  }, [selectedSeats])
+
+  // Check if deselecting a seat would create a gap in the selection
+  const wouldCreateGapOnDeselect = useCallback((seat: SelectedSeat): boolean => {
+    // Get all selected seats in the same section and row
+    const sameRowSeats = selectedSeats.filter(s => s.sectionId === seat.sectionId && s.row === seat.row)
+
+    if (sameRowSeats.length <= 1) return false // Only one seat, no gap possible
+
+    // Get seat numbers
+    const seatNumbers = sameRowSeats.map(s => typeof s.number === 'string' ? parseInt(s.number) : s.number)
+    const thisSeatNumber = typeof seat.number === 'string' ? parseInt(seat.number) : seat.number
+
+    // Sort to find min and max
+    const minSeat = Math.min(...seatNumbers)
+    const maxSeat = Math.max(...seatNumbers)
+
+    // Deselecting is only allowed if this seat is at either end
+    return thisSeatNumber !== minSeat && thisSeatNumber !== maxSeat
+  }, [selectedSeats])
+
   // Handle seat click
   const handleSeatClick = useCallback(async (seat: Seat, section: Section) => {
     if (isSeatUnavailable(seat, section) || seat.status === 'sold' || seat.status === 'blocked' || seat.status === 'disabled') return
@@ -428,6 +463,13 @@ export default function InteractiveSeatingChart({
     const isAlreadySelected = selectedSeats.some(s => s.id === seat.id)
 
     if (isAlreadySelected) {
+      // Check if deselecting would create a gap
+      const seatToDeselect = selectedSeats.find(s => s.id === seat.id)
+      if (seatToDeselect && wouldCreateGapOnDeselect(seatToDeselect)) {
+        setHoldError('Cannot deselect this seat - it would leave a gap. Deselect from the ends first.')
+        return
+      }
+
       // Deselect
       const newSelection = selectedSeats.filter(s => s.id !== seat.id)
       setSelectedSeats(newSelection)
@@ -438,21 +480,31 @@ export default function InteractiveSeatingChart({
         releaseSeatHolds()
       }
     } else {
+      // Check if seat is adjacent to current selection (or if it's the first seat)
+      // Also check if the seat is in a different row - if so, only allow if no seats selected in current rows
+      const seatsInSameRow = selectedSeats.filter(s => s.sectionId === section.id && s.row === seat.row)
+
+      if (selectedSeats.length > 0) {
+        // If there are selected seats in the same row, new seat must be adjacent
+        if (seatsInSameRow.length > 0 && !isAdjacentToSelection(seat, section)) {
+          setHoldError('Please select consecutive seats without gaps.')
+          return
+        }
+
+        // If selecting in a different row/section than existing selections, that's not allowed
+        if (seatsInSameRow.length === 0) {
+          setHoldError('Please select all seats in the same row. Clear your selection to choose a different row.')
+          return
+        }
+      }
+
       // Select (if under max)
       let newSelection: SelectedSeat[]
 
       if (selectedSeats.length >= maxSeats) {
-        // Replace oldest selection
-        newSelection = [...selectedSeats.slice(1), {
-          id: seat.id,
-          sectionId: section.id,
-          sectionName: section.name,
-          row: seat.row,
-          number: seat.number,
-          price: seatPrice,
-          priceCategoryName: priceCategory?.name || 'Standard',
-          priceCategoryColor: priceCategory?.color || '#8b5cf6',
-        }]
+        // Replace oldest selection - but this could break consecutive rule, so just show error
+        setHoldError(`Maximum ${maxSeats} seats allowed. Please deselect a seat first.`)
+        return
       } else {
         newSelection = [...selectedSeats, {
           id: seat.id,
@@ -474,7 +526,7 @@ export default function InteractiveSeatingChart({
         onSeatSelection(newSelection)
       }
     }
-  }, [getPriceCategory, isSeatUnavailable, maxSeats, onSeatSelection, selectedSeats, createSeatHolds, releaseSeatHolds])
+  }, [getPriceCategory, isSeatUnavailable, isAdjacentToSelection, wouldCreateGapOnDeselect, maxSeats, onSeatSelection, selectedSeats, createSeatHolds, releaseSeatHolds])
 
   // AI Seat Recommendation Algorithm
   const getAIRecommendedSeats = useCallback((count: number) => {
