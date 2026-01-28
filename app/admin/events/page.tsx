@@ -195,6 +195,13 @@ export default function EventsPage() {
                     Edit
                   </button>
                   <button
+                    onClick={() => router.push(`/admin/events/${event.id}/inventory`)}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm transition-colors"
+                    title="Manage Inventory"
+                  >
+                    📦
+                  </button>
+                  <button
                     onClick={() => handleDeleteEvent(event.id)}
                     className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm transition-colors"
                   >

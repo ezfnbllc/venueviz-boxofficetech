@@ -291,14 +291,28 @@ export default function EventWizard({ onClose, eventId }: { onClose: () => void,
                   </p>
                 )}
               </div>
-              <button
-                onClick={onClose}
-                className="btn-secondary p-2 rounded-lg group"
-              >
-                <svg className="w-5 h-5 text-slate-500 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-2">
+                {isEditing && eventId && (
+                  <button
+                    onClick={() => router.push(`/admin/events/${eventId}/inventory`)}
+                    className="btn-secondary px-3 py-2 rounded-lg flex items-center gap-2 text-sm"
+                    title="Manage Inventory"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                    Inventory
+                  </button>
+                )}
+                <button
+                  onClick={onClose}
+                  className="btn-secondary p-2 rounded-lg group"
+                >
+                  <svg className="w-5 h-5 text-slate-500 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
 
             {/* Progress Bar */}
