@@ -1,5 +1,9 @@
 # Dependencies
 node_modules/
+
+# Theme templates (large, not needed for app)
+barren-theme/
+*.zip
 .pnp
 .pnp.js
 

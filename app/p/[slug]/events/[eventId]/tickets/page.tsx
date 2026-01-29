@@ -42,6 +42,7 @@ interface SelectedSeat {
   number: string | number
   price: number
   priceCategoryName: string
+  priceCategoryColor: string
 }
 
 interface EventData {
@@ -458,7 +459,13 @@ export default function TicketSelectionPage() {
                         {selectedSeats.map(seat => (
                           <div
                             key={seat.id}
-                            className="px-3 py-2 bg-green-100 border border-green-300 rounded-lg text-sm"
+                            className="px-3 py-2 rounded-lg text-sm"
+                            style={{
+                              backgroundColor: `${seat.priceCategoryColor}20`,
+                              borderWidth: '1px',
+                              borderStyle: 'solid',
+                              borderColor: `${seat.priceCategoryColor}80`,
+                            }}
                           >
                             <span className="font-medium text-gray-900">
                               {seat.sectionName}
@@ -468,7 +475,10 @@ export default function TicketSelectionPage() {
                               Row {seat.row}, Seat {seat.number}
                             </span>
                             <span className="text-gray-600 mx-1">•</span>
-                            <span className="font-semibold text-green-700">
+                            <span
+                              className="font-semibold"
+                              style={{ color: seat.priceCategoryColor }}
+                            >
                               ${seat.price}
                             </span>
                           </div>

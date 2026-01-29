@@ -87,6 +87,7 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState({
     totalEvents: 0,
     totalOrders: 0,
+    totalTickets: 0,
     totalRevenue: 0,
     totalCustomers: 0,
   })
@@ -154,6 +155,28 @@ export default function AdminDashboard() {
           return sum + (order.pricing?.total || order.total || 0)
         }, 0)
 
+        // Calculate total tickets sold across all orders
+        const totalTickets = filteredOrders.reduce((sum: number, order: any) => {
+          // Try different ticket count sources
+          if (order.tickets && Array.isArray(order.tickets)) {
+            return sum + order.tickets.length
+          }
+          if (order.items && Array.isArray(order.items)) {
+            // Sum up quantities from items
+            return sum + order.items.reduce((itemSum: number, item: any) => {
+              return itemSum + (item.quantity || 1)
+            }, 0)
+          }
+          if (order.quantity) {
+            return sum + order.quantity
+          }
+          if (order.ticketCount) {
+            return sum + order.ticketCount
+          }
+          // Default to 1 if we can't determine
+          return sum + 1
+        }, 0)
+
         const customerEmails = new Set<string>()
         filteredOrders.forEach((order: any) => {
           const email = order.customer?.email || order.customerEmail || order.buyerEmail || order.email
@@ -165,6 +188,7 @@ export default function AdminDashboard() {
         setStats({
           totalEvents: filteredEvents.length,
           totalOrders: filteredOrders.length,
+          totalTickets,
           totalRevenue,
           totalCustomers: customerEmails.size,
         })
@@ -176,6 +200,7 @@ export default function AdminDashboard() {
         const dashboardInsights = generateInsights({
           totalEvents: filteredEvents.length,
           totalOrders: filteredOrders.length,
+          totalTickets,
           totalRevenue,
           totalCustomers: customerEmails.size,
           recentOrders: filteredOrders.slice(0, 20),

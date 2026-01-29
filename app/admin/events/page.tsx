@@ -6,6 +6,7 @@ import { useFirebaseAuth } from '@/lib/firebase-auth'
 import { AdminService } from '@/lib/admin/adminService'
 import { usePromoterFiltering } from '@/lib/hooks/usePromoterFiltering'
 import StatusMultiSelect from '@/components/admin/StatusMultiSelect'
+import { InventorySummary } from '@/lib/types/inventory'
 
 export default function EventsPage() {
   const router = useRouter()
@@ -16,6 +17,7 @@ export default function EventsPage() {
   const [currentPromoterId, setCurrentPromoterId] = useState<string>()
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string[]>(['active', 'published'])
+  const [inventoryMap, setInventoryMap] = useState<Record<string, InventorySummary>>({})
 
   const { activePromoterIds, shouldFilter } = usePromoterFiltering(isAdmin, currentPromoterId)
 
@@ -38,6 +40,42 @@ export default function EventsPage() {
 
     loadEvents()
   }, [])
+
+  // Load inventory for filtered events
+  useEffect(() => {
+    const loadInventory = async () => {
+      if (filteredEvents.length === 0) return
+
+      const newInventoryMap: Record<string, InventorySummary> = {}
+
+      // Fetch inventory for each event in parallel (max 10 at a time)
+      const batchSize = 10
+      for (let i = 0; i < filteredEvents.length; i += batchSize) {
+        const batch = filteredEvents.slice(i, i + batchSize)
+        const promises = batch.map(async (event) => {
+          try {
+            const res = await fetch(`/api/events/${event.id}/inventory`)
+            if (res.ok) {
+              const data = await res.json()
+              newInventoryMap[event.id] = {
+                capacity: data.totalCapacity,
+                sold: data.totalSold,
+                blocked: data.totalBlocked,
+                available: data.totalAvailable,
+              }
+            }
+          } catch (err) {
+            console.error(`Failed to load inventory for ${event.id}:`, err)
+          }
+        })
+        await Promise.all(promises)
+      }
+
+      setInventoryMap(prev => ({ ...prev, ...newInventoryMap }))
+    }
+
+    loadInventory()
+  }, [filteredEvents])
 
   // Apply filtering
   useEffect(() => {
@@ -187,12 +225,61 @@ export default function EventsPage() {
                   )}
                 </div>
 
+                {/* Inventory Summary */}
+                {inventoryMap[event.id] ? (
+                  <div className="mb-4 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Tickets</span>
+                      <span className="text-xs text-slate-500 dark:text-slate-400">
+                        {inventoryMap[event.id].sold} / {inventoryMap[event.id].capacity} sold
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-200 dark:bg-slate-600 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full transition-all ${
+                          inventoryMap[event.id].capacity > 0 && inventoryMap[event.id].sold >= inventoryMap[event.id].capacity
+                            ? 'bg-red-500'
+                            : inventoryMap[event.id].capacity > 0 && inventoryMap[event.id].sold / inventoryMap[event.id].capacity > 0.8
+                            ? 'bg-yellow-500'
+                            : 'bg-green-500'
+                        }`}
+                        style={{
+                          width: `${inventoryMap[event.id].capacity > 0
+                            ? Math.min(100, (inventoryMap[event.id].sold / inventoryMap[event.id].capacity) * 100)
+                            : 0}%`
+                        }}
+                      />
+                    </div>
+                    <div className="flex justify-between mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      <span>{inventoryMap[event.id].available} available</span>
+                      {inventoryMap[event.id].blocked > 0 && (
+                        <span className="text-orange-500">{inventoryMap[event.id].blocked} blocked</span>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mb-4 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                    <div className="animate-pulse flex justify-between items-center">
+                      <div className="h-3 bg-slate-200 dark:bg-slate-600 rounded w-16"></div>
+                      <div className="h-3 bg-slate-200 dark:bg-slate-600 rounded w-20"></div>
+                    </div>
+                    <div className="mt-2 h-2 bg-slate-200 dark:bg-slate-600 rounded-full"></div>
+                  </div>
+                )}
+
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleEditEvent(event.id)}
                     className="flex-1 px-4 py-2 bg-accent-600 hover:bg-accent-700 text-white rounded-lg text-sm transition-colors"
                   >
                     Edit
+                  </button>
+                  <button
+                    onClick={() => router.push(`/admin/events/${event.id}/inventory`)}
+                    className="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg text-sm transition-colors"
+                    title="Manage Inventory"
+                  >
+                    Inventory
                   </button>
                   <button
                     onClick={() => handleDeleteEvent(event.id)}

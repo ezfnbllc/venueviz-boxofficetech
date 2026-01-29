@@ -105,12 +105,27 @@ export async function GET(
       }
     })
 
+    // Get admin-blocked seats from inventory_blocks
+    const blocksSnapshot = await db.collection('inventory_blocks')
+      .where('eventId', '==', eventId)
+      .where('type', '==', 'reserved')
+      .get()
+
+    const blockedSeats: string[] = []
+    blocksSnapshot.docs.forEach(doc => {
+      const block = doc.data()
+      if (block.seatId) {
+        blockedSeats.push(block.seatId)
+      }
+    })
+
     // Clean up expired holds in the background (don't wait)
     cleanupExpiredHolds(db, eventId).catch(console.error)
 
     return NextResponse.json({
       soldSeats,
       heldSeats,
+      blockedSeats,
       myHolds,
       holdDurationMs: HOLD_DURATION_MS,
     })

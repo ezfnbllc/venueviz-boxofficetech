@@ -89,9 +89,29 @@ export default function OrdersPage() {
   })
 
   const totalRevenue = orders.reduce((sum, order) => sum + (order.pricing?.total || order.total || 0), 0)
-  const completedOrders = orders.filter(o => o.status === 'confirmed' || o.status === 'completed').length
-  const pendingOrders = orders.filter(o => o.status === 'pending').length
   const avgOrderValue = orders.length > 0 ? totalRevenue / orders.length : 0
+
+  // Calculate total tickets sold across all orders
+  const totalTickets = orders.reduce((sum, order) => {
+    // Try different ticket count sources
+    if (order.tickets && Array.isArray(order.tickets)) {
+      return sum + order.tickets.length
+    }
+    if (order.items && Array.isArray(order.items)) {
+      // Sum up quantities from items
+      return sum + order.items.reduce((itemSum: number, item: any) => {
+        return itemSum + (item.quantity || 1)
+      }, 0)
+    }
+    if (order.quantity) {
+      return sum + order.quantity
+    }
+    if (order.ticketCount) {
+      return sum + order.ticketCount
+    }
+    // Default to 1 if we can't determine
+    return sum + 1
+  }, 0)
 
   const printTicket = (ticket: any) => {
     window.print()
@@ -152,10 +172,15 @@ export default function OrdersPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <div className="stat-card rounded-xl p-6">
           <p className="text-secondary-contrast text-sm mb-2 font-medium">Total Orders</p>
           <p className="text-4xl font-bold text-primary-contrast">{orders.length}</p>
+        </div>
+
+        <div className="stat-card rounded-xl p-6">
+          <p className="text-secondary-contrast text-sm mb-2 font-medium">Tickets Sold</p>
+          <p className="text-4xl font-bold text-money">{totalTickets}</p>
         </div>
 
         <div className="stat-card rounded-xl p-6">
@@ -166,16 +191,6 @@ export default function OrdersPage() {
         <div className="stat-card rounded-xl p-6">
           <p className="text-secondary-contrast text-sm mb-2 font-medium">Avg Order Value</p>
           <p className="text-4xl font-bold text-primary-contrast">${avgOrderValue.toFixed(2)}</p>
-        </div>
-
-        <div className="stat-card rounded-xl p-6">
-          <p className="text-secondary-contrast text-sm mb-2 font-medium">Completed</p>
-          <p className="text-4xl font-bold text-money">{completedOrders}</p>
-        </div>
-
-        <div className="stat-card rounded-xl p-6">
-          <p className="text-secondary-contrast text-sm mb-2 font-medium">Pending</p>
-          <p className="text-4xl font-bold text-amber-500 dark:text-yellow-400">{pendingOrders}</p>
         </div>
       </div>
 
